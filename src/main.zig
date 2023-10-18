@@ -1,19 +1,14 @@
 const std = @import("std");
 const cli = @import("cli.zig");
-
-pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
-    inline for (@typeInfo(Set).ErrorSet.?) |e| {
-        if (err == @field(anyerror, e.name)) return @field(anyerror, e.name);
-    }
-    return null;
-}
-
-pub const State = struct {};
+const utils = @import("utils.zig");
+const DayEntry = @import("DayEntry.zig");
+const State = @import("State.zig");
 
 pub const CommandError = error{ NoCommandGiven, BadCommand };
 
 pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
+    note: @import("commands/note.zig"),
 
     pub fn run(
         self: *Commands,
@@ -60,7 +55,7 @@ pub fn main() !void {
     _ = try arg_iterator.next();
 
     var cmd = Commands.init(&arg_iterator) catch |err| {
-        if (inErrorSet(err, CommandError)) |e| switch (e) {
+        if (utils.inErrorSet(err, CommandError)) |e| switch (e) {
             CommandError.NoCommandGiven => {
                 try @import("./commands/help.zig").print_help(stdout_file);
                 std.os.exit(0);
@@ -71,8 +66,14 @@ pub fn main() !void {
     };
     defer cmd.deinit();
 
-    var state: State = .{};
+    var home_dir_path = std.os.getenv("HOME").?;
+    var root_path = try std.fs.path.join(
+        allocator,
+        &[_][]const u8{ home_dir_path, ".nkt" },
+    );
+    defer allocator.free(root_path);
 
+    var state: State = .{ .root_path = root_path };
     try cmd.run(allocator, stdout, &state);
 
     try bw.flush();
@@ -80,4 +81,8 @@ pub fn main() !void {
 
 test "root" {
     _ = cli;
+    _ = DayEntry;
+
+    var dir = std.testing.tmpDir(.{});
+    defer dir.cleanup();
 }

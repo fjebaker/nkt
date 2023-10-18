@@ -2,7 +2,7 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 
 const Commands = @import("../main.zig").Commands;
-const State = @import("../main.zig").State;
+const State = @import("../State.zig");
 
 const Self = @This();
 

@@ -22,6 +22,7 @@ pub const CLIErrors = error{
     CouldNotParse,
     NoValueGiven,
     BadArgument,
+    UnknownFlag,
     TooFewArguments,
     TooManyArguments,
 };
