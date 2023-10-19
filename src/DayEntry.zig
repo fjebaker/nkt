@@ -135,13 +135,8 @@ pub fn openDate(
     defer mem.deinit();
     var temp_alloc = mem.allocator();
 
-    const date_string = try utils.formatDate(temp_alloc, date);
-
-    var entry = try std.mem.concat(temp_alloc, u8, &.{ date_string, DAY_ENTRY_ENDING });
-    var meta = try std.mem.concat(temp_alloc, u8, &.{ date_string, DAY_META_ENDING });
-
-    var entry_path = try std.fs.path.join(temp_alloc, &.{ State.LOG_DIRECTORY, entry });
-    var meta_path = try std.fs.path.join(temp_alloc, &.{ State.LOG_DIRECTORY, meta });
+    const entry_path = try entryPath(temp_alloc, date, state);
+    const meta_path = try metaPath(temp_alloc, date, state);
 
     return Self.initElseNew(alloc, date, entry_path, meta_path, state);
 }
@@ -152,4 +147,84 @@ pub fn today(
 ) !Self {
     const date = utils.Date.now();
     return openDate(alloc, date, state);
+}
+
+pub fn entryPath(alloc: std.mem.Allocator, date: utils.Date, _: *State) ![]u8 {
+    const date_string = try utils.formatDateBuf(date);
+    var entry = try std.mem.concat(alloc, u8, &.{ &date_string, DAY_ENTRY_ENDING });
+    defer alloc.free(entry);
+
+    return std.fs.path.join(alloc, &.{ State.LOG_DIRECTORY, entry });
+}
+
+pub fn metaPath(alloc: std.mem.Allocator, date: utils.Date, _: *State) ![]u8 {
+    const date_string = try utils.formatDateBuf(date);
+    var meta = try std.mem.concat(alloc, u8, &.{ &date_string, DAY_META_ENDING });
+    defer alloc.free(meta);
+
+    return std.fs.path.join(alloc, &.{ State.LOG_DIRECTORY, meta });
+}
+
+pub fn entryPathElseTemplate(alloc: std.mem.Allocator, date: utils.Date, state: *State) ![]u8 {
+    var entry_path = try entryPath(alloc, date, state);
+    errdefer alloc.free(entry_path);
+
+    const file_exists = try state.fileExists(entry_path);
+    if (!file_exists) {
+        var dir = try state.getDir();
+        var fs = try dir.createFile(entry_path, .{});
+        defer fs.close();
+
+        var writer = fs.writer();
+
+        var day_of_week = try utils.dayOfWeek(alloc, date);
+        defer alloc.free(day_of_week);
+
+        var month_of_year = try utils.monthOfYear(alloc, date);
+        defer alloc.free(month_of_year);
+
+        try writer.print(
+            "# {s} - {s} of {s}\n\n",
+            .{
+                try utils.formatDateBuf(date),
+                day_of_week,
+                month_of_year,
+            },
+        );
+    }
+    return entry_path;
+}
+
+pub const DayList = struct {
+    alloc: std.mem.Allocator,
+    days: []utils.Date,
+
+    pub fn deinit(self: *DayList) void {
+        self.alloc.free(self.days);
+        self.* = undefined;
+    }
+
+    pub fn sort(self: *DayList) void {
+        std.sort.insertion(utils.Date, self.days, {}, utils.dateSort);
+    }
+};
+
+pub fn getDayList(alloc: std.mem.Allocator, state: *State) !DayList {
+    var log_dir = try state.iterableLogDirectory();
+    defer log_dir.close();
+
+    var list = std.ArrayList(utils.Date).init(alloc);
+    errdefer list.deinit();
+
+    var itt = log_dir.iterate();
+    while (try itt.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (std.mem.indexOf(u8, entry.name, DAY_META_ENDING)) |end| {
+            const day = entry.name[0..end];
+            const date = utils.toDate(day) catch continue;
+            try list.append(date);
+        }
+    }
+
+    return .{ .alloc = alloc, .days = try list.toOwnedSlice() };
 }

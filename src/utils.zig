@@ -1,6 +1,8 @@
 const std = @import("std");
 const time = @import("time");
 
+pub const DateError = error{DateStringTooShort};
+
 pub const Date = time.DateTime;
 pub fn adjustTimezone(date: Date) Date {
     return date.addHours(1);
@@ -18,6 +20,7 @@ pub fn now() u64 {
 }
 
 pub fn toDate(string: []const u8) !Date {
+    if (string.len < 10) return DateError.DateStringTooShort;
     const year = try std.fmt.parseInt(u16, string[0..4], 10);
     // months and day start at zero
     const month = try std.fmt.parseInt(u16, string[5..7], 10) - 1;
@@ -38,6 +41,16 @@ pub fn formatDateBuf(date: Date) ![10]u8 {
     var writer = bufstream.writer();
     try t_date.format("YYYY-MM-DD", .{}, writer);
     return buf;
+}
+
+pub fn dayOfWeek(alloc: std.mem.Allocator, date: Date) ![]const u8 {
+    const t_date = adjustTimezone(date);
+    return t_date.formatAlloc(alloc, "dddd");
+}
+
+pub fn monthOfYear(alloc: std.mem.Allocator, date: Date) ![]const u8 {
+    const t_date = adjustTimezone(date);
+    return t_date.formatAlloc(alloc, "MMMM");
 }
 
 pub fn dateSort(_: void, lhs: Date, rhs: Date) bool {

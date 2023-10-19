@@ -61,6 +61,15 @@ pub fn setupDirectory(self: *Self) !void {
     try self.makeDirIfNotExists(NOTES_DIRECTORY);
 }
 
+pub fn fileExists(self: *Self, path: []const u8) !bool {
+    var dir = try self.getDir();
+    dir.access(path, .{}) catch |err| {
+        if (err == std.fs.Dir.AccessError.FileNotFound) return false;
+        return err;
+    };
+    return true;
+}
+
 fn makeDirIfNotExists(self: *Self, path: []const u8) !void {
     var dir = try self.getDir();
     dir.makeDir(path) catch |err| {
@@ -76,4 +85,12 @@ pub fn iterableLogDirectory(self: *Self) !std.fs.IterableDir {
 pub fn getNotesDirectory(self: *Self) !std.fs.IterableDir {
     var dir = try self.getDir();
     return dir.openIterableDir(NOTES_DIRECTORY, .{});
+}
+
+pub fn absPathify(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+    rel_path: []const u8,
+) ![]u8 {
+    return std.fs.path.join(alloc, &.{ self.root_path, rel_path });
 }

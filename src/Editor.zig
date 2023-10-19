@@ -3,7 +3,7 @@ const Editor = @This();
 
 pub const EditorErrors = error{BadExit};
 
-editor_command: []const u8,
+editor: []const u8,
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -12,6 +12,10 @@ pub fn init(allocator: std.mem.Allocator) !Editor {
         .editor = editor,
         .allocator = allocator,
     };
+}
+
+pub fn deinit(self: *Editor) void {
+    self.* = undefined;
 }
 
 fn tmpFile(allocator: std.mem.Allocator) ![]u8 {

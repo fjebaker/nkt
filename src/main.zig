@@ -8,6 +8,7 @@ const Editor = @import("Editor.zig");
 pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
 pub const Commands = union(enum) {
+    edit: @import("commands/edit.zig"),
     help: @import("commands/help.zig"),
     init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),

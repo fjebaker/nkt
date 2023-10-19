@@ -73,7 +73,6 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 }
 
 fn listNotes(
-    _: *const Self,
     alloc: std.mem.Allocator,
     out_writer: anytype,
     state: *State,
@@ -82,7 +81,7 @@ fn listNotes(
     const opts = config.notes;
     const choice = opts.day orelse 0;
 
-    var dl = try getDayList(alloc, state);
+    var dl = try DayEntry.getDayList(alloc, state);
     defer dl.deinit();
     dl.sort();
 
@@ -100,42 +99,8 @@ fn listNotes(
     }
 }
 
-pub const DayList = struct {
-    alloc: std.mem.Allocator,
-    days: []utils.Date,
-
-    pub fn deinit(self: *DayList) void {
-        self.alloc.free(self.days);
-        self.* = undefined;
-    }
-
-    pub fn sort(self: *DayList) void {
-        std.sort.insertion(utils.Date, self.days, {}, utils.dateSort);
-    }
-};
-
-pub fn getDayList(alloc: std.mem.Allocator, state: *State) !DayList {
-    var log_dir = try state.iterableLogDirectory();
-    defer log_dir.close();
-
-    var list = std.ArrayList(utils.Date).init(alloc);
-    errdefer list.deinit();
-
-    var itt = log_dir.iterate();
-    while (try itt.next()) |entry| {
-        if (entry.kind != .file) continue;
-        if (std.mem.indexOf(u8, entry.name, DayEntry.DAY_META_ENDING)) |end| {
-            const day = entry.name[0..end];
-            const date = utils.toDate(day) catch continue;
-            try list.append(date);
-        }
-    }
-
-    return .{ .alloc = alloc, .days = try list.toOwnedSlice() };
-}
-
-fn listDays(_: *const Self, alloc: std.mem.Allocator, out_writer: anytype, state: *State) !void {
-    var daylist = try getDayList(alloc, state);
+fn listDays(alloc: std.mem.Allocator, out_writer: anytype, state: *State) !void {
+    var daylist = try DayEntry.getDayList(alloc, state);
     defer daylist.deinit();
 
     daylist.sort();
@@ -154,7 +119,7 @@ pub fn run(
     state: *State,
 ) !void {
     switch (self.config) {
-        .notes => try self.listNotes(alloc, out_writer, state, self.config),
-        .days => try self.listDays(alloc, out_writer, state),
+        .notes => try listNotes(alloc, out_writer, state, self.config),
+        .days => try listDays(alloc, out_writer, state),
     }
 }
