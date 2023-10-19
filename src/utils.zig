@@ -1,6 +1,18 @@
 const std = @import("std");
 const time = @import("time");
 
+pub fn isAlias(
+    comptime field: std.builtin.Type.UnionField,
+    name: []const u8,
+) bool {
+    if (@hasDecl(field.type, "alias")) {
+        inline for (@field(field.type, "alias")) |alias| {
+            if (std.mem.eql(u8, alias, name)) return true;
+        }
+    }
+    return false;
+}
+
 pub const DateError = error{DateStringTooShort};
 
 pub const Date = time.DateTime;

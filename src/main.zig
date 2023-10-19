@@ -32,9 +32,10 @@ pub const Commands = union(enum) {
         if (command.flag) return CommandError.UnknownCommand;
 
         inline for (@typeInfo(Commands).Union.fields) |field| {
-            if (std.mem.eql(u8, command.string, field.name)) {
-                const T = field.type;
-                var instance = try @field(T, "init")(args);
+            const is_field = std.mem.eql(u8, command.string, field.name);
+            const is_alias = utils.isAlias(field, command.string);
+            if (is_field or is_alias) {
+                var instance = try @field(field.type, "init")(args);
                 return @unionInit(Commands, field.name, instance);
             }
         }

@@ -1,5 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const utils = @import("../utils.zig");
 
 const Commands = @import("../main.zig").Commands;
 const CommandError = @import("../main.zig").CommandError;
@@ -28,11 +29,22 @@ pub fn printExtendedHelp(writer: anytype, command: []const u8) !void {
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
         const has_extended_help = @hasDecl(field.type, "extended_help");
-        const field_right = std.mem.eql(u8, field.name, command);
+        const field_right =
+            std.mem.eql(u8, field.name, command) or utils.isAlias(field, command);
 
         if (has_extended_help and field_right) {
             const eh = @field(field.type, "extended_help");
-            try writer.print("Extended help for {s}\n{s}", .{ command, eh });
+            try writer.print("Extended help for {s}:\n\n", .{field.name});
+
+            if (@hasDecl(field.type, "alias")) {
+                _ = try writer.writeAll("Aliases:");
+                for (@field(field.type, "alias")) |alias| {
+                    try writer.print(" {s}", .{alias});
+                }
+                _ = try writer.writeAll("\n\n");
+            }
+
+            _ = try writer.writeAll(eh);
             return;
         }
 
