@@ -17,7 +17,14 @@ pub const DateError = error{DateStringTooShort};
 
 pub const Date = time.DateTime;
 pub fn adjustTimezone(date: Date) Date {
-    return date.addHours(1);
+    var modified = date.addHours(1);
+    if (modified.hours >= 24) {
+        const rem = modified.hours % 24;
+        const days = modified.hours / 24;
+        modified = date.addDays(days);
+        modified.hours = rem;
+    }
+    return modified;
 }
 
 pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
@@ -79,4 +86,11 @@ test "to date" {
     try testToDateAndBack("2023-01-10");
     try testToDateAndBack("2010-02-19");
     try testToDateAndBack("2017-11-19");
+}
+
+test "time shift" {
+    var date = Date.init(2023, 10, 10, 23, 13, 0);
+    const new = adjustTimezone(date);
+    try std.testing.expectEqual(new.hours, 0);
+    try std.testing.expectEqual(new.days, 11);
 }

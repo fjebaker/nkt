@@ -165,36 +165,6 @@ pub fn metaPath(alloc: std.mem.Allocator, date: utils.Date, _: *State) ![]u8 {
     return std.fs.path.join(alloc, &.{ State.LOG_DIRECTORY, meta });
 }
 
-pub fn entryPathElseTemplate(alloc: std.mem.Allocator, date: utils.Date, state: *State) ![]u8 {
-    var entry_path = try entryPath(alloc, date, state);
-    errdefer alloc.free(entry_path);
-
-    const file_exists = try state.fileExists(entry_path);
-    if (!file_exists) {
-        var dir = try state.getDir();
-        var fs = try dir.createFile(entry_path, .{});
-        defer fs.close();
-
-        var writer = fs.writer();
-
-        var day_of_week = try utils.dayOfWeek(alloc, date);
-        defer alloc.free(day_of_week);
-
-        var month_of_year = try utils.monthOfYear(alloc, date);
-        defer alloc.free(month_of_year);
-
-        try writer.print(
-            "# {s} - {s} of {s}\n\n",
-            .{
-                try utils.formatDateBuf(date),
-                day_of_week,
-                month_of_year,
-            },
-        );
-    }
-    return entry_path;
-}
-
 pub const DayList = struct {
     alloc: std.mem.Allocator,
     days: []utils.Date,

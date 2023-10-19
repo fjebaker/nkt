@@ -6,7 +6,11 @@ const DayEntry = @import("../DayEntry.zig");
 const State = @import("../State.zig");
 const Editor = @import("../Editor.zig");
 
+const notes = @import("../notes.zig");
+
 const Self = @This();
+
+pub const alias = [_][]const u8{"e"};
 
 pub const help = "Edit a note with EDITOR.";
 pub const extended_help =
@@ -23,45 +27,7 @@ pub const extended_help =
     \\
 ;
 
-pub const SelectionError = error{UnknownSelection};
-
-fn isNumeric(c: u8) bool {
-    return (c >= '0' and c <= '9');
-}
-
-fn allNumeric(string: []const u8) bool {
-    for (string) |c| {
-        if (!isNumeric(c)) return false;
-    }
-    return true;
-}
-
-fn isDate(string: []const u8) bool {
-    for (string) |c| {
-        if (!isNumeric(c) and c != '-') return false;
-    }
-    return true;
-}
-
-const Selection = union(enum) {
-    Day: usize,
-    Date: utils.Date,
-    File: []const u8,
-
-    pub fn parse(string: []const u8) !Selection {
-        if (allNumeric(string)) {
-            const day = try std.fmt.parseInt(usize, string, 10);
-            return .{ .Day = day };
-        } else if (isDate(string)) {
-            const date = try utils.toDate(string);
-            return .{ .Date = date };
-        } else {
-            return .{ .File = string };
-        }
-    }
-};
-
-selection: Selection,
+selection: notes.Note,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
     var string: ?[]const u8 = null;
@@ -74,28 +40,11 @@ pub fn init(itt: *cli.ArgIterator) !Self {
     }
 
     if (string) |s| {
-        return .{ .selection = try Selection.parse(s) };
+        return .{ .selection = try notes.parse(s) };
     } else {
         return cli.CLIErrors.TooFewArguments;
     }
 }
-
-fn editDate(
-    temp_alloc: std.mem.Allocator,
-    out_writer: anytype,
-    date: utils.Date,
-    state: *State,
-) !void {
-    const entry_path = try DayEntry.entryPathElseTemplate(temp_alloc, date, state);
-    var editor = try Editor.init(temp_alloc);
-    defer editor.deinit();
-
-    const abs_path = try state.absPathify(temp_alloc, entry_path);
-    try editor.editPath(abs_path);
-    try out_writer.print("Written to '{s}'.\n", .{entry_path});
-}
-
-const FILE_EXTENSION = ".md";
 
 pub fn run(
     self: *Self,
@@ -108,34 +57,18 @@ pub fn run(
 
     var temp_alloc = mem.allocator();
 
-    switch (self.selection) {
-        .Date => {
-            const date = self.selection.Date;
-            try editDate(temp_alloc, out_writer, date, state);
-        },
-        .Day => {
-            const choice = self.selection.Day;
+    const rel_path = try self.selection.getRelPath(temp_alloc, state);
+    const abs_path = try state.absPathify(temp_alloc, rel_path);
 
-            var dl = try DayEntry.getDayList(temp_alloc, state);
-            dl.sort();
-
-            const date = dl.days[dl.days.len - choice - 1];
-            try editDate(temp_alloc, out_writer, date, state);
-        },
-        .File => {
-            const filename = try std.mem.concat(temp_alloc, u8, &.{ self.selection.File, FILE_EXTENSION });
-            const rel_path = try std.fs.path.join(
-                temp_alloc,
-                &.{ State.NOTES_DIRECTORY, filename },
-            );
-            const abs_path = try state.absPathify(temp_alloc, rel_path);
-
-            var editor = try Editor.init(temp_alloc);
-            defer editor.deinit();
-
-            try editor.editPath(abs_path);
-
-            try out_writer.print("Written to '{s}'.\n", .{rel_path});
-        },
+    if (try state.fileExists(rel_path)) {
+        try out_writer.print("Opening file '{s}'\n", .{rel_path});
+    } else {
+        try out_writer.print("Creating new file '{s}'\n", .{rel_path});
+        try self.selection.makeTemplate(temp_alloc, rel_path, state);
     }
+
+    var editor = try Editor.init(temp_alloc);
+    defer editor.deinit();
+
+    try editor.editPath(abs_path);
 }
