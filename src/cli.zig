@@ -53,7 +53,10 @@ pub const Arg = struct {
             .Int => std.fmt.parseInt(T, self.string, 10),
             .Float => std.fmt.parseFloat(T, self.string),
             else => @compileError("Could not parse type given."),
-        } catch return CLIErrors.CouldNotParse;
+        } catch {
+            std.debug.print("{any}\n", .{self});
+            return CLIErrors.CouldNotParse;
+        };
 
         return parsed;
     }

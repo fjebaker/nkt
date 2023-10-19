@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const notes = @import("../notes.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
@@ -26,6 +27,7 @@ const Options = enum { notes, days };
 const Config = union(Options) {
     notes: struct {
         day: ?usize = null,
+        number: usize = 25,
     },
     days: void,
 
@@ -56,22 +58,48 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
         switch (config) {
             .days => {
+                if (arg.flag) return cli.CLIErrors.UnknownFlag;
                 return cli.CLIErrors.TooManyArguments;
             },
             .notes => |*opt| {
-                switch (arg.index.?) {
-                    1 => {
-                        opt.day = try std.fmt.parseInt(usize, arg.string, 10);
-                    },
-                    else => return cli.CLIErrors.TooManyArguments,
+                if (arg.flag) {
+                    if (arg.is('n', "number")) {
+                        const value = try itt.getValue();
+                        opt.number = try value.as(usize);
+                    } else {
+                        return cli.CLIErrors.UnknownFlag;
+                    }
+                } else {
+                    switch (arg.index.?) {
+                        1 => {
+                            opt.day = try std.fmt.parseInt(usize, arg.string, 10);
+                        },
+                        else => return cli.CLIErrors.TooManyArguments,
+                    }
                 }
             },
         }
     }
     return .{ .config = config };
+}
+
+fn writeDiary(
+    out_writer: anytype,
+    entry: DayEntry,
+    limit: usize,
+) !void {
+    try out_writer.print("Notes for {s}\n", .{try utils.formatDateBuf(entry.date)});
+
+    const offset = @min(entry.notes.len, limit);
+    const start = entry.notes.len - offset;
+
+    for (entry.notes[start..]) |note| {
+        const time_of_day = utils.adjustTimezone(utils.Date.initUnixMs(note.modified));
+        try time_of_day.format("HH:mm:ss - ", .{}, out_writer);
+        try out_writer.print("{s}\n", .{note.content});
+    }
 }
 
 fn listNotes(
@@ -81,23 +109,47 @@ fn listNotes(
     config: Config,
 ) !void {
     const opts = config.notes;
-    const choice = opts.day orelse 0;
 
-    var dl = try DayEntry.getDayList(alloc, state);
-    defer dl.deinit();
-    dl.sort();
+    if (opts.day) |day| {
+        var note = notes.Note{ .Day = .{ .i = day } };
+        const date = try note.getDate(alloc, state);
 
-    const selection = dl.days[dl.days.len - choice - 1];
+        var diary = try DayEntry.openDate(alloc, date, state);
+        defer diary.deinit();
 
-    var day = try DayEntry.openDate(alloc, selection, state);
-    defer day.deinit();
+        try writeDiary(out_writer, diary, opts.number);
+    } else {
+        var mem = std.heap.ArenaAllocator.init(alloc);
+        defer mem.deinit();
+        var temp_alloc = mem.allocator();
 
-    try out_writer.print("Notes for {s}\n", .{try utils.formatDateBuf(day.date)});
+        var dl = try DayEntry.getDayList(temp_alloc, state);
+        dl.sort();
 
-    for (day.notes) |note| {
-        const time_of_day = utils.adjustTimezone(utils.Date.initUnixMs(note.modified));
-        try time_of_day.format("HH:mm:ss - ", .{}, out_writer);
-        try out_writer.print("{s}\n", .{note.content});
+        // calculate how many diary entries we need
+        var list = std.ArrayList(DayEntry).init(temp_alloc);
+        var note_count: usize = 0;
+        for (0..dl.days.len) |i| {
+            const date = dl.days[dl.days.len - i - 1];
+            var diary = try DayEntry.openDate(temp_alloc, date, state);
+            try list.append(diary);
+            note_count += diary.notes.len;
+            if (note_count >= opts.number) break;
+        }
+
+        std.mem.reverse(DayEntry, list.items);
+
+        // print the first one truncated
+        const difference = note_count -| opts.number;
+        try writeDiary(out_writer, list.items[0], list.items[0].notes.len - difference);
+
+        // print the rest
+        if (list.items.len > 1) {
+            for (list.items[1..]) |diary| {
+                try writeDiary(out_writer, diary, note_count);
+                note_count -|= diary.notes.len;
+            }
+        }
     }
 }
 
