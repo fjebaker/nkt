@@ -9,6 +9,7 @@ pub const CommandError = error{ NoCommandGiven, BadCommand };
 pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
     note: @import("commands/note.zig"),
+    list: @import("commands/list.zig"),
 
     pub fn run(
         self: *Commands,

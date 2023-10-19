@@ -1,7 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 
-const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
 const DayEntry = @import("../DayEntry.zig");
 

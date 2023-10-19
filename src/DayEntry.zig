@@ -71,7 +71,6 @@ pub fn initElseNew(
     var mem_alloc = mem.allocator();
 
     var notes: []Note = if (meta_content) |content| blk: {
-        std.debug.print("'{s}'\n", .{content});
         const meta = try Meta.init(&mem, content);
         break :blk meta.notes;
     } else try mem_alloc.alloc(Note, 0);
@@ -125,5 +124,17 @@ pub fn today(
     alloc: std.mem.Allocator,
     state: *State,
 ) !Self {
-    return Self.initElseNew(alloc, "today.md", "today.meta.json", state);
+    var t = try formatDate(alloc, utils.Date.now());
+    defer alloc.free(t);
+
+    var entry_path = try std.mem.concat(alloc, u8, &.{ t, ".md" });
+    defer alloc.free(entry_path);
+    var meta_path = try std.mem.concat(alloc, u8, &.{ t, ".meta.json" });
+    defer alloc.free(meta_path);
+
+    return Self.initElseNew(alloc, entry_path, meta_path, state);
+}
+
+fn formatDate(alloc: std.mem.Allocator, date: utils.Date) ![]const u8 {
+    return date.formatAlloc(alloc, "YYYY-MM-DD");
 }
