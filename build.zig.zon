@@ -1,0 +1,10 @@
+.{
+    .name = "nkt",
+    .version = "0.1.0",
+    .dependencies = .{
+        .time = .{
+            .url = "https://github.com/fjebaker/zig-time/archive/fjebaker.tar.gz",
+            .hash = "1220c16381997edcb7b4b00113ed67f0fd41c33486e38e974eb980e1d71e5183423d",
+        } 
+    }
+}
