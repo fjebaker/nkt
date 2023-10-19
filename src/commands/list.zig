@@ -9,6 +9,15 @@ const DayEntry = @import("../DayEntry.zig");
 const Self = @This();
 
 pub const help = "List notes in various ways.";
+pub const extended_help =
+    \\List notes in various ways to the terminal.
+    \\  nkt list
+    \\     [notes] [day]         list the diary notes made today or on
+    \\                           [day] if specified.
+    \\     [days]                enumerate the last diary entries.
+    \\Without any arguments, default to `notes`.
+    \\
+;
 
 const Options = enum { notes, days };
 

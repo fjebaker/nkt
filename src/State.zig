@@ -57,9 +57,15 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn setupDirectory(self: *Self) !void {
+    try self.makeDirIfNotExists(LOG_DIRECTORY);
+    try self.makeDirIfNotExists(NOTES_DIRECTORY);
+}
+
+fn makeDirIfNotExists(self: *Self, path: []const u8) !void {
     var dir = try self.getDir();
-    try dir.makeDir(LOG_DIRECTORY);
-    try dir.makeDir(NOTES_DIRECTORY);
+    dir.makeDir(path) catch |err| {
+        if (err != std.os.MakeDirError.PathAlreadyExists) return err;
+    };
 }
 
 pub fn iterableLogDirectory(self: *Self) !std.fs.IterableDir {

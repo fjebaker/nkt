@@ -5,7 +5,7 @@ const DayEntry = @import("DayEntry.zig");
 const State = @import("State.zig");
 const Editor = @import("Editor.zig");
 
-pub const CommandError = error{ NoCommandGiven, BadCommand };
+pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
 pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
@@ -28,7 +28,7 @@ pub const Commands = union(enum) {
 
     pub fn init(args: *cli.ArgIterator) !Commands {
         const command = (try args.next()) orelse return CommandError.NoCommandGiven;
-        if (command.flag) return CommandError.BadCommand;
+        if (command.flag) return CommandError.UnknownCommand;
 
         inline for (@typeInfo(Commands).Union.fields) |field| {
             if (std.mem.eql(u8, command.string, field.name)) {
@@ -37,7 +37,7 @@ pub const Commands = union(enum) {
                 return @unionInit(Commands, field.name, instance);
             }
         }
-        return CommandError.BadCommand;
+        return CommandError.UnknownCommand;
     }
 };
 
@@ -60,7 +60,7 @@ pub fn main() !void {
     var cmd = Commands.init(&arg_iterator) catch |err| {
         if (utils.inErrorSet(err, CommandError)) |e| switch (e) {
             CommandError.NoCommandGiven => {
-                try @import("./commands/help.zig").print_help(stdout_file);
+                try @import("./commands/help.zig").printHelp(stdout_file);
                 std.os.exit(0);
             },
             else => return e,

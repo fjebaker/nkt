@@ -2,18 +2,53 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 
 const Commands = @import("../main.zig").Commands;
+const CommandError = @import("../main.zig").CommandError;
 const State = @import("../State.zig");
 
 const Self = @This();
 
 pub const help = "Print this help message.";
 
-pub fn init(_: *cli.ArgIterator) !Self {
-    return .{};
+command: []const u8,
+
+pub fn init(itt: *cli.ArgIterator) !Self {
+    var command: []const u8 = "";
+
+    if (try itt.next()) |arg| {
+        if (arg.flag) return cli.CLIErrors.UnknownFlag;
+        command = arg.string;
+    }
+
+    return .{ .command = command };
 }
 
-pub fn print_help(writer: anytype) !void {
+pub fn printExtendedHelp(writer: anytype, command: []const u8) !void {
+    var unknown_command = true;
+
+    const info = @typeInfo(Commands).Union;
+    inline for (info.fields) |field| {
+        const has_extended_help = @hasDecl(field.type, "extended_help");
+        const field_right = std.mem.eql(u8, field.name, command);
+
+        if (has_extended_help and field_right) {
+            const eh = @field(field.type, "extended_help");
+            try writer.print("Extended help for {s}\n{s}", .{ command, eh });
+            return;
+        }
+
+        if (field_right) unknown_command = false;
+    }
+
+    if (unknown_command) {
+        return CommandError.UnknownCommand;
+    }
+
+    try writer.print("No extended help for '{s}' available.\n", .{command});
+}
+
+pub fn printHelp(writer: anytype) !void {
     try writer.writeAll("Help:\n");
+
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
         const descr = @field(field.type, "help");
@@ -22,10 +57,14 @@ pub fn print_help(writer: anytype) !void {
 }
 
 pub fn run(
-    _: *Self,
+    self: *Self,
     _: std.mem.Allocator,
     out_writer: anytype,
     _: *State,
 ) !void {
-    try print_help(out_writer);
+    if (self.command.len > 0) {
+        try printExtendedHelp(out_writer, self.command);
+    } else {
+        try printHelp(out_writer);
+    }
 }
