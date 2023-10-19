@@ -3,6 +3,9 @@ const utils = @import("utils.zig");
 
 const Self = @This();
 
+pub const LOG_DIRECTORY = "log";
+pub const NOTES_DIRECTORY = "notes";
+
 root_path: []const u8,
 dir: ?std.fs.Dir = null,
 
@@ -49,6 +52,22 @@ pub fn readFile(self: *Self, alloc: std.mem.Allocator, rel_path: []const u8) ![]
 }
 
 pub fn deinit(self: *Self) void {
-    if (self.dir) |d| d.close();
+    if (self.dir) |*d| d.close();
     self.* = undefined;
+}
+
+pub fn setupDirectory(self: *Self) !void {
+    var dir = try self.getDir();
+    try dir.makeDir(LOG_DIRECTORY);
+    try dir.makeDir(NOTES_DIRECTORY);
+}
+
+pub fn iterableLogDirectory(self: *Self) !std.fs.IterableDir {
+    var dir = try self.getDir();
+    return dir.openIterableDir(LOG_DIRECTORY, .{});
+}
+
+pub fn getNotesDirectory(self: *Self) !std.fs.IterableDir {
+    var dir = try self.getDir();
+    return dir.openIterableDir(NOTES_DIRECTORY, .{});
 }

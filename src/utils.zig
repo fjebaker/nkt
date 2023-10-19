@@ -2,6 +2,9 @@ const std = @import("std");
 const time = @import("time");
 
 pub const Date = time.DateTime;
+pub fn adjustTimezone(date: Date) Date {
+    return date.addHours(1);
+}
 
 pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
     inline for (@typeInfo(Set).ErrorSet.?) |e| {
@@ -10,10 +13,45 @@ pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
     return null;
 }
 
-pub fn timezone() comptime_int {
-    return std.time.ms_per_hour;
-}
-
 pub fn now() u64 {
     return @intCast(std.time.milliTimestamp());
+}
+
+pub fn toDate(string: []const u8) !Date {
+    const year = try std.fmt.parseInt(u16, string[0..4], 10);
+    // months and day start at zero
+    const month = try std.fmt.parseInt(u16, string[5..7], 10) - 1;
+    const day = try std.fmt.parseInt(u16, string[8..10], 10) - 1;
+
+    return Date.init(year, month, day, 0, 0, 0);
+}
+
+pub fn formatDate(alloc: std.mem.Allocator, date: Date) ![]const u8 {
+    const t_date = adjustTimezone(date);
+    return t_date.formatAlloc(alloc, "YYYY-MM-DD");
+}
+
+pub fn formatDateBuf(date: Date) ![10]u8 {
+    const t_date = adjustTimezone(date);
+    var buf: [10]u8 = undefined;
+    var bufstream = std.io.fixedBufferStream(&buf);
+    var writer = bufstream.writer();
+    try t_date.format("YYYY-MM-DD", .{}, writer);
+    return buf;
+}
+
+pub fn dateSort(_: void, lhs: Date, rhs: Date) bool {
+    return (lhs.toUnixMilli() < rhs.toUnixMilli());
+}
+
+fn testToDateAndBack(s: []const u8) !void {
+    const date = try toDate(s);
+    const back = try formatDateBuf(date);
+    try std.testing.expectEqualSlices(u8, s, back[0..10]);
+}
+
+test "to date" {
+    try testToDateAndBack("2023-01-10");
+    try testToDateAndBack("2010-02-19");
+    try testToDateAndBack("2017-11-19");
 }

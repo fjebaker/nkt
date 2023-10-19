@@ -3,13 +3,15 @@ const cli = @import("cli.zig");
 const utils = @import("utils.zig");
 const DayEntry = @import("DayEntry.zig");
 const State = @import("State.zig");
+const Editor = @import("Editor.zig");
 
 pub const CommandError = error{ NoCommandGiven, BadCommand };
 
 pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
-    note: @import("commands/note.zig"),
+    init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),
+    note: @import("commands/note.zig"),
 
     pub fn run(
         self: *Commands,
@@ -75,6 +77,7 @@ pub fn main() !void {
     defer allocator.free(root_path);
 
     var state: State = .{ .root_path = root_path };
+    defer state.deinit();
     try cmd.run(allocator, stdout, &state);
 
     try bw.flush();
@@ -83,6 +86,7 @@ pub fn main() !void {
 test "root" {
     _ = cli;
     _ = DayEntry;
+    _ = utils;
 
     var dir = std.testing.tmpDir(.{});
     defer dir.cleanup();

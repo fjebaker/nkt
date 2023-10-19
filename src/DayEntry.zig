@@ -3,6 +3,9 @@ const utils = @import("utils.zig");
 
 const State = @import("State.zig");
 
+pub const DAY_ENTRY_ENDING = ".md";
+pub const DAY_META_ENDING = ".meta.json";
+
 const Self = @This();
 
 // Each day is a file
@@ -51,14 +54,16 @@ mem: std.heap.ArenaAllocator,
 state: *State,
 // parsed from metadata json
 notes: []Note,
+date: utils.Date,
 
 pub fn deinit(self: *Self) void {
     self.mem.deinit();
     self.* = undefined;
 }
 
-pub fn initElseNew(
+fn initElseNew(
     alloc: std.mem.Allocator,
+    date: utils.Date,
     entry_filepath: []const u8,
     meta_filepath: []const u8,
     state: *State,
@@ -84,6 +89,7 @@ pub fn initElseNew(
         .notes = notes,
         .mem = mem,
         .state = state,
+        .date = date,
     };
 }
 
@@ -120,21 +126,30 @@ pub fn writeMeta(self: *Self) !void {
     try file.setEndPos(string.len);
 }
 
+pub fn openDate(
+    alloc: std.mem.Allocator,
+    date: utils.Date,
+    state: *State,
+) !Self {
+    var mem = std.heap.ArenaAllocator.init(alloc);
+    defer mem.deinit();
+    var temp_alloc = mem.allocator();
+
+    const date_string = try utils.formatDate(temp_alloc, date);
+
+    var entry = try std.mem.concat(temp_alloc, u8, &.{ date_string, DAY_ENTRY_ENDING });
+    var meta = try std.mem.concat(temp_alloc, u8, &.{ date_string, DAY_META_ENDING });
+
+    var entry_path = try std.fs.path.join(temp_alloc, &.{ State.LOG_DIRECTORY, entry });
+    var meta_path = try std.fs.path.join(temp_alloc, &.{ State.LOG_DIRECTORY, meta });
+
+    return Self.initElseNew(alloc, date, entry_path, meta_path, state);
+}
+
 pub fn today(
     alloc: std.mem.Allocator,
     state: *State,
 ) !Self {
-    var t = try formatDate(alloc, utils.Date.now());
-    defer alloc.free(t);
-
-    var entry_path = try std.mem.concat(alloc, u8, &.{ t, ".md" });
-    defer alloc.free(entry_path);
-    var meta_path = try std.mem.concat(alloc, u8, &.{ t, ".meta.json" });
-    defer alloc.free(meta_path);
-
-    return Self.initElseNew(alloc, entry_path, meta_path, state);
-}
-
-fn formatDate(alloc: std.mem.Allocator, date: utils.Date) ![]const u8 {
-    return date.formatAlloc(alloc, "YYYY-MM-DD");
+    const date = utils.Date.now();
+    return openDate(alloc, date, state);
 }
