@@ -5,12 +5,16 @@ pub const DateError = error{DateStringTooShort};
 
 pub const Date = time.DateTime;
 
-pub fn List(comptime T: type, comptime lessThan: anytype) type {
+pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
     return struct {
         const Self = @This();
 
         alloc: std.mem.Allocator,
         items: []T,
+
+        pub fn init(alloc: std.mem.Allocator, items: []T) Self {
+            return .{ .alloc = alloc, .items = items };
+        }
 
         pub fn deinit(self: *Self) void {
             self.alloc.free(self.items);
@@ -18,6 +22,9 @@ pub fn List(comptime T: type, comptime lessThan: anytype) type {
         }
 
         pub fn sort(self: *Self) void {
+            if (@typeInfo(@TypeOf(lessThan)) == .Void) {
+                @compileError("Cannot call sort with void lessThan function");
+            }
             std.sort.insertion(T, self.items, {}, lessThan);
         }
 
@@ -27,11 +34,15 @@ pub fn List(comptime T: type, comptime lessThan: anytype) type {
     };
 }
 
+pub fn List(comptime T: type) type {
+    return SortableList(T, void);
+}
+
 fn dateSort(_: void, lhs: Date, rhs: Date) bool {
     return (lhs.toUnixMilli() < rhs.toUnixMilli());
 }
 
-pub const DateList = List(Date, dateSort);
+pub const DateList = SortableList(Date, dateSort);
 
 pub fn isAlias(
     comptime field: std.builtin.Type.UnionField,
@@ -109,6 +120,15 @@ fn testToDateAndBack(s: []const u8) !void {
     const date = try toDate(s);
     const back = try formatDateBuf(date);
     try std.testing.expectEqualSlices(u8, s, back[0..10]);
+}
+
+pub fn push(comptime T: type, allocator: std.mem.Allocator, list: *[]T, new: T) !void {
+    var managed_list = std.ArrayList(T).fromOwnedSlice(
+        allocator,
+        list.*,
+    );
+    try managed_list.append(new);
+    list.* = try managed_list.toOwnedSlice();
 }
 
 test "to date" {

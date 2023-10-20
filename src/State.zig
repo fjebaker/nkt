@@ -5,6 +5,8 @@ const notes = @import("notes.zig");
 pub const NoteManager = @import("NoteManager.zig");
 pub const FileSystem = @import("FileSystem.zig");
 
+pub const Ordering = enum { Modified, Created };
+
 const Self = @This();
 
 pub const DiaryMapKey = struct {
@@ -104,4 +106,37 @@ pub fn absPathify(self: *Self, rel_path: []const u8) ![]const u8 {
 
 pub fn writeChanges(self: *Self) !void {
     try self.manager.writeChanges(self);
+}
+
+const NoteList = utils.List(notes.named_note.Note);
+pub fn makeNoteList(self: *Self, ordering: Ordering) !NoteList {
+    var alloc = self.manager.mem.allocator();
+
+    var copy = try alloc.dupe(notes.named_note.Note, self.manager.note_list);
+    errdefer alloc.free(copy);
+
+    var ordered_list = NoteList.init(alloc, copy);
+
+    switch (ordering) {
+        .Created => std.sort.insertion(
+            notes.named_note.Note,
+            ordered_list.items,
+            {},
+            notes.named_note.sortCreated,
+        ),
+        .Modified => std.sort.insertion(
+            notes.named_note.Note,
+            ordered_list.items,
+            {},
+            notes.named_note.sortModified,
+        ),
+    }
+
+    return ordered_list;
+}
+
+pub fn makeDiaryList(self: *Self, ordering: Ordering) !void {
+    _ = self;
+    _ = ordering;
+    // todo
 }

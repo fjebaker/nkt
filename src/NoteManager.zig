@@ -1,8 +1,10 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 const State = @import("State.zig");
 
 const notes = @import("notes.zig");
 const NoteInfo = notes.named_note.NoteInfo;
+const Note = notes.named_note.Note;
 
 const _NoteManagerSchema = struct {
     note_infos: []NoteInfo,
@@ -30,6 +32,7 @@ fn parseNoteManager(alloc: std.mem.Allocator, string: []const u8) !_NoteManagerS
 
 const Self = @This();
 
+note_list: []Note,
 note_infos: []NoteInfo,
 mem: std.heap.ArenaAllocator,
 
@@ -46,7 +49,13 @@ pub fn init(alloc: std.mem.Allocator, fs: *State.FileSystem) !Self {
     else
         try temp_alloc.alloc(NoteInfo, 0);
 
+    var note_list = try temp_alloc.alloc(Note, note_infos.len);
+    for (0.., note_infos) |i, *info| {
+        note_list[i] = Note.new(info);
+    }
+
     return .{
+        .note_list = note_list,
         .note_infos = note_infos,
         .mem = mem,
     };
@@ -57,25 +66,30 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn createInfo(self: *Self, name: []const u8) !*NoteInfo {
+fn createInfo(self: *Self, name: []const u8) !*NoteInfo {
     var alloc = self.mem.allocator();
     var info = try NoteInfo.new(alloc, name);
     errdefer info.free(alloc);
 
-    var list = std.ArrayList(NoteInfo).fromOwnedSlice(
-        alloc,
-        self.note_infos,
-    );
-
-    try list.append(info);
-    self.note_infos = try list.toOwnedSlice();
-
+    try utils.push(NoteInfo, alloc, &self.note_infos, info);
     return &(self.note_infos[self.note_infos.len - 1]);
 }
 
-pub fn getOrCreatePtrInfo(self: *Self, name: []const u8) !*NoteInfo {
-    return self.getPtrToInfo(name) orelse
-        try self.createInfo(name);
+pub fn createNote(self: *Self, name: []const u8) !*Note {
+    var alloc = self.mem.allocator();
+
+    var info = try self.createInfo(name);
+    errdefer self.note_infos = self.note_infos[0 .. self.note_infos.len - 1];
+
+    var note = Note.new(info);
+
+    try utils.push(Note, alloc, &self.note_list, note);
+    return &(self.note_list[self.note_list.len - 1]);
+}
+
+pub fn getOrCreatePtrNote(self: *Self, name: []const u8) !*Note {
+    return self.getPtrToNote(name) orelse
+        try self.createNote(name);
 }
 
 pub fn writeChanges(self: *const Self, state: *State) !void {
@@ -84,9 +98,9 @@ pub fn writeChanges(self: *const Self, state: *State) !void {
     try state.fs.overwrite(DATA_STORE_FILENAME, string);
 }
 
-pub fn getPtrToInfo(self: *Self, name: []const u8) ?*NoteInfo {
-    for (self.note_infos) |*info| {
-        if (std.mem.eql(u8, info.name, name)) return info;
+pub fn getPtrToNote(self: *Self, name: []const u8) ?*Note {
+    for (self.note_list) |*note| {
+        if (std.mem.eql(u8, note.info.name, name)) return note;
     }
     return null;
 }

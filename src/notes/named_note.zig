@@ -38,6 +38,14 @@ pub const NoteInfo = struct {
         alloc.free(self.note_path);
         self.* = undefined;
     }
+
+    pub fn creationDate(self: *const NoteInfo) utils.Date {
+        return utils.Date.initUnixMs(self.created);
+    }
+
+    pub fn modifiedDate(self: *const NoteInfo) utils.Date {
+        return utils.Date.initUnixMs(self.modified);
+    }
 };
 
 pub const Note = struct {
@@ -49,16 +57,25 @@ pub const Note = struct {
     /// Note owns the memory.
     pub fn readNote(self: *Note, state: *State) ![]const u8 {
         if (self.content) |ct| return ct;
-        var alloc = state.mem.allocator();
+        var alloc = state.manager.mem.allocator();
         self.content = try state.fs.readFileAlloc(alloc, self.diary_path);
         return self.content.?;
+    }
+
+    pub fn new(info: *NoteInfo) Note {
+        return .{ .content = null, .info = info };
     }
 };
 
 pub fn openOrCreate(state: *State, name: []const u8) !Note {
-    var info = try state.manager.getOrCreatePtrInfo(name);
-    return .{
-        .info = info,
-        .content = null,
-    };
+    const note = try state.manager.getOrCreatePtrNote(name);
+    return note.*;
+}
+
+pub fn sortCreated(_: void, lhs: Note, rhs: Note) bool {
+    return lhs.info.created < rhs.info.created;
+}
+
+pub fn sortModified(_: void, lhs: Note, rhs: Note) bool {
+    return lhs.info.modified < rhs.info.modified;
 }

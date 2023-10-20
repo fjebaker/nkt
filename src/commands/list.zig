@@ -16,6 +16,8 @@ pub const extended_help =
     \\  nkt list
     \\     [-n/--limit int]      maximum number of entries to display
     \\     [--all]               list all entries (ignores `--limit`)
+    \\     [--modified]          sort by last modified (default for notes)
+    \\     [--created]           sort by date created (default for days)
     \\     [notes|days]          list either notes or days (default days)
     \\
 ;
@@ -23,6 +25,7 @@ pub const extended_help =
 const Options = enum { notes, days };
 
 selection: Options,
+ordering: State.Ordering,
 number: usize,
 all: bool,
 
@@ -30,6 +33,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
     var selection: ?Options = null;
     var number: usize = 25;
     var all: bool = false;
+    var ordering: ?State.Ordering = null;
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
@@ -38,6 +42,10 @@ pub fn init(itt: *cli.ArgIterator) !Self {
                 number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 all = true;
+            } else if (arg.is(null, "modified")) {
+                ordering = .Modified;
+            } else if (arg.is(null, "created")) {
+                ordering = .Created;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -49,10 +57,16 @@ pub fn init(itt: *cli.ArgIterator) !Self {
             } else return cli.CLIErrors.TooManyArguments;
         }
     }
+
+    const selected = selection orelse .days;
     return .{
-        .selection = selection orelse .days,
+        .selection = selected,
         .number = number,
         .all = all,
+        .ordering = ordering orelse switch (selected) {
+            .days => .Created,
+            .notes => .Modified,
+        },
     };
 }
 
@@ -89,17 +103,24 @@ fn listNotes(
     state: *State,
     out_writer: anytype,
 ) !void {
-    _ = self;
     var notes_directory = try state.fs.iterableNotesDirectory();
     defer notes_directory.close();
 
-    var iterator = notes_directory.iterate();
-    while (try iterator.next()) |entry| {
-        if (entry.kind != .file) continue;
-        if (std.mem.indexOf(u8, entry.name, notes.named_note.DEFAULT_FILE_EXTENSION)) |end| {
-            const name = entry.name[0..end];
-            try out_writer.print("{s}\n", .{name});
-        }
+    var note_list = try state.makeNoteList(self.ordering);
+    defer note_list.deinit();
+
+    switch (self.ordering) {
+        .Modified => try out_writer.print("Notes ordered by last modified:\n", .{}),
+        .Created => try out_writer.print("Notes ordered by date created:\n", .{}),
+    }
+
+    for (note_list.items) |note| {
+        const date = switch (self.ordering) {
+            .Modified => note.info.modifiedDate(),
+            .Created => note.info.creationDate(),
+        };
+        const date_string = try utils.formatDateBuf(date);
+        try out_writer.print("{s} - {s}\n", .{ date_string, note.info.name });
     }
 }
 
