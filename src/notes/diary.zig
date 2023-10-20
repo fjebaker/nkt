@@ -12,8 +12,8 @@
 // if absolutely needed
 
 const std = @import("std");
-const utils = @import("utils.zig");
-const State = @import("State.zig");
+const utils = @import("../utils.zig");
+const State = @import("../State.zig");
 
 pub const DIARY_ENTRY_SUFFIX = ".md";
 pub const DIARY_EXTRA_SUFFIX = ".meta.json";
@@ -134,7 +134,7 @@ fn parseNotes(alloc: std.mem.Allocator, string: []const u8) ![]DiaryNote {
 
 /// Open the diary entry from a specified date.
 /// Will create a blank entry if entry does not exist.
-pub fn openEntry(state: *State, date: utils.Date) !Entry {
+pub fn openOrCreate(state: *State, date: utils.Date) !Entry {
     var alloc = state.mem.allocator();
 
     const diary_path = try diaryPath(state, date);

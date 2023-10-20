@@ -13,8 +13,9 @@ pub const alias = [_][]const u8{"ls"};
 pub const help = "List notes in various ways.";
 pub const extended_help =
     \\List notes in various ways to the terminal.
-    \\  nkt list 
+    \\  nkt list
     \\     [-n/--limit int]      maximum number of entries to display
+    \\     [--all]               list all entries (ignores `--limit`)
     \\     [notes|days]          list either notes or days (default days)
     \\
 ;
@@ -23,16 +24,20 @@ const Options = enum { notes, days };
 
 selection: Options,
 number: usize,
+all: bool,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
     var selection: ?Options = null;
     var number: usize = 25;
+    var all: bool = false;
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
             if (arg.is('n', "limit")) {
                 const value = try itt.getValue();
                 number = try value.as(usize);
+            } else if (arg.is(null, "all")) {
+                all = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -47,6 +52,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
     return .{
         .selection = selection orelse .days,
         .number = number,
+        .all = all,
     };
 }
 
@@ -84,9 +90,17 @@ fn listNotes(
     out_writer: anytype,
 ) !void {
     _ = self;
-    _ = state;
-    _ = out_writer;
-    // todo
+    var notes_directory = try state.fs.iterableNotesDirectory();
+    defer notes_directory.close();
+
+    var iterator = notes_directory.iterate();
+    while (try iterator.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (std.mem.indexOf(u8, entry.name, notes.named_note.DEFAULT_FILE_EXTENSION)) |end| {
+            const name = entry.name[0..end];
+            try out_writer.print("{s}\n", .{name});
+        }
+    }
 }
 
 fn listDays(
@@ -99,8 +113,17 @@ fn listDays(
 
     date_list.sort();
 
-    const end = @min(self.number, date_list.items.len);
-    try out_writer.print("Last {d} diary entries:\n", .{end});
+    const end = blk: {
+        if (self.all) {
+            try out_writer.print("All diary entries:\n", .{});
+            break :blk date_list.items.len;
+        } else {
+            const end = @min(self.number, date_list.items.len);
+            try out_writer.print("Last {d} diary entries:\n", .{end});
+            break :blk end;
+        }
+    };
+
     for (1.., date_list.items[0..end]) |i, date| {
         const day = try utils.formatDateBuf(date);
         try out_writer.print("{d}: {s}\n", .{ end - i, day });

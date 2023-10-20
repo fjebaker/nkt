@@ -94,7 +94,7 @@ fn readLastNotes(
     for (0..date_list.items.len) |i| {
         const date = date_list.items[date_list.items.len - i - 1];
 
-        var entry = try state.openEntry(date);
+        var entry = try state.openDiaryEntry(date);
         try needed.append(entry);
 
         // tally how many entries we'd print now
@@ -137,7 +137,7 @@ fn readEntry(
     var note = self.selection.?;
     const date = try note.getDate(state);
 
-    var entry = try state.openEntry(date);
+    var entry = try state.openDiaryEntry(date);
 
     if (entry.has_diary) try readDiaryContent(
         state,
@@ -154,7 +154,7 @@ pub fn run(
 ) !void {
     if (self.selection) |selection| switch (selection) {
         .Day, .Date => try self.readEntry(state, out_writer),
-        .Name => try self.readNamedNode(state, out_writer),
+        .NamedNote => try self.readNamedNode(state, out_writer),
     } else {
         try self.readLastNotes(state, out_writer);
     }

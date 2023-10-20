@@ -6,12 +6,11 @@ const list = @import("./commands/list.zig");
 
 const State = @import("State.zig");
 
-pub const diary = @import("diary.zig");
+pub const diary = @import("./notes/diary.zig");
+pub const named_note = @import("./notes/named_note.zig");
 
 pub const SelectionError = error{ UnknownSelection, NoDate };
 pub const NoteError = error{NoSuchNote};
-
-pub const DEFAULT_FILE_EXTENSION = ".md";
 
 pub fn today() AnyNote {
     return .{ .Day = .{ .i = 0 } };
@@ -23,7 +22,7 @@ pub const AnyNote = union(enum) {
         date: ?utils.Date = null,
     },
     Date: utils.Date,
-    Name: []const u8,
+    NamedNote: []const u8,
 
     pub fn getDate(
         self: *AnyNote,
@@ -53,20 +52,13 @@ pub const AnyNote = union(enum) {
     /// Get the relative filepath of the note from state.
     /// State owns the memory.
     pub fn getRelPath(self: *AnyNote, state: *State) ![]const u8 {
-        var alloc = state.mem.allocator();
         switch (self.*) {
-            .Date, .Day => return diary.diaryPath(state, try self.getDate(state)),
-            .Name => |name| {
-                const filename = try std.mem.concat(
-                    alloc,
-                    u8,
-                    &.{ name, DEFAULT_FILE_EXTENSION },
-                );
-                return std.fs.path.join(
-                    alloc,
-                    &.{ State.FileSystem.NOTES_DIRECTORY, filename },
-                );
+            .Date, .Day => {
+                const date = try self.getDate(state);
+                const entry = try state.openDiaryEntry(date);
+                return entry.diary_path;
             },
+            .NamedNote => |name| return (try state.openNamedNote(name)).info.note_path,
         }
     }
 
@@ -99,7 +91,7 @@ pub const AnyNote = union(enum) {
                     },
                 );
             },
-            .Name => {},
+            .NamedNote => {},
         }
     }
 };
@@ -133,7 +125,7 @@ pub fn parse(string: []const u8) !AnyNote {
         const date = try utils.toDate(string);
         return .{ .Date = date };
     } else {
-        return .{ .Name = string };
+        return .{ .NamedNote = string };
     }
 }
 
