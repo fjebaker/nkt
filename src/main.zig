@@ -79,7 +79,10 @@ pub fn main() !void {
     defer allocator.free(root_path);
 
     // initialize the state
-    var state = try State.init(allocator, root_path);
+    var state = try State.init(
+        allocator,
+        .{ .root_path = root_path },
+    );
     defer state.deinit();
 
     // setup complete: execute the program

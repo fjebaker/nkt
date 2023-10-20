@@ -1,11 +1,12 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const cli = @import("cli.zig");
-const diary = @import("diary.zig");
 
 const list = @import("./commands/list.zig");
 
 const State = @import("State.zig");
+
+pub const diary = @import("diary.zig");
 
 pub const SelectionError = error{ UnknownSelection, NoDate };
 
@@ -62,7 +63,7 @@ pub const AnyNote = union(enum) {
                 );
                 return std.fs.path.join(
                     alloc,
-                    &.{ State.NOTES_DIRECTORY, filename },
+                    &.{ State.FileSystem.NOTES_DIRECTORY, filename },
                 );
             },
         }
@@ -75,7 +76,7 @@ pub const AnyNote = union(enum) {
         state: *State,
         rel_path: []const u8,
     ) !void {
-        var fs = try state.dir.createFile(rel_path, .{});
+        var fs = try state.fs.dir.createFile(rel_path, .{});
         defer fs.close();
 
         var writer = fs.writer();

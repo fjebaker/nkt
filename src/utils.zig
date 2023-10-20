@@ -74,6 +74,10 @@ pub fn toDate(string: []const u8) !Date {
     const month = try std.fmt.parseInt(u16, string[5..7], 10) - 1;
     const day = try std.fmt.parseInt(u16, string[8..10], 10) - 1;
 
+    return newDate(year, month, day);
+}
+
+pub fn newDate(year: u16, month: u16, day: u16) Date {
     return Date.init(year, month, day, 0, 0, 0);
 }
 

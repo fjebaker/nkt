@@ -1,129 +1,77 @@
 const std = @import("std");
 const utils = @import("utils.zig");
+const notes = @import("notes.zig");
+
+pub const FileSystem = @import("FileSystem.zig");
 
 const Self = @This();
 
-pub const DIARY_DIRECTORY = "log";
-pub const NOTES_DIRECTORY = "notes";
+pub const DiaryMapKey = struct {
+    year: u16,
+    month: u16,
+    day: u16,
+};
 
-pub const MAXIMUM_BYTES_READ = 16384;
-
-mem: std.heap.ArenaAllocator,
-root_path: []const u8,
-dir: std.fs.Dir,
-
-pub fn init(allocator: std.mem.Allocator, root_path: []const u8) !Self {
-    var dir = try std.fs.cwd().openDir(root_path, .{});
-    errdefer dir.close();
-
+fn toKey(date: utils.Date) DiaryMapKey {
     return .{
-        .dir = dir,
-        .root_path = root_path,
-        .mem = std.heap.ArenaAllocator.init(allocator),
+        .year = date.years,
+        .month = date.months,
+        .day = date.days,
+    };
+}
+fn toDate(key: DiaryMapKey) utils.Date {
+    return utils.newDate(key.year, key.month, key.day);
+}
+
+pub const DiaryMap = std.AutoHashMap(DiaryMapKey, notes.diary.Entry);
+
+fs: FileSystem,
+mem: std.heap.ArenaAllocator,
+diary: DiaryMap,
+
+pub const Config = struct {
+    root_path: []const u8,
+};
+
+pub fn init(allocator: std.mem.Allocator, config: Config) !Self {
+    var mem = std.heap.ArenaAllocator.init(allocator);
+    errdefer mem.deinit();
+
+    var diarymap = DiaryMap.init(mem.child_allocator);
+    errdefer diarymap.deinit();
+
+    var file_system = try FileSystem.init(config.root_path);
+    return .{
+        .fs = file_system,
+        .mem = mem,
+        .diary = diarymap,
     };
 }
 
 pub fn deinit(self: *Self) void {
-    self.dir.close();
+    self.diary.deinit();
+    self.fs.deinit();
     self.mem.deinit();
     self.* = undefined;
 }
 
-fn isFileNotFound(err: anyerror) bool {
-    if (utils.inErrorSet(err, std.fs.File.OpenError)) |e| {
-        if (e == std.fs.File.OpenError.FileNotFound) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/// Open a file at the given relative path, else create it and return handle.
-/// Will raise errors for permissions, etc.
-pub fn openElseCreate(self: *const Self, rel_path: []const u8) !std.fs.File {
-    return (try self.openElseNull(rel_path)) orelse
-        self.dir.createFile(rel_path, .{});
-}
-
-/// Open a file at the given relative path, else return `null` if the
-/// file does not exist. Will raise errors for permissions, etc.
-pub fn openElseNull(self: *const Self, rel_path: []const u8) !?std.fs.File {
-    return self.dir.openFile(rel_path, .{ .mode = .read_write }) catch |err| {
-        if (isFileNotFound(err)) return null;
-        return err;
+/// Lookup the diary entry in the diary map, else open it and store in
+/// the diary map. Returns a pointer to the Entry.
+pub fn openEntry(self: *Self, date: utils.Date) !*notes.diary.Entry {
+    const key = toKey(date);
+    return self.diary.getPtr(key) orelse {
+        var entry = try notes.diary.openEntry(self, date);
+        try self.diary.put(key, entry);
+        return self.diary.getPtr(key).?;
     };
 }
 
-/// Read the contents of a file at the relativity path.
-/// State owns the memory.
-pub fn readFile(self: *Self, rel_path: []const u8) ![]u8 {
-    return self.readFileAlloc(self.mem.allocator(), rel_path);
+pub fn openToday(self: *Self) !*notes.diary.Entry {
+    return self.openEntry(utils.Date.now());
 }
 
-/// Read the contents of a file at the relativity path.
-/// Caller owns the memory.
-pub fn readFileAlloc(
-    self: *const Self,
-    alloc: std.mem.Allocator,
-    rel_path: []const u8,
-) ![]u8 {
-    var file = try self.dir.openFile(rel_path, .{ .mode = .read_only });
-    defer file.close();
-    return file.readToEndAlloc(alloc, MAXIMUM_BYTES_READ);
-}
-
-/// Read the contents of a file at the relativity path, return null if does
-/// not exist. Will raise error on permissions etc.
-/// Caller owns the memory.
-pub fn readFileAllocElseNull(
-    self: *const Self,
-    alloc: std.mem.Allocator,
-    rel_path: []const u8,
-) !?[]u8 {
-    return self.readFileAlloc(alloc, rel_path) catch |err| {
-        if (isFileNotFound(err)) return null;
-        return err;
-    };
-}
-
-fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
-    self.dir.makeDir(path) catch |err| {
-        if (err != std.os.MakeDirError.PathAlreadyExists) return err;
-    };
-}
-
-/// Initialize the home directory with requisite sub paths.
-pub fn setupDirectory(self: *const Self) !void {
-    try self.makeDirIfNotExists(DIARY_DIRECTORY);
-    try self.makeDirIfNotExists(NOTES_DIRECTORY);
-}
-
-/// Check if a file exists.
-/// Will raise error on permissions etc.
-pub fn fileExists(self: *const Self, path: []const u8) !bool {
-    self.dir.access(path, .{}) catch |err| {
-        if (err == std.fs.Dir.AccessError.FileNotFound) return false;
-        return err;
-    };
-    return true;
-}
-
-pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
-    return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
-}
-
-pub fn iterableNotesDirectory(self: *const Self) !std.fs.IterableDir {
-    return self.dir.openIterableDir(NOTES_DIRECTORY, .{});
-}
-
-/// Turn a path relative to the root directory into an absolute file path.
-/// State owns the memory.
-pub fn absPathify(
-    self: *Self,
-    rel_path: []const u8,
-) ![]const u8 {
-    return std.fs.path.join(
-        self.mem.allocator(),
-        &.{ self.root_path, rel_path },
-    );
+/// Turn a path relative to the root directory into an absolute file
+/// path. State owns the memory.
+pub fn absPathify(self: *Self, rel_path: []const u8) ![]const u8 {
+    return self.fs.absPathify(self.mem.allocator(), rel_path);
 }

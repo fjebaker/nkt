@@ -52,7 +52,7 @@ pub fn run(
     const rel_path = try self.selection.getRelPath(state);
     const abs_path = try state.absPathify(rel_path);
 
-    if (try state.fileExists(rel_path)) {
+    if (try state.fs.fileExists(rel_path)) {
         try out_writer.print("Opening file '{s}'\n", .{rel_path});
     } else {
         try out_writer.print("Creating new file '{s}'\n", .{rel_path});

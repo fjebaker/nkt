@@ -1,6 +1,5 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const diary = @import("../diary.zig");
 
 const State = @import("../State.zig");
 
@@ -22,8 +21,7 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var entry = try diary.today(state);
-    defer entry.deinit();
+    var entry = try state.openToday();
 
     try entry.addNote(self.note);
     try entry.writeNotes(state);

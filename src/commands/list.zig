@@ -2,7 +2,6 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const notes = @import("../notes.zig");
-const diary = @import("../diary.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
@@ -54,7 +53,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 pub fn getDiaryDateList(
     state: *State,
 ) !utils.DateList {
-    var diary_directory = try state.iterableDiaryDirectory();
+    var diary_directory = try state.fs.iterableDiaryDirectory();
     defer diary_directory.close();
 
     var alloc = state.mem.allocator();
@@ -68,7 +67,7 @@ pub fn getDiaryDateList(
         if (std.mem.indexOf(
             u8,
             entry.name,
-            diary.DIARY_EXTRA_SUFFIX,
+            notes.diary.DIARY_EXTRA_SUFFIX,
         )) |end| {
             const day = entry.name[0..end];
             const date = utils.toDate(day) catch continue;

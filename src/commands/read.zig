@@ -2,7 +2,6 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const notes = @import("../notes.zig");
-const diary = @import("../diary.zig");
 
 const list = @import("./list.zig");
 
@@ -47,7 +46,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 }
 
 fn readDiary(
-    entry: diary.Entry,
+    entry: notes.diary.Entry,
     out_writer: anytype,
     limit: usize,
 ) !void {
@@ -65,7 +64,7 @@ fn readDiary(
 
 fn readDiaryContent(
     state: *State,
-    entry: *diary.Entry,
+    entry: *notes.diary.Entry,
     out_writer: anytype,
 ) !void {
     try out_writer.print(
@@ -90,13 +89,12 @@ fn readLastNotes(
     date_list.sort();
 
     // calculate how many diary entries we need
-    var needed = std.ArrayList(diary.Entry).init(alloc);
+    var needed = std.ArrayList(*notes.diary.Entry).init(alloc);
     var note_count: usize = 0;
     for (0..date_list.items.len) |i| {
         const date = date_list.items[date_list.items.len - i - 1];
 
-        var entry = try diary.openDiary(state, date);
-
+        var entry = try state.openEntry(date);
         try needed.append(entry);
 
         // tally how many entries we'd print now
@@ -104,16 +102,16 @@ fn readLastNotes(
         if (note_count >= self.number) break;
     }
 
-    std.mem.reverse(diary.Entry, needed.items);
+    std.mem.reverse(*notes.diary.Entry, needed.items);
 
     // print the first one truncated
     const difference = note_count -| self.number;
-    try readDiary(needed.items[0], out_writer, needed.items[0].notes.len - difference);
+    try readDiary(needed.items[0].*, out_writer, needed.items[0].notes.len - difference);
 
     // print the rest
     if (needed.items.len > 1) {
         for (needed.items[1..]) |entry| {
-            try readDiary(entry, out_writer, note_count);
+            try readDiary(entry.*, out_writer, note_count);
             note_count -|= entry.notes.len;
         }
     }
@@ -127,15 +125,14 @@ fn readEntry(
     var note = self.selection.?;
     const date = try note.getDate(state);
 
-    var entry = try diary.openDiary(state, date);
-    defer entry.deinit();
+    var entry = try state.openEntry(date);
 
     if (entry.has_diary) try readDiaryContent(
         state,
-        &entry,
+        entry,
         out_writer,
     );
-    try readDiary(entry, out_writer, self.number);
+    try readDiary(entry.*, out_writer, self.number);
 }
 
 pub fn run(

@@ -28,7 +28,7 @@ fn relativePath(state: *State, date: utils.Date, suffix: []const u8) ![]const u8
     );
     defer alloc.free(entry);
 
-    return std.fs.path.join(alloc, &.{ State.DIARY_DIRECTORY, entry });
+    return std.fs.path.join(alloc, &.{ State.FileSystem.DIARY_DIRECTORY, entry });
 }
 
 /// Get the relative path to the diary entry.
@@ -88,7 +88,7 @@ pub const Entry = struct {
     /// Entry owns the memory.
     pub fn readDiary(self: *Entry, state: *const State) ![]const u8 {
         if (self.content) |ct| return ct;
-        self.content = try state.readFileAlloc(self.alloc, self.diary_path);
+        self.content = try state.fs.readFileAlloc(self.alloc, self.diary_path);
         return self.content.?;
     }
 
@@ -99,7 +99,7 @@ pub const Entry = struct {
     }
 
     pub fn writeNotes(self: *Entry, state: *const State) !void {
-        var fs = try state.openElseCreate(self.notes_path);
+        var fs = try state.fs.openElseCreate(self.notes_path);
         defer fs.close();
 
         const string = try toJsonString(self.alloc, self.notes);
@@ -134,13 +134,13 @@ fn parseNotes(alloc: std.mem.Allocator, string: []const u8) ![]DiaryNote {
 
 /// Open the diary entry from a specified date.
 /// Will create a blank entry if entry does not exist.
-pub fn openDiary(state: *State, date: utils.Date) !Entry {
+pub fn openEntry(state: *State, date: utils.Date) !Entry {
     var alloc = state.mem.allocator();
 
     const diary_path = try diaryPath(state, date);
     const notes_path = try notesPath(state, date);
 
-    var notes_content = try state.readFileAllocElseNull(
+    var notes_content = try state.fs.readFileAllocElseNull(
         state.mem.child_allocator,
         notes_path,
     );
@@ -151,7 +151,7 @@ pub fn openDiary(state: *State, date: utils.Date) !Entry {
     else
         try alloc.alloc(DiaryNote, 0);
 
-    const has_diary = try state.fileExists(diary_path);
+    const has_diary = try state.fs.fileExists(diary_path);
 
     return .{
         .alloc = alloc,
@@ -161,9 +161,4 @@ pub fn openDiary(state: *State, date: utils.Date) !Entry {
         .notes = notes,
         .has_diary = has_diary,
     };
-}
-
-pub fn today(state: *State) !Entry {
-    const date = utils.Date.now();
-    return openDiary(state, date);
 }
