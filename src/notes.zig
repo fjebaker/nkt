@@ -1,5 +1,6 @@
 const std = @import("std");
 const utils = @import("utils.zig");
+const cli = @import("cli.zig");
 
 const State = @import("State.zig");
 const DayEntry = @import("DayEntry.zig");
@@ -130,4 +131,19 @@ pub fn parse(string: []const u8) !Note {
     } else {
         return .{ .Name = string };
     }
+}
+
+pub fn today() Note {
+    return .{ .Day = .{ .i = 0 } };
+}
+
+pub fn optionalParse(
+    itt: *cli.ArgIterator,
+) !?Note {
+    const arg = (try itt.next()) orelse return null;
+    if (arg.flag) {
+        itt.rewind();
+        return null;
+    }
+    return try parse(arg.string);
 }

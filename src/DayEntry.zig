@@ -177,6 +177,10 @@ pub const DayList = struct {
     pub fn sort(self: *DayList) void {
         std.sort.insertion(utils.Date, self.days, {}, utils.dateSort);
     }
+
+    pub fn reverse(self: *DayList) void {
+        std.mem.reverse(utils.Date, self.days);
+    }
 };
 
 pub fn getDayList(alloc: std.mem.Allocator, state: *State) !DayList {

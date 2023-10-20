@@ -87,6 +87,21 @@ pub const ArgIterator = struct {
     index: usize = 0,
     counter: usize = 0,
 
+    pub fn rewind(self: *ArgIterator) void {
+        switch (self.current_type) {
+            .Positional, .LongFlag, .Seperator => self.args.index -= 1,
+            .ShortFlag => {
+                if (self.index == 2) {
+                    // only one flag read, so need to rewind the argument too
+                    self.args.index -= 1;
+                    self.index = self.current.len;
+                } else {
+                    self.index -= 1;
+                }
+            },
+        }
+    }
+
     pub fn init(args: []const []const u8) ArgIterator {
         return .{ .args = Iterator([]const u8).init(args) };
     }
