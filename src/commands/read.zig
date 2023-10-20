@@ -61,6 +61,18 @@ fn readDiary(
     }
 }
 
+fn readDiaryContent(
+    alloc: std.mem.Allocator,
+    out_writer: anytype,
+    entry: DayEntry,
+    state: *State,
+) !void {
+    try out_writer.print("Diary entry for {s}\n", .{try utils.formatDateBuf(entry.date)});
+    var content = try state.readFile(alloc, entry.entry_filepath);
+    defer alloc.free(content);
+    _ = try out_writer.writeAll(content);
+}
+
 fn readLastNotes(
     self: Self,
     alloc: std.mem.Allocator,
@@ -110,6 +122,8 @@ fn readEntry(
     const date = try note.getDate(alloc, state);
     var diary = try DayEntry.openDate(alloc, date, state);
     defer diary.deinit();
+    if (try diary.hasEntry(state))
+        try readDiaryContent(alloc, out_writer, diary, state);
     try readDiary(out_writer, diary, self.number);
 }
 

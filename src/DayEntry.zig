@@ -141,6 +141,10 @@ pub fn openDate(
     return Self.initElseNew(alloc, date, entry_path, meta_path, state);
 }
 
+pub fn hasEntry(self: Self, state: *State) !bool {
+    return try state.fileExists(self.entry_filepath);
+}
+
 pub fn today(
     alloc: std.mem.Allocator,
     state: *State,
