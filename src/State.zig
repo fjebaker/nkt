@@ -3,94 +3,127 @@ const utils = @import("utils.zig");
 
 const Self = @This();
 
-pub const LOG_DIRECTORY = "log";
+pub const DIARY_DIRECTORY = "log";
 pub const NOTES_DIRECTORY = "notes";
 
-root_path: []const u8,
-dir: ?std.fs.Dir = null,
+pub const MAXIMUM_BYTES_READ = 16384;
 
-pub fn getDir(self: *Self) !std.fs.Dir {
-    return self.dir orelse {
-        self.dir = try std.fs.cwd().openDir(self.root_path, .{});
-        return self.dir.?;
+mem: std.heap.ArenaAllocator,
+root_path: []const u8,
+dir: std.fs.Dir,
+
+pub fn init(allocator: std.mem.Allocator, root_path: []const u8) !Self {
+    var dir = try std.fs.cwd().openDir(root_path, .{});
+    errdefer dir.close();
+
+    return .{
+        .dir = dir,
+        .root_path = root_path,
+        .mem = std.heap.ArenaAllocator.init(allocator),
     };
 }
 
-pub fn openElseCreate(self: *Self, rel_path: []const u8) !std.fs.File {
-    var dir = try self.getDir();
-    return (try self.openElseNull(rel_path)) orelse
-        dir.createFile(rel_path, .{});
+pub fn deinit(self: *Self) void {
+    self.dir.close();
+    self.mem.deinit();
+    self.* = undefined;
 }
 
-pub fn openElseNull(self: *Self, rel_path: []const u8) !?std.fs.File {
-    var dir = try self.getDir();
-    return dir.openFile(rel_path, .{ .mode = .read_write }) catch |err| {
-        if (utils.inErrorSet(err, std.fs.File.OpenError)) |e| {
-            if (e == std.fs.File.OpenError.FileNotFound) {
-                return null;
-            }
+fn isFileNotFound(err: anyerror) bool {
+    if (utils.inErrorSet(err, std.fs.File.OpenError)) |e| {
+        if (e == std.fs.File.OpenError.FileNotFound) {
+            return true;
         }
+    }
+    return false;
+}
+
+/// Open a file at the given relative path, else create it and return handle.
+/// Will raise errors for permissions, etc.
+pub fn openElseCreate(self: *const Self, rel_path: []const u8) !std.fs.File {
+    return (try self.openElseNull(rel_path)) orelse
+        self.dir.createFile(rel_path, .{});
+}
+
+/// Open a file at the given relative path, else return `null` if the
+/// file does not exist. Will raise errors for permissions, etc.
+pub fn openElseNull(self: *const Self, rel_path: []const u8) !?std.fs.File {
+    return self.dir.openFile(rel_path, .{ .mode = .read_write }) catch |err| {
+        if (isFileNotFound(err)) return null;
         return err;
     };
 }
 
-pub fn readFileElseNull(
-    self: *Self,
+/// Read the contents of a file at the relativity path.
+/// State owns the memory.
+pub fn readFile(self: *Self, rel_path: []const u8) ![]u8 {
+    return self.readFileAlloc(self.mem.allocator(), rel_path);
+}
+
+/// Read the contents of a file at the relativity path.
+/// Caller owns the memory.
+pub fn readFileAlloc(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+    rel_path: []const u8,
+) ![]u8 {
+    var file = try self.dir.openFile(rel_path, .{ .mode = .read_only });
+    defer file.close();
+    return file.readToEndAlloc(alloc, MAXIMUM_BYTES_READ);
+}
+
+/// Read the contents of a file at the relativity path, return null if does
+/// not exist. Will raise error on permissions etc.
+/// Caller owns the memory.
+pub fn readFileAllocElseNull(
+    self: *const Self,
     alloc: std.mem.Allocator,
     rel_path: []const u8,
 ) !?[]u8 {
-    var file = (try self.openElseNull(rel_path)) orelse return null;
-    defer file.close();
-    return try file.readToEndAlloc(alloc, 16384);
+    return self.readFileAlloc(alloc, rel_path) catch |err| {
+        if (isFileNotFound(err)) return null;
+        return err;
+    };
 }
 
-pub fn readFile(self: *Self, alloc: std.mem.Allocator, rel_path: []const u8) ![]u8 {
-    var dir = try self.getDir();
-    var file = try dir.openFile(rel_path, .{ .mode = .read_only });
-    defer file.close();
-    return file.readToEndAlloc(alloc, 16384);
+fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
+    self.dir.makeDir(path) catch |err| {
+        if (err != std.os.MakeDirError.PathAlreadyExists) return err;
+    };
 }
 
-pub fn deinit(self: *Self) void {
-    if (self.dir) |*d| d.close();
-    self.* = undefined;
-}
-
-pub fn setupDirectory(self: *Self) !void {
-    try self.makeDirIfNotExists(LOG_DIRECTORY);
+/// Initialize the home directory with requisite sub paths.
+pub fn setupDirectory(self: *const Self) !void {
+    try self.makeDirIfNotExists(DIARY_DIRECTORY);
     try self.makeDirIfNotExists(NOTES_DIRECTORY);
 }
 
-pub fn fileExists(self: *Self, path: []const u8) !bool {
-    var dir = try self.getDir();
-    dir.access(path, .{}) catch |err| {
+/// Check if a file exists.
+/// Will raise error on permissions etc.
+pub fn fileExists(self: *const Self, path: []const u8) !bool {
+    self.dir.access(path, .{}) catch |err| {
         if (err == std.fs.Dir.AccessError.FileNotFound) return false;
         return err;
     };
     return true;
 }
 
-fn makeDirIfNotExists(self: *Self, path: []const u8) !void {
-    var dir = try self.getDir();
-    dir.makeDir(path) catch |err| {
-        if (err != std.os.MakeDirError.PathAlreadyExists) return err;
-    };
+pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
+    return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
 }
 
-pub fn iterableLogDirectory(self: *Self) !std.fs.IterableDir {
-    var dir = try self.getDir();
-    return dir.openIterableDir(LOG_DIRECTORY, .{});
+pub fn iterableNotesDirectory(self: *const Self) !std.fs.IterableDir {
+    return self.dir.openIterableDir(NOTES_DIRECTORY, .{});
 }
 
-pub fn getNotesDirectory(self: *Self) !std.fs.IterableDir {
-    var dir = try self.getDir();
-    return dir.openIterableDir(NOTES_DIRECTORY, .{});
-}
-
+/// Turn a path relative to the root directory into an absolute file path.
+/// State owns the memory.
 pub fn absPathify(
-    self: *const Self,
-    alloc: std.mem.Allocator,
+    self: *Self,
     rel_path: []const u8,
-) ![]u8 {
-    return std.fs.path.join(alloc, &.{ self.root_path, rel_path });
+) ![]const u8 {
+    return std.fs.path.join(
+        self.mem.allocator(),
+        &.{ self.root_path, rel_path },
+    );
 }

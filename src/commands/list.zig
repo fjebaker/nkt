@@ -2,10 +2,10 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const notes = @import("../notes.zig");
+const diary = @import("../diary.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
-const DayEntry = @import("../DayEntry.zig");
 
 const Self = @This();
 
@@ -51,64 +51,70 @@ pub fn init(itt: *cli.ArgIterator) !Self {
     };
 }
 
-fn writeDiary(
-    out_writer: anytype,
-    entry: DayEntry,
-    limit: usize,
-) !void {
-    try out_writer.print("Notes for {s}\n", .{try utils.formatDateBuf(entry.date)});
+pub fn getDiaryDateList(
+    state: *State,
+) !utils.DateList {
+    var diary_directory = try state.iterableDiaryDirectory();
+    defer diary_directory.close();
 
-    const offset = @min(entry.notes.len, limit);
-    const start = entry.notes.len - offset;
+    var alloc = state.mem.allocator();
 
-    for (entry.notes[start..]) |note| {
-        const time_of_day = utils.adjustTimezone(utils.Date.initUnixMs(note.modified));
-        try time_of_day.format("HH:mm:ss - ", .{}, out_writer);
-        try out_writer.print("{s}\n", .{note.content});
+    var date_list = std.ArrayList(utils.Date).init(alloc);
+    errdefer date_list.deinit();
+
+    var iterator = diary_directory.iterate();
+    while (try iterator.next()) |entry| {
+        if (entry.kind != .file) continue;
+        if (std.mem.indexOf(
+            u8,
+            entry.name,
+            diary.DIARY_EXTRA_SUFFIX,
+        )) |end| {
+            const day = entry.name[0..end];
+            const date = utils.toDate(day) catch continue;
+            try date_list.append(date);
+        }
     }
+
+    return .{ .alloc = alloc, .items = try date_list.toOwnedSlice() };
 }
 
 fn listNotes(
     self: Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
     _ = self;
-    _ = alloc;
-    _ = out_writer;
     _ = state;
+    _ = out_writer;
     // todo
 }
 
 fn listDays(
     self: Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
-    var daylist = try DayEntry.getDayList(alloc, state);
-    defer daylist.deinit();
+    var date_list = try getDiaryDateList(state);
+    defer date_list.deinit();
 
-    daylist.sort();
+    date_list.sort();
 
-    const end = @min(self.number, daylist.days.len);
+    const end = @min(self.number, date_list.items.len);
     try out_writer.print("Last {d} diary entries:\n", .{end});
-    for (1.., daylist.days[0..end]) |i, date| {
-        var day = try utils.formatDate(alloc, date);
-        defer alloc.free(day);
+    for (1.., date_list.items[0..end]) |i, date| {
+        const day = try utils.formatDateBuf(date);
         try out_writer.print("{d}: {s}\n", .{ end - i, day });
     }
 }
 
 pub fn run(
     self: *Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
     switch (self.selection) {
-        .notes => try self.listNotes(alloc, out_writer, state),
-        .days => try self.listDays(alloc, out_writer, state),
+        .notes => try self.listNotes(state, out_writer),
+        .days => try self.listDays(state, out_writer),
     }
 }

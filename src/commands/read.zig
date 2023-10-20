@@ -2,10 +2,12 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const notes = @import("../notes.zig");
+const diary = @import("../diary.zig");
+
+const list = @import("./list.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
-const DayEntry = @import("../DayEntry.zig");
 
 const Self = @This();
 
@@ -21,7 +23,7 @@ pub const extended_help =
     \\
 ;
 
-selection: ?notes.Note,
+selection: ?notes.AnyNote,
 number: usize,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
@@ -45,8 +47,8 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 }
 
 fn readDiary(
+    entry: diary.Entry,
     out_writer: anytype,
-    entry: DayEntry,
     limit: usize,
 ) !void {
     try out_writer.print("Notes for {s}\n", .{try utils.formatDateBuf(entry.date)});
@@ -62,81 +64,89 @@ fn readDiary(
 }
 
 fn readDiaryContent(
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
-    entry: DayEntry,
     state: *State,
+    entry: *diary.Entry,
+    out_writer: anytype,
 ) !void {
-    try out_writer.print("Diary entry for {s}\n", .{try utils.formatDateBuf(entry.date)});
-    var content = try state.readFile(alloc, entry.entry_filepath);
-    defer alloc.free(content);
+    try out_writer.print(
+        "Diary entry for {s}\n",
+        .{try utils.formatDateBuf(entry.date)},
+    );
+
+    const content = try entry.readDiary(state);
     _ = try out_writer.writeAll(content);
 }
 
 fn readLastNotes(
     self: Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
-    var mem = std.heap.ArenaAllocator.init(alloc);
-    defer mem.deinit();
-    var temp_alloc = mem.allocator();
+    var alloc = state.mem.allocator();
 
-    var dl = try DayEntry.getDayList(temp_alloc, state);
-    dl.sort();
+    var date_list = try list.getDiaryDateList(state);
+    defer date_list.deinit();
+
+    date_list.sort();
 
     // calculate how many diary entries we need
-    var list = std.ArrayList(DayEntry).init(temp_alloc);
+    var needed = std.ArrayList(diary.Entry).init(alloc);
     var note_count: usize = 0;
-    for (0..dl.days.len) |i| {
-        const date = dl.days[dl.days.len - i - 1];
-        var diary = try DayEntry.openDate(temp_alloc, date, state);
-        try list.append(diary);
-        note_count += diary.notes.len;
+    for (0..date_list.items.len) |i| {
+        const date = date_list.items[date_list.items.len - i - 1];
+
+        var entry = try diary.openDiary(state, date);
+
+        try needed.append(entry);
+
+        // tally how many entries we'd print now
+        note_count += entry.notes.len;
         if (note_count >= self.number) break;
     }
 
-    std.mem.reverse(DayEntry, list.items);
+    std.mem.reverse(diary.Entry, needed.items);
 
     // print the first one truncated
     const difference = note_count -| self.number;
-    try readDiary(out_writer, list.items[0], list.items[0].notes.len - difference);
+    try readDiary(needed.items[0], out_writer, needed.items[0].notes.len - difference);
 
     // print the rest
-    if (list.items.len > 1) {
-        for (list.items[1..]) |diary| {
-            try readDiary(out_writer, diary, note_count);
-            note_count -|= diary.notes.len;
+    if (needed.items.len > 1) {
+        for (needed.items[1..]) |entry| {
+            try readDiary(entry, out_writer, note_count);
+            note_count -|= entry.notes.len;
         }
     }
 }
 
 fn readEntry(
     self: Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
     var note = self.selection.?;
-    const date = try note.getDate(alloc, state);
-    var diary = try DayEntry.openDate(alloc, date, state);
-    defer diary.deinit();
-    if (try diary.hasEntry(state))
-        try readDiaryContent(alloc, out_writer, diary, state);
-    try readDiary(out_writer, diary, self.number);
+    const date = try note.getDate(state);
+
+    var entry = try diary.openDiary(state, date);
+    defer entry.deinit();
+
+    if (entry.has_diary) try readDiaryContent(
+        state,
+        &entry,
+        out_writer,
+    );
+    try readDiary(entry, out_writer, self.number);
 }
 
 pub fn run(
     self: *Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
     if (self.selection) |selection| switch (selection) {
-        .Day, .Date => try self.readEntry(alloc, out_writer, state),
+        .Day, .Date => try self.readEntry(state, out_writer),
         .Name => {},
     } else {
-        try self.readLastNotes(alloc, out_writer, state);
+        try self.readLastNotes(state, out_writer);
     }
 }

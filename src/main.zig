@@ -1,7 +1,6 @@
 const std = @import("std");
 const cli = @import("cli.zig");
 const utils = @import("utils.zig");
-const DayEntry = @import("DayEntry.zig");
 const State = @import("State.zig");
 const Editor = @import("Editor.zig");
 
@@ -17,12 +16,11 @@ pub const Commands = union(enum) {
 
     pub fn run(
         self: *Commands,
-        allocator: std.mem.Allocator,
-        out_writer: anytype,
         state: *State,
+        out_writer: anytype,
     ) !void {
         switch (self.*) {
-            inline else => |*s| try s.run(allocator, out_writer, state),
+            inline else => |*s| try s.run(state, out_writer),
         }
     }
 
@@ -72,6 +70,7 @@ pub fn main() !void {
     };
     defer cmd.deinit();
 
+    // resolve the home path
     var home_dir_path = std.os.getenv("HOME").?;
     var root_path = try std.fs.path.join(
         allocator,
@@ -79,16 +78,18 @@ pub fn main() !void {
     );
     defer allocator.free(root_path);
 
-    var state: State = .{ .root_path = root_path };
+    // initialize the state
+    var state = try State.init(allocator, root_path);
     defer state.deinit();
-    try cmd.run(allocator, stdout, &state);
+
+    // setup complete: execute the program
+    try cmd.run(&state, stdout);
 
     try bw.flush();
 }
 
 test "root" {
     _ = cli;
-    _ = DayEntry;
     _ = utils;
 
     var dir = std.testing.tmpDir(.{});

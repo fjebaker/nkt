@@ -70,9 +70,8 @@ pub fn printHelp(writer: anytype) !void {
 
 pub fn run(
     self: *Self,
-    _: std.mem.Allocator,
-    out_writer: anytype,
     _: *State,
+    out_writer: anytype,
 ) !void {
     if (self.command.len > 0) {
         try printExtendedHelp(out_writer, self.command);

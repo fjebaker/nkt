@@ -4,7 +4,6 @@ const utils = @import("../utils.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../State.zig");
-const DayEntry = @import("../DayEntry.zig");
 
 pub const help = "(Re)Initialize the home directory structure.";
 
@@ -17,9 +16,8 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 
 pub fn run(
     _: *Self,
-    _: std.mem.Allocator,
-    _: anytype,
     state: *State,
+    _: anytype,
 ) !void {
     try state.setupDirectory();
 }

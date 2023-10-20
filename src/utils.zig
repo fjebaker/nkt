@@ -1,6 +1,38 @@
 const std = @import("std");
 const time = @import("time");
 
+pub const DateError = error{DateStringTooShort};
+
+pub const Date = time.DateTime;
+
+pub fn List(comptime T: type, comptime lessThan: anytype) type {
+    return struct {
+        const Self = @This();
+
+        alloc: std.mem.Allocator,
+        items: []T,
+
+        pub fn deinit(self: *Self) void {
+            self.alloc.free(self.items);
+            self.* = undefined;
+        }
+
+        pub fn sort(self: *Self) void {
+            std.sort.insertion(T, self.items, {}, lessThan);
+        }
+
+        pub fn reverse(self: *Self) void {
+            std.mem.reverse(T, self.items);
+        }
+    };
+}
+
+fn dateSort(_: void, lhs: Date, rhs: Date) bool {
+    return (lhs.toUnixMilli() < rhs.toUnixMilli());
+}
+
+pub const DateList = List(Date, dateSort);
+
 pub fn isAlias(
     comptime field: std.builtin.Type.UnionField,
     name: []const u8,
@@ -13,9 +45,6 @@ pub fn isAlias(
     return false;
 }
 
-pub const DateError = error{DateStringTooShort};
-
-pub const Date = time.DateTime;
 pub fn adjustTimezone(date: Date) Date {
     var modified = date.addHours(1);
     if (modified.hours >= 24) {
@@ -70,10 +99,6 @@ pub fn dayOfWeek(alloc: std.mem.Allocator, date: Date) ![]const u8 {
 pub fn monthOfYear(alloc: std.mem.Allocator, date: Date) ![]const u8 {
     const t_date = adjustTimezone(date);
     return t_date.formatAlloc(alloc, "MMMM");
-}
-
-pub fn dateSort(_: void, lhs: Date, rhs: Date) bool {
-    return (lhs.toUnixMilli() < rhs.toUnixMilli());
 }
 
 fn testToDateAndBack(s: []const u8) !void {

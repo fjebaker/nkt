@@ -1,8 +1,8 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const diary = @import("../diary.zig");
 
 const State = @import("../State.zig");
-const DayEntry = @import("../DayEntry.zig");
 
 const Self = @This();
 
@@ -19,15 +19,14 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 
 pub fn run(
     self: *Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
-    var day = try DayEntry.today(alloc, state);
-    defer day.deinit();
+    var entry = try diary.today(state);
+    defer entry.deinit();
 
-    try day.addNote(self.note);
-    try day.writeMeta();
+    try entry.addNote(self.note);
+    try entry.writeNotes(state);
 
-    try out_writer.print("Written note to '{s}'\n", .{day.meta_filepath});
+    try out_writer.print("Written note to '{s}'\n", .{entry.notes_path});
 }

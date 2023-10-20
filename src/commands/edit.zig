@@ -1,12 +1,10 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const notes = @import("../notes.zig");
 
-const DayEntry = @import("../DayEntry.zig");
 const State = @import("../State.zig");
 const Editor = @import("../Editor.zig");
-
-const notes = @import("../notes.zig");
 
 const Self = @This();
 
@@ -27,7 +25,7 @@ pub const extended_help =
     \\
 ;
 
-selection: notes.Note,
+selection: notes.AnyNote,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
     var string: ?[]const u8 = null;
@@ -48,26 +46,20 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 
 pub fn run(
     self: *Self,
-    alloc: std.mem.Allocator,
-    out_writer: anytype,
     state: *State,
+    out_writer: anytype,
 ) !void {
-    var mem = std.heap.ArenaAllocator.init(alloc);
-    defer mem.deinit();
-
-    var temp_alloc = mem.allocator();
-
-    const rel_path = try self.selection.getRelPath(temp_alloc, state);
-    const abs_path = try state.absPathify(temp_alloc, rel_path);
+    const rel_path = try self.selection.getRelPath(state);
+    const abs_path = try state.absPathify(rel_path);
 
     if (try state.fileExists(rel_path)) {
         try out_writer.print("Opening file '{s}'\n", .{rel_path});
     } else {
         try out_writer.print("Creating new file '{s}'\n", .{rel_path});
-        try self.selection.makeTemplate(temp_alloc, rel_path, state);
+        try self.selection.makeTemplate(state, rel_path);
     }
 
-    var editor = try Editor.init(temp_alloc);
+    var editor = try Editor.init(state.mem.child_allocator);
     defer editor.deinit();
 
     try editor.editPath(abs_path);
