@@ -9,6 +9,7 @@ const State = @import("State.zig");
 pub const diary = @import("diary.zig");
 
 pub const SelectionError = error{ UnknownSelection, NoDate };
+pub const NoteError = error{NoSuchNote};
 
 pub const DEFAULT_FILE_EXTENSION = ".md";
 

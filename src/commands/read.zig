@@ -117,6 +117,18 @@ fn readLastNotes(
     }
 }
 
+fn readNamedNode(self: Self, state: *State, out_writer: anytype) !void {
+    var note = self.selection.?;
+    const rel_path = try note.getRelPath(state);
+
+    if (try state.fs.fileExists(rel_path)) {
+        var content = try state.fs.readFileAlloc(state.mem.allocator(), rel_path);
+        _ = try out_writer.writeAll(content);
+    } else {
+        return notes.NoteError.NoSuchNote;
+    }
+}
+
 fn readEntry(
     self: Self,
     state: *State,
@@ -142,7 +154,7 @@ pub fn run(
 ) !void {
     if (self.selection) |selection| switch (selection) {
         .Day, .Date => try self.readEntry(state, out_writer),
-        .Name => {},
+        .Name => try self.readNamedNode(state, out_writer),
     } else {
         try self.readLastNotes(state, out_writer);
     }
