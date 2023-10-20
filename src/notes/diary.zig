@@ -99,16 +99,9 @@ pub const Entry = struct {
     }
 
     pub fn writeNotes(self: *Entry, state: *const State) !void {
-        var fs = try state.fs.openElseCreate(self.notes_path);
-        defer fs.close();
-
         const string = try toJsonString(self.alloc, self.notes);
         defer self.alloc.free(string);
-
-        // seek to start to remove anything that may already be in the file
-        try fs.seekTo(0);
-        try fs.writeAll(string);
-        try fs.setEndPos(string.len);
+        try state.fs.overwrite(self.notes_path, string);
     }
 };
 

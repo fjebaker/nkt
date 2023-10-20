@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const notes = @import("notes.zig");
 
+pub const NoteManager = @import("NoteManager.zig");
 pub const FileSystem = @import("FileSystem.zig");
 
 const Self = @This();
@@ -30,6 +31,7 @@ fs: FileSystem,
 mem: std.heap.ArenaAllocator,
 diary: DiaryMap,
 named_notes: NamedNoteMap,
+manager: NoteManager,
 
 pub const Config = struct {
     root_path: []const u8,
@@ -46,11 +48,17 @@ pub fn init(allocator: std.mem.Allocator, config: Config) !Self {
     errdefer namedmap.deinit();
 
     var file_system = try FileSystem.init(config.root_path);
+    errdefer file_system.deinit();
+
+    var manager = try NoteManager.init(mem.child_allocator, &file_system);
+    errdefer manager.deinit();
+
     return .{
         .fs = file_system,
         .mem = mem,
         .diary = diarymap,
         .named_notes = namedmap,
+        .manager = manager,
     };
 }
 
@@ -58,6 +66,7 @@ pub fn deinit(self: *Self) void {
     self.diary.deinit();
     self.named_notes.deinit();
     self.fs.deinit();
+    self.manager.deinit();
     self.mem.deinit();
     self.* = undefined;
 }
@@ -91,4 +100,8 @@ pub fn openToday(self: *Self) !*notes.diary.Entry {
 /// path. State owns the memory.
 pub fn absPathify(self: *Self, rel_path: []const u8) ![]const u8 {
     return self.fs.absPathify(self.mem.allocator(), rel_path);
+}
+
+pub fn writeChanges(self: *Self) !void {
+    try self.manager.writeChanges(self);
 }

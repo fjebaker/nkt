@@ -99,6 +99,15 @@ pub fn fileExists(self: *const Self, path: []const u8) !bool {
     return true;
 }
 
+pub fn overwrite(self: *const Self, rel_path: []const u8, content: []const u8) !void {
+    var fs = try self.openElseCreate(rel_path);
+    defer fs.close();
+    // seek to start to remove anything that may already be in the file
+    try fs.seekTo(0);
+    try fs.writeAll(content);
+    try fs.setEndPos(content.len);
+}
+
 pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
     return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
 }

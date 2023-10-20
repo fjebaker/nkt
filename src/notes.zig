@@ -49,6 +49,16 @@ pub const AnyNote = union(enum) {
         }
     }
 
+    pub fn updateModified(self: *AnyNote, state: *State) !void {
+        switch (self.*) {
+            .Date, .Day => {},
+            .NamedNote => |name| {
+                var note = try state.openNamedNote(name);
+                note.info.modified = utils.now();
+            },
+        }
+    }
+
     /// Get the relative filepath of the note from state.
     /// State owns the memory.
     pub fn getRelPath(self: *AnyNote, state: *State) ![]const u8 {
@@ -58,7 +68,10 @@ pub const AnyNote = union(enum) {
                 const entry = try state.openDiaryEntry(date);
                 return entry.diary_path;
             },
-            .NamedNote => |name| return (try state.openNamedNote(name)).info.note_path,
+            .NamedNote => |name| {
+                var note = try state.openNamedNote(name);
+                return note.info.note_path;
+            },
         }
     }
 

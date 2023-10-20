@@ -63,4 +63,5 @@ pub fn run(
     defer editor.deinit();
 
     try editor.editPath(abs_path);
+    try self.selection.updateModified(state);
 }

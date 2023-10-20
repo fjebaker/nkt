@@ -88,6 +88,8 @@ pub fn main() !void {
     // setup complete: execute the program
     try cmd.run(&state, stdout);
 
+    try state.writeChanges();
+
     try bw.flush();
 }
 

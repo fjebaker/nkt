@@ -11,8 +11,6 @@ fn relativePath(alloc: std.mem.Allocator, name: []const u8, suffix: []const u8) 
         u8,
         &.{ name, suffix },
     );
-    defer alloc.free(filename);
-
     return std.fs.path.join(alloc, &.{ State.FileSystem.NOTES_DIRECTORY, filename });
 }
 
@@ -24,8 +22,6 @@ pub const NoteInfo = struct {
 
     pub fn new(alloc: std.mem.Allocator, name: []const u8) !NoteInfo {
         const owned_name = try alloc.dupe(u8, name);
-        errdefer alloc.free(owned_name);
-
         const path = try relativePath(alloc, name, DEFAULT_FILE_EXTENSION);
         const now = utils.now();
 
@@ -33,7 +29,7 @@ pub const NoteInfo = struct {
             .created = now,
             .modified = now,
             .note_path = path,
-            .name = name,
+            .name = owned_name,
         };
     }
 
@@ -45,40 +41,23 @@ pub const NoteInfo = struct {
 };
 
 pub const Note = struct {
-    alloc: std.mem.Allocator,
-
-    info: NoteInfo,
     content: ?[]const u8,
+    info: *NoteInfo,
 
     /// Read the contents of the note entry and return slice.
     /// Will not check if file exists and will raise error if not.
     /// Note owns the memory.
     pub fn readNote(self: *Note, state: *State) ![]const u8 {
         if (self.content) |ct| return ct;
-        self.content = try state.fs.readFileAlloc(self.alloc, self.diary_path);
+        var alloc = state.mem.allocator();
+        self.content = try state.fs.readFileAlloc(alloc, self.diary_path);
         return self.content.?;
-    }
-
-    pub fn writeChanges(self: *Note, state: *State) !void {
-        _ = self;
-        _ = state;
-    }
-
-    pub fn deinit(self: *Note) void {
-        if (self.content) |ct| self.alloc.free(ct);
-        self.info.free(self.alloc);
-        self.* = undefined;
     }
 };
 
 pub fn openOrCreate(state: *State, name: []const u8) !Note {
-    var alloc = state.mem.allocator();
-
-    var info = try NoteInfo.new(alloc, name);
-    errdefer info.free(alloc);
-
+    var info = try state.manager.getOrCreatePtrInfo(name);
     return .{
-        .alloc = alloc,
         .info = info,
         .content = null,
     };
