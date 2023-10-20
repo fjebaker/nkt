@@ -84,7 +84,7 @@ fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
 }
 
 /// Initialize the home directory with requisite sub paths.
-pub fn setupDirectory(self: *const Self) !void {
+pub fn setupDefaultDirectory(self: *const Self) !void {
     try self.makeDirIfNotExists(DIARY_DIRECTORY);
     try self.makeDirIfNotExists(NOTES_DIRECTORY);
 }

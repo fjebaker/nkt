@@ -4,7 +4,7 @@ const utils = @import("../utils.zig");
 
 const Commands = @import("../main.zig").Commands;
 const CommandError = @import("../main.zig").CommandError;
-const State = @import("../State.zig");
+const State = @import("../NewState.zig");
 
 const Self = @This();
 

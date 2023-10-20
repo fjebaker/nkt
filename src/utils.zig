@@ -5,37 +5,34 @@ pub const DateError = error{DateStringTooShort};
 
 pub const Date = time.DateTime;
 
-pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
+pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
-        const Self = @This();
-
-        alloc: std.mem.Allocator,
-        items: []T,
-
-        pub fn init(alloc: std.mem.Allocator, items: []T) Self {
-            return .{ .alloc = alloc, .items = items };
+        pub fn initOwned(alloc: std.mem.Allocator, items: []T) Self {
+            return .{ .allocator = alloc, .items = items };
         }
-
         pub fn deinit(self: *Self) void {
-            self.alloc.free(self.items);
+            self.allocator.free(self.items);
             self.* = undefined;
         }
-
-        pub fn sort(self: *Self) void {
-            if (@typeInfo(@TypeOf(lessThan)) == .Void) {
-                @compileError("Cannot call sort with void lessThan function");
-            }
-            std.sort.insertion(T, self.items, {}, lessThan);
-        }
-
         pub fn reverse(self: *Self) void {
             std.mem.reverse(T, self.items);
         }
     };
 }
 
-pub fn List(comptime T: type) type {
-    return SortableList(T, void);
+pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+        items: []T,
+
+        pub usingnamespace ListMixin(Self, T);
+
+        pub fn sort(self: *Self) void {
+            std.sort.insertion(T, self.items, {}, lessThan);
+        }
+    };
 }
 
 fn dateSort(_: void, lhs: Date, rhs: Date) bool {
