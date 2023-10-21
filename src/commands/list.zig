@@ -86,13 +86,18 @@ fn listDirectory(
         ),
     }
 
+    const is_diary = std.mem.eql(u8, "diary", directory.directory.name);
     for (notelist.items) |note| {
-        const date = switch (self.ordering) {
-            .Modified => utils.Date.initUnixMs(note.info.modified),
-            .Created => utils.Date.initUnixMs(note.info.created),
-        };
-        const date_string = try utils.formatDateBuf(date);
-        try writer.print("{s} - {s}\n", .{ date_string, note.info.name });
+        if (is_diary) {
+            try writer.print("{s}\n", .{note.info.name});
+        } else {
+            const date = switch (self.ordering) {
+                .Modified => utils.Date.initUnixMs(note.info.modified),
+                .Created => utils.Date.initUnixMs(note.info.created),
+            };
+            const date_string = try utils.formatDateBuf(date);
+            try writer.print("{s} - {s}\n", .{ date_string, note.info.name });
+        }
     }
 }
 
