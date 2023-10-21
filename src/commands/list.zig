@@ -1,12 +1,13 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
-const notes = @import("../notes.zig");
 
 const Commands = @import("../main.zig").Commands;
-const State = @import("../State.zig");
+const State = @import("../NewState.zig");
 
 const Self = @This();
+
+pub const ListError = error{CannotListJournal};
 
 pub const alias = [_][]const u8{"ls"};
 
@@ -14,141 +15,107 @@ pub const help = "List notes in various ways.";
 pub const extended_help =
     \\List notes in various ways to the terminal.
     \\  nkt list
-    \\     [-n/--limit int]      maximum number of entries to display
+    \\     [what]                list journals, directories, or notes with a
+    \\                             `directory` to list. this option may also be
+    \\                             `all` to list everything (default: all)
+    \\     [-n/--limit int]      maximum number of entries to list (default: 25)
     \\     [--all]               list all entries (ignores `--limit`)
-    \\     [--modified]          sort by last modified (default for notes)
-    \\     [--created]           sort by date created (default for days)
-    \\     [notes|days]          list either notes or days (default days)
+    \\     [--modified]          sort by last modified (default)
+    \\     [--created]           sort by date created
     \\
 ;
 
-const Options = enum { notes, days };
-
-selection: Options,
+selection: []const u8,
 ordering: State.Ordering,
 number: usize,
 all: bool,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
-    var selection: ?Options = null;
-    var number: usize = 25;
-    var all: bool = false;
-    var ordering: ?State.Ordering = null;
+    var self: Self = .{
+        .selection = "",
+        .ordering = .Modified,
+        .number = 25,
+        .all = false,
+    };
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
             if (arg.is('n', "limit")) {
                 const value = try itt.getValue();
-                number = try value.as(usize);
+                self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
-                all = true;
+                self.all = true;
             } else if (arg.is(null, "modified")) {
-                ordering = .Modified;
+                self.ordering = .Modified;
             } else if (arg.is(null, "created")) {
-                ordering = .Created;
+                self.ordering = .Created;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            if (selection == null) {
-                if (std.meta.stringToEnum(Options, arg.string)) |s| {
-                    selection = s;
-                }
+            if (self.selection.len == 0) {
+                self.selection = arg.string;
             } else return cli.CLIErrors.TooManyArguments;
         }
     }
 
-    const selected = selection orelse .days;
-    return .{
-        .selection = selected,
-        .number = number,
-        .all = all,
-        .ordering = ordering orelse switch (selected) {
-            .days => .Created,
-            .notes => .Modified,
-        },
-    };
+    if (self.selection.len == 0) self.selection = "all";
+
+    return self;
 }
 
-pub fn getDiaryDateList(
-    state: *State,
-) !utils.DateList {
-    var diary_directory = try state.fs.iterableDiaryDirectory();
-    defer diary_directory.close();
-
-    var alloc = state.mem.allocator();
-
-    var date_list = std.ArrayList(utils.Date).init(alloc);
-    errdefer date_list.deinit();
-
-    var iterator = diary_directory.iterate();
-    while (try iterator.next()) |entry| {
-        if (entry.kind != .file) continue;
-        if (std.mem.indexOf(
-            u8,
-            entry.name,
-            notes.diary.DIARY_EXTRA_SUFFIX,
-        )) |end| {
-            const day = entry.name[0..end];
-            const date = utils.toDate(day) catch continue;
-            try date_list.append(date);
-        }
-    }
-
-    return .{ .alloc = alloc, .items = try date_list.toOwnedSlice() };
-}
-
-fn listNotes(
-    self: Self,
-    state: *State,
-    out_writer: anytype,
+fn listDirectory(
+    self: *Self,
+    alloc: std.mem.Allocator,
+    directory: *State.NotesDirectory,
+    writer: anytype,
 ) !void {
-    var notes_directory = try state.fs.iterableNotesDirectory();
-    defer notes_directory.close();
+    var notelist = try directory.getNoteList(alloc);
+    defer notelist.deinit();
 
-    var note_list = try state.makeNoteList(self.ordering);
-    defer note_list.deinit();
+    notelist.sortBy(self.ordering);
 
     switch (self.ordering) {
-        .Modified => try out_writer.print("Notes ordered by last modified:\n", .{}),
-        .Created => try out_writer.print("Notes ordered by date created:\n", .{}),
+        .Modified => try writer.print(
+            "Directory '{s}' ordered by last modified:\n",
+            .{directory.directory.name},
+        ),
+        .Created => try writer.print(
+            "Directory '{s}' ordered by date created:\n",
+            .{directory.directory.name},
+        ),
     }
 
-    for (note_list.items) |note| {
+    for (notelist.items) |note| {
         const date = switch (self.ordering) {
-            .Modified => note.info.modifiedDate(),
-            .Created => note.info.creationDate(),
+            .Modified => utils.Date.initUnixMs(note.info.modified),
+            .Created => utils.Date.initUnixMs(note.info.created),
         };
         const date_string = try utils.formatDateBuf(date);
-        try out_writer.print("{s} - {s}\n", .{ date_string, note.info.name });
+        try writer.print("{s} - {s}\n", .{ date_string, note.info.name });
     }
 }
 
-fn listDays(
-    self: Self,
-    state: *State,
-    out_writer: anytype,
+fn listNames(
+    _: *const Self,
+    cnames: State.CollectionNameList,
+    what: State.CollectionTypes,
+    writer: anytype,
 ) !void {
-    var date_list = try getDiaryDateList(state);
-    defer date_list.deinit();
-
-    date_list.sort();
-
-    const end = blk: {
-        if (self.all) {
-            try out_writer.print("All diary entries:\n", .{});
-            break :blk date_list.items.len;
-        } else {
-            const end = @min(self.number, date_list.items.len);
-            try out_writer.print("Last {d} diary entries:\n", .{end});
-            break :blk end;
-        }
-    };
-
-    for (1.., date_list.items[0..end]) |i, date| {
-        const day = try utils.formatDateBuf(date);
-        try out_writer.print("{d}: {s}\n", .{ end - i, day });
+    switch (what) {
+        .Directory => try writer.print("Directories list:\n", .{}),
+        .Journal => try writer.print("Journals list:\n", .{}),
     }
+
+    for (cnames.items) |name| {
+        if (name.collection == what) {
+            try writer.print(" {s}\n", .{name.name});
+        }
+    }
+}
+
+fn is(s: []const u8, other: []const u8) bool {
+    return std.mem.eql(u8, s, other);
 }
 
 pub fn run(
@@ -156,8 +123,29 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    switch (self.selection) {
-        .notes => try self.listNotes(state, out_writer),
-        .days => try self.listDays(state, out_writer),
+    if (is(self.selection, "all")) {
+        var cnames = try state.getCollectionNames(state.allocator);
+        defer cnames.deinit();
+
+        try self.listNames(cnames, .Directory, out_writer);
+        try self.listNames(cnames, .Journal, out_writer);
+    } else if (is(self.selection, "directories") or is(self.selection, "dirs")) {
+        var cnames = try state.getCollectionNames(state.allocator);
+        defer cnames.deinit();
+
+        try self.listNames(cnames, .Directory, out_writer);
+    } else if (is(self.selection, "journals") or is(self.selection, "jrnl")) {
+        var cnames = try state.getCollectionNames(state.allocator);
+        defer cnames.deinit();
+
+        try self.listNames(cnames, .Journal, out_writer);
+    } else {
+        var collection = try state.getCollection(self.selection);
+        switch (collection) {
+            .Directory => |d| {
+                try self.listDirectory(state.allocator, d, out_writer);
+            },
+            .Journal => return ListError.CannotListJournal,
+        }
     }
 }

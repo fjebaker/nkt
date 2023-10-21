@@ -96,6 +96,56 @@ pub const NotesDirectory = struct {
     }
 };
 
+pub const TrackedJournal = struct {
+    const Journal = Topology.Journal;
+
+    pub const EntryList = struct {
+        const Entry = Journal.Entry;
+
+        allocator: std.mem.Allocator,
+        items: []Entry,
+
+        pub usingnamespace utils.ListMixin(EntryList, Entry);
+
+        pub fn sortBy(self: *EntryList, ordering: Ordering) void {
+            const sorter = std.sort.insertion;
+            switch (ordering) {
+                .Created => sorter(
+                    Entry,
+                    self.items,
+                    {},
+                    Entry.sortCreated,
+                ),
+                .Modified => sorter(
+                    Entry,
+                    self.items,
+                    {},
+                    Entry.sortModified,
+                ),
+            }
+        }
+    };
+
+    journal_allocator: std.mem.Allocator,
+    journal: *Journal,
+
+    pub fn getEntryList(
+        self: *const TrackedJournal,
+        alloc: std.mem.Allocator,
+    ) !EntryList {
+        var entries = try alloc.alloc(Journal.Entry, self.journal.entries.len);
+        return EntryList.initOwned(alloc, entries);
+    }
+};
+
+pub const CollectionTypes = enum { Directory, Journal };
+
+pub const Collection = union(CollectionTypes) {
+    pub const Errors = error{NoSuchCollection};
+    Directory: *NotesDirectory,
+    Journal: TrackedJournal,
+};
+
 pub const Config = struct {
     root_path: []const u8,
 };
@@ -169,4 +219,61 @@ pub fn getDirectory(self: *Self, name: []const u8) ?*NotesDirectory {
         }
     }
     return null;
+}
+
+pub fn getCollection(self: *Self, name: []const u8) !Collection {
+    for (self.topology.journals) |*journal| {
+        if (std.mem.eql(u8, journal.name, name))
+            return .{
+                .Journal = .{
+                    .journal_allocator = self.topology.mem.allocator(),
+                    .journal = journal,
+                },
+            };
+    }
+
+    for (self.directories) |*directory| {
+        if (std.mem.eql(u8, directory.directory.name, name))
+            return .{ .Directory = directory };
+    }
+
+    return Collection.Errors.NoSuchCollection;
+}
+
+pub const CollectionNameList = struct {
+    pub const CollectionName = struct {
+        collection: CollectionTypes,
+        name: []const u8,
+    };
+
+    allocator: std.mem.Allocator,
+    items: []CollectionName,
+
+    pub usingnamespace utils.ListMixin(CollectionNameList, CollectionName);
+};
+
+pub fn getCollectionNames(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+) !CollectionNameList {
+    const N_directories = self.directories.len;
+    const N = N_directories + self.topology.journals.len;
+    var cnames = try alloc.alloc(CollectionNameList.CollectionName, N);
+    errdefer alloc.free(cnames);
+
+    for (0.., self.directories) |i, d| {
+        cnames[i] = .{
+            .collection = .Directory,
+            .name = d.directory.name,
+        };
+    }
+
+    for (N_directories.., self.topology.journals) |i, j| {
+        cnames[i] = .{
+            .collection = .Journal,
+            .name = j.name,
+        };
+    }
+
+    return CollectionNameList.initOwned(alloc, cnames);
 }

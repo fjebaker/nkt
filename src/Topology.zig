@@ -11,17 +11,25 @@ pub const Note = struct {
         modified: u64,
         name: []const u8,
         path: []const u8,
+
+        pub fn sortCreated(_: void, lhs: Info, rhs: Info) bool {
+            return lhs.created < rhs.created;
+        }
+
+        pub fn sortModified(_: void, lhs: Info, rhs: Info) bool {
+            return lhs.modified < rhs.modified;
+        }
     };
 
     info: *Info,
     content: ?[]const u8,
 
     pub fn sortCreated(_: void, lhs: Note, rhs: Note) bool {
-        return lhs.info.created < rhs.info.created;
+        return Info.sortCreated({}, lhs.info.*, rhs.info.*);
     }
 
     pub fn sortModified(_: void, lhs: Note, rhs: Note) bool {
-        return lhs.info.modified < rhs.info.modified;
+        return Info.sortModified({}, lhs.info.*, rhs.info.*);
     }
 };
 
@@ -30,7 +38,16 @@ pub const Journal = struct {
         created: u64,
         modified: u64,
         entry: []const u8,
+
+        pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
+            return lhs.created < rhs.created;
+        }
+
+        pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
+            return lhs.modified < rhs.modified;
+        }
     };
+    name: []const u8,
     entries: []Entry,
 };
 
@@ -42,13 +59,13 @@ pub const Directory = struct {
 
 const TopologySchema = struct {
     directories: []Directory,
-    journal: []Journal,
+    journals: []Journal,
     editor: []const u8,
     pager: []const u8,
 };
 
 directories: []Directory,
-journal: []Journal,
+journals: []Journal,
 editor: []const u8,
 pager: []const u8,
 mem: std.heap.ArenaAllocator,
@@ -60,13 +77,13 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
     var temp_alloc = mem.allocator();
 
     var directories = try temp_alloc.alloc(Directory, 0);
-    var journal = try temp_alloc.alloc(Journal, 0);
+    var journals = try temp_alloc.alloc(Journal, 0);
     var editor = try temp_alloc.dupe(u8, "vim");
     var pager = try temp_alloc.dupe(u8, "less");
 
     return .{
         .directories = directories,
-        .journal = journal,
+        .journals = journals,
         .editor = editor,
         .pager = pager,
         .mem = mem,
@@ -87,7 +104,7 @@ pub fn init(alloc: std.mem.Allocator, data: []const u8) !Self {
 
     return .{
         .directories = schema.directories,
-        .journal = schema.journal,
+        .journals = schema.journals,
         .editor = schema.editor,
         .pager = schema.pager,
         .mem = mem,
@@ -103,7 +120,7 @@ pub fn deinit(self: *Self) void {
 pub fn toString(self: *Self, alloc: std.mem.Allocator) ![]const u8 {
     const schema: TopologySchema = .{
         .directories = self.directories,
-        .journal = self.journal,
+        .journals = self.journals,
         .editor = self.editor,
         .pager = self.pager,
     };
