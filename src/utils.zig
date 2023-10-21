@@ -8,12 +8,22 @@ pub const Date = time.DateTime;
 pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
         pub fn initOwned(alloc: std.mem.Allocator, items: []T) Self {
-            return .{ .allocator = alloc, .items = items };
+            if (@hasDecl(Self, "_init")) {
+                @call(.auto, @field(Self, "_init"), .{ alloc, items });
+            } else {
+                return .{ .allocator = alloc, .items = items };
+            }
         }
+
         pub fn deinit(self: *Self) void {
-            self.allocator.free(self.items);
-            self.* = undefined;
+            if (@hasDecl(Self, "_deinit")) {
+                @call(.auto, @field(Self, "_deinit"), .{self});
+            } else {
+                self.allocator.free(self.items);
+                self.* = undefined;
+            }
         }
+
         pub fn reverse(self: *Self) void {
             std.mem.reverse(T, self.items);
         }

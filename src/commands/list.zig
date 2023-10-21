@@ -110,12 +110,40 @@ fn listNames(
     switch (what) {
         .Directory => try writer.print("Directories list:\n", .{}),
         .Journal => try writer.print("Journals list:\n", .{}),
+        .DirectoryWithJournal => unreachable,
     }
 
     for (cnames.items) |name| {
         if (name.collection == what) {
             try writer.print(" {s}\n", .{name.name});
         }
+    }
+}
+
+fn listJournal(
+    self: *Self,
+    alloc: std.mem.Allocator,
+    journal: State.TrackedJournal,
+    writer: anytype,
+) !void {
+    var entrylist = try journal.getDatedEntryList(alloc);
+    defer entrylist.deinit();
+
+    entrylist.sortBy(self.ordering);
+
+    switch (self.ordering) {
+        .Modified => try writer.print(
+            "Journal '{s}' ordered by last modified:\n",
+            .{journal.journal.name},
+        ),
+        .Created => try writer.print(
+            "Journal '{s}' ordered by date created:\n",
+            .{journal.journal.name},
+        ),
+    }
+
+    for (entrylist.items) |entry| {
+        try writer.print("{s}\n", .{entry.entry.name});
     }
 }
 
@@ -150,7 +178,13 @@ pub fn run(
             .Directory => |d| {
                 try self.listDirectory(state.allocator, d, out_writer);
             },
-            .Journal => return ListError.CannotListJournal,
+            .Journal => |j| {
+                try self.listJournal(state.allocator, j, out_writer);
+            },
+            .DirectoryWithJournal => |dj| {
+                try self.listDirectory(state.allocator, dj.directory, out_writer);
+                try self.listJournal(state.allocator, dj.journal, out_writer);
+            },
         }
     }
 }

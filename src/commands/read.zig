@@ -1,12 +1,10 @@
 const std = @import("std");
+
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
-const notes = @import("../notes.zig");
-
-const list = @import("./list.zig");
 
 const Commands = @import("../main.zig").Commands;
-const State = @import("../State.zig");
+const State = @import("../NewState.zig");
 
 const Self = @This();
 
@@ -14,15 +12,22 @@ pub const alias = [_][]const u8{"r"};
 
 pub const help = "Display the contentes of notes in various ways";
 pub const extended_help =
-    \\Print the note to stdout in a formatted way.
+    \\Print the contents of a journal or note to stdout
     \\  nkt read
+    \\     <what>                what to print: name of a journal, or a note
+    \\                             entry. if choice is ambiguous, must specify
+    \\                             from where with the `--journal` or `--dir`
+    \\                             flags
+    \\     [--journal name]      name of journal to read from
+    \\     [--dir name]          name of directory to read from
     \\     [-n/--limit int]      maximum number of entries to display
-    \\     [note or day-like]    print
     \\Without any arguments, default to printing last `--limit` notes.
     \\
 ;
 
-selection: ?notes.AnyNote,
+
+name: []const u8,
+where: ?State.CollectionTypes
 number: usize,
 
 pub fn init(itt: *cli.ArgIterator) !Self {

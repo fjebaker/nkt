@@ -4,6 +4,7 @@ const utils = @import("utils.zig");
 const Self = @This();
 
 pub const DATA_STORE_FILENAME = "topology.json";
+const TOPOLOGY_SCHEMA_VERSION = "0.1.0";
 
 pub const Note = struct {
     pub const Info = struct {
@@ -35,19 +36,44 @@ pub const Note = struct {
 
 pub const Journal = struct {
     pub const Entry = struct {
-        created: u64,
-        modified: u64,
-        entry: []const u8,
+        pub const Item = struct {
+            created: u64,
+            modified: u64,
+            item: []const u8,
 
-        pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
-            return lhs.created < rhs.created;
+            pub fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
+                return lhs.created < rhs.created;
+            }
+
+            pub fn sortModified(_: void, lhs: Item, rhs: Item) bool {
+                return lhs.modified < rhs.modified;
+            }
+        };
+
+        name: []const u8,
+        path: []const u8, // to be used
+        items: []Item,
+
+        pub fn timeCreated(self: *const Entry) u64 {
+            std.debug.assert(self.items.len > 0);
+            var min: u64 = self.items[0].created;
+            for (self.items) |item| {
+                min = @min(min, item.created);
+            }
+            return min;
         }
 
-        pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
-            return lhs.modified < rhs.modified;
+        pub fn lastModified(self: *const Entry) u64 {
+            std.debug.assert(self.items.len > 0);
+            var max: u64 = self.items[0].modified;
+            for (self.items) |item| {
+                max = @max(max, item.modified);
+            }
+            return max;
         }
     };
     name: []const u8,
+    path: []const u8, // to be used
     entries: []Entry,
 };
 
@@ -58,10 +84,11 @@ pub const Directory = struct {
 };
 
 const TopologySchema = struct {
-    directories: []Directory,
-    journals: []Journal,
+    _schema_version: []const u8,
     editor: []const u8,
     pager: []const u8,
+    directories: []Directory,
+    journals: []Journal,
 };
 
 directories: []Directory,
@@ -119,6 +146,7 @@ pub fn deinit(self: *Self) void {
 /// Caller owns the memory.
 pub fn toString(self: *Self, alloc: std.mem.Allocator) ![]const u8 {
     const schema: TopologySchema = .{
+        ._schema_version = TOPOLOGY_SCHEMA_VERSION,
         .directories = self.directories,
         .journals = self.journals,
         .editor = self.editor,

@@ -99,28 +99,69 @@ pub const NotesDirectory = struct {
 pub const TrackedJournal = struct {
     const Journal = Topology.Journal;
 
-    pub const EntryList = struct {
+    pub const DatedEntryList = struct {
         const Entry = Journal.Entry;
 
+        pub const DatedEntry = struct {
+            created: u64,
+            modified: u64,
+            entry: *Entry,
+
+            pub fn sortCreated(_: void, lhs: DatedEntry, rhs: DatedEntry) bool {
+                return lhs.created < rhs.created;
+            }
+
+            pub fn sortModified(_: void, lhs: DatedEntry, rhs: DatedEntry) bool {
+                return lhs.modified < rhs.modified;
+            }
+        };
+
         allocator: std.mem.Allocator,
-        items: []Entry,
+        items: []DatedEntry,
+        _entries: []Entry,
 
-        pub usingnamespace utils.ListMixin(EntryList, Entry);
+        pub usingnamespace utils.ListMixin(DatedEntryList, DatedEntry);
 
-        pub fn sortBy(self: *EntryList, ordering: Ordering) void {
+        pub fn _deinit(self: *DatedEntryList) void {
+            self.allocator.free(self._entries);
+            self.allocator.free(self.items);
+            self.* = undefined;
+        }
+
+        fn initOwnedEntries(alloc: std.mem.Allocator, entries: []Entry) !DatedEntryList {
+            var items = try alloc.alloc(DatedEntry, entries.len);
+
+            for (items, entries) |*item, *entry| {
+                const created = entry.timeCreated();
+                const modified = entry.lastModified();
+                item.* = .{
+                    .created = created,
+                    .modified = modified,
+                    .entry = entry,
+                };
+            }
+
+            return .{
+                .allocator = alloc,
+                .items = items,
+                ._entries = entries,
+            };
+        }
+
+        pub fn sortBy(self: *DatedEntryList, ordering: Ordering) void {
             const sorter = std.sort.insertion;
             switch (ordering) {
                 .Created => sorter(
-                    Entry,
+                    DatedEntry,
                     self.items,
                     {},
-                    Entry.sortCreated,
+                    DatedEntry.sortCreated,
                 ),
                 .Modified => sorter(
-                    Entry,
+                    DatedEntry,
                     self.items,
                     {},
-                    Entry.sortModified,
+                    DatedEntry.sortModified,
                 ),
             }
         }
@@ -129,21 +170,42 @@ pub const TrackedJournal = struct {
     journal_allocator: std.mem.Allocator,
     journal: *Journal,
 
-    pub fn getEntryList(
+    pub fn getDatedEntryList(
         self: *const TrackedJournal,
         alloc: std.mem.Allocator,
-    ) !EntryList {
-        var entries = try alloc.alloc(Journal.Entry, self.journal.entries.len);
-        return EntryList.initOwned(alloc, entries);
+    ) !DatedEntryList {
+        var entries = try alloc.dupe(Journal.Entry, self.journal.entries);
+        errdefer alloc.free(entries);
+        return DatedEntryList.initOwnedEntries(alloc, entries);
     }
 };
 
-pub const CollectionTypes = enum { Directory, Journal };
+pub const CollectionTypes = enum { Directory, Journal, DirectoryWithJournal };
 
 pub const Collection = union(CollectionTypes) {
     pub const Errors = error{NoSuchCollection};
     Directory: *NotesDirectory,
     Journal: TrackedJournal,
+    DirectoryWithJournal: struct {
+        journal: TrackedJournal,
+        directory: *NotesDirectory,
+    },
+
+    pub fn init(maybe_directory: ?*NotesDirectory, maybe_journal: ?TrackedJournal) ?Collection {
+        if (maybe_directory != null and maybe_journal != null) {
+            return .{
+                .DirectoryWithJournal = .{
+                    .journal = maybe_journal.?,
+                    .directory = maybe_directory.?,
+                },
+            };
+        } else if (maybe_journal) |journal| {
+            return .{ .Journal = journal };
+        } else if (maybe_directory) |dir| {
+            return .{ .Directory = dir };
+        }
+        return null;
+    }
 };
 
 pub const Config = struct {
@@ -222,22 +284,24 @@ pub fn getDirectory(self: *Self, name: []const u8) ?*NotesDirectory {
 }
 
 pub fn getCollection(self: *Self, name: []const u8) !Collection {
+    var maybe_journal: ?TrackedJournal = null;
+    var maybe_directory: ?*NotesDirectory = null;
+
     for (self.topology.journals) |*journal| {
         if (std.mem.eql(u8, journal.name, name))
-            return .{
-                .Journal = .{
-                    .journal_allocator = self.topology.mem.allocator(),
-                    .journal = journal,
-                },
+            maybe_journal = .{
+                .journal_allocator = self.topology.mem.allocator(),
+                .journal = journal,
             };
     }
 
     for (self.directories) |*directory| {
         if (std.mem.eql(u8, directory.directory.name, name))
-            return .{ .Directory = directory };
+            maybe_directory = directory;
     }
 
-    return Collection.Errors.NoSuchCollection;
+    return Collection.init(maybe_directory, maybe_journal) orelse
+        Collection.Errors.NoSuchCollection;
 }
 
 pub const CollectionNameList = struct {
