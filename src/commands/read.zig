@@ -5,6 +5,7 @@ const utils = @import("../utils.zig");
 
 const Commands = @import("../main.zig").Commands;
 const State = @import("../NewState.zig");
+const Topology = @import("../Topology.zig");
 
 const Self = @This();
 
@@ -76,9 +77,37 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    const collection = cli.selections.find(state, self.where, self.selection);
-    std.debug.print("{any}\n", .{self.where});
-    try out_writer.print("selected: {any}\n", .{collection});
+    const collection = cli.selections.find(state, self.where, self.selection) orelse
+        return State.Collection.Errors.NoSuchCollection;
+
+    switch (collection) {
+        .JournalEntry => |journal_entry| {
+            try self.readJournalEntry(state.allocator, journal_entry.item, out_writer);
+        },
+        .NoteWithJournalEntry => |both| {
+            try self.readJournalEntry(state.allocator, both.journal.item, out_writer);
+        },
+        else => {},
+    }
+}
+
+const Journal = Topology.Journal;
+fn readJournalEntry(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    entry: *Journal.Entry,
+    writer: anytype,
+) !void {
+    try writer.print("JournalEntry {s}\n", .{entry.name});
+
+    for (entry.items) |item| {
+        const date = utils.Date.initUnixMs(item.created);
+        const time_of_day = try utils.formatTimeBuf(date);
+        try writer.print("{s} - {s}\n", .{ time_of_day, item.item });
+    }
+
+    _ = self;
+    _ = allocator;
 }
 
 // fn readDiary(

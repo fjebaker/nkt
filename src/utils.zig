@@ -129,6 +129,15 @@ pub fn formatDateBuf(date: Date) ![10]u8 {
     return buf;
 }
 
+pub fn formatTimeBuf(date: Date) ![8]u8 {
+    const t_date = adjustTimezone(date);
+    var buf: [8]u8 = undefined;
+    var bufstream = std.io.fixedBufferStream(&buf);
+    var writer = bufstream.writer();
+    try t_date.format("HH:mm:ss", .{}, writer);
+    return buf;
+}
+
 pub fn dayOfWeek(alloc: std.mem.Allocator, date: Date) ![]const u8 {
     const t_date = adjustTimezone(date);
     return t_date.formatAlloc(alloc, "dddd");

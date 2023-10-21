@@ -115,6 +115,21 @@ fn finalizeMatching(state: *State, journal: TrackedItem) ?TrackedItem {
     return journal;
 }
 
+/// Search in the user preferred order
+fn findIndexPreferredJournal(state: *State, index: usize) ?TrackedItem {
+    if (state.getJournal("diary")) |journal| {
+        if (journal.getIndex(index)) |entry| {
+            return .{ .JournalEntry = .{ .collection = journal, .item = entry } };
+        }
+    }
+    const journal: ?TrackedItem = for (state.journals) |*journal| {
+        if (journal.getIndex(index)) |item| {
+            break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+        }
+    } else null;
+    return journal;
+}
+
 pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?TrackedItem {
     if (where) |w| switch (w.container) {
         .Journal => {
@@ -162,13 +177,10 @@ pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?Tracked
         // for index, we only look at journals, but use the name to do a dir lookup
         // with the condition that the directory must have the same name as the journal
         .ByIndex => |index| {
-            const journal: TrackedItem = for (state.journals) |*journal| {
-                if (journal.getIndex(index)) |item| {
-                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
-                }
+            const maybe_journal = findIndexPreferredJournal(state, index);
+            if (maybe_journal) |journal| {
+                return finalizeMatching(state, journal);
             } else return null;
-
-            return finalizeMatching(state, journal);
         },
         // for dates, we only look at journals
         .ByDate => |date| {
