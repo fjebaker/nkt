@@ -5,20 +5,37 @@ const Topology = @import("../Topology.zig");
 const FileSystem = @import("../FileSystem.zig");
 
 const ContentMap = @import("ContentMap.zig");
-const Ordering = @import("collections.zig").Ordering;
+const collections = @import("collections.zig");
+const Ordering = collections.Ordering;
 
 const indexing = @import("indexing.zig");
 const IndexContainer = indexing.IndexContainer;
 
+const Note = Topology.Note;
+const Directory = Topology.Directory;
 const Self = @This();
 
 directory_allocator: std.mem.Allocator,
-directory: *Topology.Directory,
+directory: *Directory,
 content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
 
-const Note = Topology.Note;
+pub usingnamespace collections.Mixin(
+    Self,
+    Note.Info,
+    Note,
+    "directory",
+    "infos",
+    prepareItem,
+);
+
+fn prepareItem(self: *Self, info: *Note.Info) *Note {
+    return .{
+        .info = info,
+        .content = self.content.get(info.name),
+    };
+}
 
 pub const NoteList = struct {
     allocator: std.mem.Allocator,

@@ -59,6 +59,39 @@ pub const TrackedItem = union(ItemType) {
     },
 };
 
+pub fn Mixin(
+    comptime Self: type,
+    comptime Item: type,
+    comptime Child: type,
+    comptime parent_field: []const u8,
+    comptime child_field: []const u8,
+    comptime prepareItem: fn (*Self, *Item) *Child,
+) type {
+    if (!@hasField(Item, "name"))
+        @compileError("Child must have 'name' field");
+
+    if (!@hasField(Self, "index"))
+        @compileError("Self must have 'index' field");
+
+    return struct {
+        pub fn getIndex(self: *Self, index: usize) ?*Child {
+            const name = self.index.get(index) orelse
+                return null;
+            return self.get(name);
+        }
+
+        pub fn get(self: *Self, name: []const u8) ?*Child {
+            var items = @field(@field(self, parent_field), child_field);
+            for (items) |*item| {
+                if (std.mem.eql(u8, item.name, name)) {
+                    return prepareItem(self, item);
+                }
+            }
+            return null;
+        }
+    };
+}
+
 pub fn newNotesDirectoryList(
     alloc: std.mem.Allocator,
     directory_allocator: std.mem.Allocator,

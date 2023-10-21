@@ -5,27 +5,31 @@ const Topology = @import("../Topology.zig");
 const FileSystem = @import("../FileSystem.zig");
 
 const ContentMap = @import("ContentMap.zig");
-const Ordering = @import("collections.zig").Ordering;
+const collections = @import("collections.zig");
+const Ordering = collections.Ordering;
 
 const indexing = @import("indexing.zig");
 const IndexContainer = indexing.IndexContainer;
 
+const Journal = Topology.Journal;
 const Self = @This();
 
 journal_allocator: std.mem.Allocator,
 journal: *Journal,
 index: IndexContainer,
 
-pub fn getDatedEntryList(
-    self: *const Self,
-    alloc: std.mem.Allocator,
-) !DatedEntryList {
-    var entries = try alloc.dupe(Journal.Entry, self.journal.entries);
-    errdefer alloc.free(entries);
-    return DatedEntryList.initOwnedEntries(alloc, entries);
-}
+pub usingnamespace collections.Mixin(
+    Self,
+    Journal.Entry,
+    Journal.Entry,
+    "journal",
+    "entries",
+    prepareItem,
+);
 
-const Journal = Topology.Journal;
+fn prepareItem(_: *Self, entry: *Journal.Entry) *Journal.Entry {
+    return entry;
+}
 
 pub const DatedEntryList = struct {
     const Entry = Journal.Entry;
@@ -94,3 +98,12 @@ pub const DatedEntryList = struct {
         }
     }
 };
+
+pub fn getDatedEntryList(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+) !DatedEntryList {
+    var entries = try alloc.dupe(Journal.Entry, self.journal.entries);
+    errdefer alloc.free(entries);
+    return DatedEntryList.initOwnedEntries(alloc, entries);
+}
