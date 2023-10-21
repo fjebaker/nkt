@@ -36,13 +36,12 @@ all: bool,
 pub fn init(itt: *cli.ArgIterator) !Self {
     var self: Self = .{
         .selection = Selection.today(),
-        .what = null,
+        .where = null,
         .number = 25,
         .all = false,
     };
 
-    const selection = try Selection.optionalParse(itt);
-
+    itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
             if (arg.is('n', "limit")) {
@@ -64,12 +63,9 @@ pub fn init(itt: *cli.ArgIterator) !Self {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            return cli.CLIErrors.TooManyArguments;
+            if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
+            self.selection = try Selection.parse(arg.string);
         }
-    }
-
-    if (selection) |selected| {
-        self.selection = selected;
     }
 
     return self;
@@ -80,7 +76,8 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    const collection = try cli.selections.find(state, self.where, self.selection);
+    const collection = cli.selections.find(state, self.where, self.selection);
+    std.debug.print("{any}\n", .{self.where});
     try out_writer.print("selected: {any}\n", .{collection});
 }
 

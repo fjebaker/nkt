@@ -48,8 +48,8 @@ pub const TrackedItem = union(ItemType) {
         return struct { collection: CT, item: IT };
     }
 
-    const _NoteType = Item(*NotesDirectory, *Topology.Note);
-    const _JournalEntry = Item(*Topology.Journal, *Topology.Journal.Entry);
+    const _NoteType = Item(*NotesDirectory, Topology.Note);
+    const _JournalEntry = Item(*TrackedJournal, *Topology.Journal.Entry);
 
     Note: _NoteType,
     JournalEntry: _JournalEntry,
@@ -65,22 +65,22 @@ pub fn Mixin(
     comptime Child: type,
     comptime parent_field: []const u8,
     comptime child_field: []const u8,
-    comptime prepareItem: fn (*Self, *Item) *Child,
+    comptime prepareItem: fn (*Self, Item) Child,
 ) type {
-    if (!@hasField(Item, "name"))
+    if (!@hasField(@typeInfo(Item).Pointer.child, "name"))
         @compileError("Child must have 'name' field");
 
     if (!@hasField(Self, "index"))
         @compileError("Self must have 'index' field");
 
     return struct {
-        pub fn getIndex(self: *Self, index: usize) ?*Child {
+        pub fn getIndex(self: *Self, index: usize) ?Child {
             const name = self.index.get(index) orelse
                 return null;
             return self.get(name);
         }
 
-        pub fn get(self: *Self, name: []const u8) ?*Child {
+        pub fn get(self: *Self, name: []const u8) ?Child {
             var items = @field(@field(self, parent_field), child_field);
             for (items) |*item| {
                 if (std.mem.eql(u8, item.name, name)) {

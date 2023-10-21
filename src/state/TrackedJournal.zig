@@ -20,8 +20,8 @@ index: IndexContainer,
 
 pub usingnamespace collections.Mixin(
     Self,
-    Journal.Entry,
-    Journal.Entry,
+    *Journal.Entry,
+    *Journal.Entry,
     "journal",
     "entries",
     prepareItem,

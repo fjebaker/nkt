@@ -23,14 +23,14 @@ index: IndexContainer,
 
 pub usingnamespace collections.Mixin(
     Self,
-    Note.Info,
+    *Note.Info,
     Note,
     "directory",
     "infos",
     prepareItem,
 );
 
-fn prepareItem(self: *Self, info: *Note.Info) *Note {
+fn prepareItem(self: *Self, info: *Note.Info) Note {
     return .{
         .info = info,
         .content = self.content.get(info.name),

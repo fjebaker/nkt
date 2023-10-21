@@ -40,16 +40,13 @@ pub const ContainerSelection = struct {
 };
 
 pub const SelectionSet = enum {
-    ByDateIndex,
+    ByIndex,
     ByDate,
     ByName,
 };
 
 pub const Selection = union(enum) {
-    ByIndex: struct {
-        i: usize,
-        date: ?Date = null,
-    },
+    ByIndex: usize,
     ByDate: Date,
     ByName: []const u8,
 
@@ -65,10 +62,10 @@ pub const Selection = union(enum) {
             return Selection.today();
         } else if (allNumeric(input)) {
             const day = try std.fmt.parseInt(usize, input, 10);
-            return .{ .ByDateIndex = .{ .i = day } };
+            return .{ .ByIndex = day };
         } else if (isDate(input)) {
             const date = try utils.toDate(input);
-            return .{ .Date = date };
+            return .{ .ByDate = date };
         } else {
             return .{ .ByName = input };
         }
@@ -87,29 +84,103 @@ pub const Selection = union(enum) {
         }
         return try parse(arg.string);
     }
-
-    /// Caller owns memory
-    pub fn asName(self: Selection, collection: anytype, alloc: std.mem.Allocator) ![]const u8 {
-        switch (self) {
-            .ByDate => |date| return try utils.formatDate(alloc, date),
-            .ByName => |name| return try alloc.dupe(u8, name),
-            .ByDateIndex => {
-                var namelist = try collection.nameList(alloc);
-                defer alloc.free(namelist);
-            },
-        }
-    }
 };
 
-// pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?TrackedItem {
-//     if (where) |w| switch (w.container) {
-//         .Journal => {
-//             var journal = state.getJournal(w.where) orelse return null;
+fn finalize(maybe_note: ?TrackedItem, maybe_journal: ?TrackedItem) ?TrackedItem {
+    if (maybe_note != null and maybe_journal != null) {
+        return .{
+            .NoteWithJournalEntry = .{
+                .journal = maybe_journal.?.JournalEntry,
+                .note = maybe_note.?.Note,
+            },
+        };
+    }
+    return maybe_note orelse
+        maybe_journal orelse
+        null;
+}
 
-//         },
-//         .Directory => {
+fn finalizeMatching(state: *State, journal: TrackedItem) ?TrackedItem {
+    const journal_name = journal.JournalEntry.collection.journal.name;
+    const dir = state.getDirectory(journal_name) orelse
+        return journal;
 
-//         }
-//     }
-//     // both
-// }
+    const entry_name = journal.JournalEntry.item.name;
+    if (dir.get(entry_name)) |item| {
+        return finalize(
+            .{ .Note = .{ .collection = dir, .item = item } },
+            journal,
+        );
+    }
+    return journal;
+}
+
+pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?TrackedItem {
+    if (where) |w| switch (w.container) {
+        .Journal => {
+            var journal = state.getJournal(w.name) orelse return null;
+            const entry = switch (what) {
+                .ByName => |name| journal.get(name),
+                .ByIndex => |index| journal.getIndex(index),
+                .ByDate => |date| blk: {
+                    const name = utils.formatDateBuf(date) catch return null;
+                    break :blk journal.get(&name);
+                },
+            } orelse return null;
+            return .{ .JournalEntry = .{ .collection = journal, .item = entry } };
+        },
+        .Directory => {
+            var dir = state.getDirectory(w.name) orelse return null;
+            const item = switch (what) {
+                .ByName => |name| dir.get(name),
+                .ByIndex => |index| dir.getIndex(index),
+                .ByDate => unreachable,
+            } orelse return null;
+            return .{ .Note = .{ .collection = dir, .item = item } };
+        },
+        .DirectoryWithJournal => unreachable,
+    };
+
+    // don't know if journal or entry, so we try both
+    switch (what) {
+        // for names, we prefer searching in the notes directory first
+        .ByName => |name| {
+            const maybe_note: ?TrackedItem = for (state.directories) |*dir| {
+                if (dir.get(name)) |item| {
+                    break .{ .Note = .{ .collection = dir, .item = item } };
+                }
+            } else null;
+
+            const maybe_journal: ?TrackedItem = for (state.journals) |*journal| {
+                if (journal.get(name)) |item| {
+                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+                }
+            } else null;
+
+            return finalize(maybe_note, maybe_journal);
+        },
+        // for index, we only look at journals, but use the name to do a dir lookup
+        // with the condition that the directory must have the same name as the journal
+        .ByIndex => |index| {
+            const journal: TrackedItem = for (state.journals) |*journal| {
+                if (journal.getIndex(index)) |item| {
+                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+                }
+            } else return null;
+
+            return finalizeMatching(state, journal);
+        },
+        // for dates, we only look at journals
+        .ByDate => |date| {
+            const name = utils.formatDateBuf(date) catch return null;
+            const journal: TrackedItem = for (state.journals) |*journal| {
+                if (journal.get(&name)) |item| {
+                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+                }
+            } else return null;
+
+            return finalizeMatching(state, journal);
+        },
+    }
+    return null;
+}

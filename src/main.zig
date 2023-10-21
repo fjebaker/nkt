@@ -13,7 +13,7 @@ pub const Commands = union(enum) {
     init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),
     // note: @import("commands/note.zig"),
-    // read: @import("commands/read.zig"),
+    read: @import("commands/read.zig"),
 
     pub fn run(
         self: *Commands,
