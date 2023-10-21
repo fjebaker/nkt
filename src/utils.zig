@@ -7,6 +7,11 @@ pub const Date = time.DateTime;
 
 pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
+        pub fn initSize(alloc: std.mem.Allocator, N: usize) !Self {
+            var items = try alloc.alloc(T, N);
+            return .{ .allocator = alloc, .items = items };
+        }
+
         pub fn initOwned(alloc: std.mem.Allocator, items: []T) Self {
             if (@hasDecl(Self, "_init")) {
                 @call(.auto, @field(Self, "_init"), .{ alloc, items });
@@ -27,6 +32,17 @@ pub fn ListMixin(comptime Self: type, comptime T: type) type {
         pub fn reverse(self: *Self) void {
             std.mem.reverse(T, self.items);
         }
+    };
+}
+
+pub fn List(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+        items: []T,
+
+        pub usingnamespace ListMixin(Self, T);
     };
 }
 

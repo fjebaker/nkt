@@ -54,7 +54,7 @@ pub const Journal = struct {
         path: []const u8, // to be used
         items: []Item,
 
-        pub fn timeCreated(self: *const Entry) u64 {
+        pub fn timeCreated(self: Entry) u64 {
             std.debug.assert(self.items.len > 0);
             var min: u64 = self.items[0].created;
             for (self.items) |item| {
@@ -63,7 +63,7 @@ pub const Journal = struct {
             return min;
         }
 
-        pub fn lastModified(self: *const Entry) u64 {
+        pub fn lastModified(self: Entry) u64 {
             std.debug.assert(self.items.len > 0);
             var max: u64 = self.items[0].modified;
             for (self.items) |item| {

@@ -104,7 +104,7 @@ fn listDirectory(
 fn listNames(
     _: *const Self,
     cnames: State.CollectionNameList,
-    what: State.CollectionTypes,
+    what: State.CollectionType,
     writer: anytype,
 ) !void {
     switch (what) {
@@ -123,7 +123,7 @@ fn listNames(
 fn listJournal(
     self: *Self,
     alloc: std.mem.Allocator,
-    journal: State.TrackedJournal,
+    journal: *State.TrackedJournal,
     writer: anytype,
 ) !void {
     var entrylist = try journal.getDatedEntryList(alloc);
@@ -173,7 +173,8 @@ pub fn run(
 
         try self.listNames(cnames, .Journal, out_writer);
     } else {
-        var collection = try state.getCollection(self.selection);
+        var collection = state.getCollection(self.selection) orelse
+            return State.Collection.Errors.NoSuchCollection;
         switch (collection) {
             .Directory => |d| {
                 try self.listDirectory(state.allocator, d, out_writer);
