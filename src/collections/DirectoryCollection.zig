@@ -15,6 +15,8 @@ const Note = Topology.Note;
 const Directory = Topology.Directory;
 const Self = @This();
 
+pub const DEFAULT_FILE_EXTENSION = ".md";
+
 // public interface for getting the subtypes
 pub const Parent = Directory;
 pub const Child = Note;
@@ -22,6 +24,10 @@ pub const Child = Note;
 pub const DirectoryItem = struct {
     collection: *Self,
     item: Child,
+
+    pub fn relativePath(self: DirectoryItem) []const u8 {
+        return self.item.info.path;
+    }
 };
 
 directory_allocator: std.mem.Allocator,
@@ -117,9 +123,50 @@ pub fn addNote(
     self: *Self,
     info: Note.Info,
     content: ?[]const u8,
-) !void {
-    utils.push(Note.Info, self.directory_allocator, self.directory.infos, info);
+) !Note {
+    const info_ptr = try utils.push(
+        Note.Info,
+        self.directory_allocator,
+        &self.directory.infos,
+        info,
+    );
+
     if (content) |c| {
         try self.content.put(info.name, c);
     }
+
+    return .{
+        .info = info_ptr,
+        .content = self.content.get(info.name),
+    };
+}
+
+fn childPath(self: *Self, name: []const u8) ![]const u8 {
+    const filename = try std.mem.concat(
+        self.directory_allocator,
+        u8,
+        &.{ name, DEFAULT_FILE_EXTENSION },
+    );
+    return try std.fs.path.join(
+        self.directory_allocator,
+        &.{ self.directory.path, filename },
+    );
+}
+
+pub fn newChild(
+    self: *Self,
+    name: []const u8,
+) !DirectoryItem {
+    const owned_name = try self.directory_allocator.dupe(u8, name);
+
+    const now = utils.now();
+    const info: Note.Info = .{
+        .modified = now,
+        .created = now,
+        .name = owned_name,
+        .path = try self.childPath(owned_name),
+    };
+
+    var note = try self.addNote(info, null);
+    return .{ .collection = self, .item = note };
 }

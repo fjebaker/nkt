@@ -89,7 +89,8 @@ pub fn run(
             .JournalEntry => |journal_entry| {
                 try self.readJournalEntry(journal_entry.item, &printer);
             },
-            .NoteWithJournalEntry => |both| {
+            .DirectoryJournalItems => |both| {
+                try self.readNote(both.directory.item, &printer);
                 try self.readJournalEntry(both.journal.item, &printer);
             },
             .Note => |note_directory| {

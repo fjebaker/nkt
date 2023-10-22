@@ -19,9 +19,9 @@ pub fn init(alloc: std.mem.Allocator) !Self {
 
 pub fn put(self: *Self, key: []const u8, content: []const u8) !void {
     var alloc = self.mem.allocator();
-    const owned_content = alloc.dupe(u8, content);
+    const owned_content = try alloc.dupe(u8, content);
 
-    try self.putMove(self, key, owned_content);
+    try self.putMove(key, owned_content);
 }
 
 pub fn putMove(self: *Self, key: []const u8, content: []const u8) !void {

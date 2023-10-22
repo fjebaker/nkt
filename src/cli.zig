@@ -3,11 +3,14 @@ const selections = @import("cli/selections.zig");
 
 pub const Selection = selections.Selection;
 pub const SelectedCollection = selections.SelectedCollection;
+
 pub const SelectionError = error{
-    NoSuchJournal,
+    InvalidSelection,
     NoSuchDirectory,
+    NoSuchJournal,
     UnknownCollection,
 };
+
 pub const find = selections.find;
 
 fn Iterator(comptime T: type) type {

@@ -3,7 +3,7 @@ const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const notes = @import("../notes.zig");
 
-const State = @import("../State.zig");
+const State = @import("../NewState.zig");
 const Editor = @import("../Editor.zig");
 
 const Self = @This();
@@ -14,7 +14,13 @@ pub const help = "Edit a note with EDITOR.";
 pub const extended_help =
     \\Edit a note with $EDITOR
     \\
-    \\  nkt edit <name or day-like>
+    \\  nkt edit
+    \\     <what>                what to print: name of a journal, or a note
+    \\                             entry. if choice is ambiguous, will print both,
+    \\                             else specify with the `--journal` or `--dir`
+    \\                             flags
+    \\     [--journal name]      name of journal to read from
+    \\     [--dir name]          name of directory to read from
     \\
     \\Examples:
     \\=========
@@ -25,22 +31,95 @@ pub const extended_help =
     \\
 ;
 
-selection: notes.AnyNote,
+selection: ?cli.Selection,
+where: ?cli.SelectedCollection,
 
 pub fn init(itt: *cli.ArgIterator) !Self {
-    var string: ?[]const u8 = null;
+    var self: Self = .{ .selection = null, .where = null };
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
-        if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-        string = arg.string;
+        if (arg.flag) {
+            if (arg.is(null, "journal")) {
+                if (self.where == null) {
+                    const value = try itt.getValue();
+                    self.where = cli.SelectedCollection.from(.Journal, value.string);
+                }
+            } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
+                if (self.where == null) {
+                    const value = try itt.getValue();
+                    self.where = cli.SelectedCollection.from(.Directory, value.string);
+                }
+            } else {
+                return cli.CLIErrors.UnknownFlag;
+            }
+        } else {
+            if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
+            self.selection = try cli.Selection.parse(arg.string);
+        }
     }
 
-    if (string) |s| {
-        return .{ .selection = try notes.parse(s) };
-    } else {
-        return cli.CLIErrors.TooFewArguments;
+    if (self.selection == null) return cli.CLIErrors.TooFewArguments;
+    return self;
+}
+
+fn createDefaultInDirectory(
+    self: *Self,
+    state: *State,
+) !State.DirectoryItem {
+    // guard against trying to use journal
+    if (self.where) |w| if (w.container == .Journal)
+        return cli.SelectionError.InvalidSelection;
+
+    const selection = self.selection.?;
+
+    const default_dir: []const u8 = switch (selection) {
+        .ByDate => "diary",
+        .ByName => "notes",
+        .ByIndex => return cli.SelectionError.InvalidSelection,
+    };
+
+    var dir: *State.Directory = blk: {
+        if (self.where) |w| {
+            break :blk state.getDirectory(w.name) orelse
+                return cli.SelectionError.UnknownCollection;
+            // var where = state.getCollection(w.name) orelse
+            //     return cli.SelectionError.UnknownCollection;
+            // break :blk switch (where) {
+            //     .Directory => |d| d,
+            //     .DirectoryWithJournal => |d| d.directory,
+            //     else => unreachable,
+            // };
+        } else break :blk state.getDirectory(default_dir).?;
+    };
+
+    const name = if (selection == .ByDate)
+        try utils.formatDate(state.allocator, selection.ByDate)
+    else
+        selection.ByName;
+    defer if (selection == .ByDate) state.allocator.free(name);
+
+    return try dir.newChild(name);
+}
+
+fn findOrCreateDefault(self: *Self, state: *State) !State.DirectoryItem {
+    const selection = self.selection.?;
+
+    const item: State.Item = cli.find(
+        state,
+        self.where,
+        selection,
+    ) orelse return try createDefaultInDirectory(self, state);
+
+    switch (item) {
+        .DirectoryJournalItems => |d| return d.directory,
+        .Note => |d| return d,
+        else => {
+            if (selection == .ByDate) {
+                return try createDefaultInDirectory(self, state);
+            }
+            return cli.SelectionError.InvalidSelection;
+        },
     }
 }
 
@@ -49,19 +128,21 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    const rel_path = try self.selection.getRelPath(state);
-    const abs_path = try state.absPathify(rel_path);
+    var citem = try self.findOrCreateDefault(state);
+    const rel_path = citem.relativePath();
+
+    const abs_path = try state.fs.absPathify(state.allocator, rel_path);
+    defer state.allocator.free(abs_path);
 
     if (try state.fs.fileExists(rel_path)) {
         try out_writer.print("Opening file '{s}'\n", .{rel_path});
     } else {
         try out_writer.print("Creating new file '{s}'\n", .{rel_path});
-        try self.selection.makeTemplate(state, rel_path);
     }
 
-    var editor = try Editor.init(state.mem.child_allocator);
+    var editor = try Editor.init(state.allocator);
     defer editor.deinit();
 
     try editor.editPath(abs_path);
-    try self.selection.updateModified(state);
+    citem.item.info.modified = utils.now();
 }

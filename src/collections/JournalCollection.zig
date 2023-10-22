@@ -160,7 +160,7 @@ fn assertNoDuplicate(self: *Self, name: []const u8) !void {
     if (self.getEntryByName(name)) |_| return JournalError.DuplicateEntry;
 }
 
-pub fn createEntry(
+pub fn newChild(
     self: *Self,
     name: []const u8,
 ) !JournalItem {

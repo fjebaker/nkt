@@ -89,9 +89,9 @@ pub const Selection = union(enum) {
 fn finalize(maybe_note: ?Item, maybe_journal: ?Item) ?Item {
     if (maybe_note != null and maybe_journal != null) {
         return .{
-            .NoteWithJournalEntry = .{
+            .DirectoryJournalItems = .{
                 .journal = maybe_journal.?.JournalEntry,
-                .note = maybe_note.?.Note,
+                .directory = maybe_note.?.Note,
             },
         };
     }
@@ -158,21 +158,8 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
 
     // don't know if journal or entry, so we try both
     switch (what) {
-        // for names, we prefer searching in the notes directory first
         .ByName => |name| {
-            const maybe_note: ?Item = for (state.directories) |*dir| {
-                if (dir.get(name)) |item| {
-                    break .{ .Note = .{ .collection = dir, .item = item } };
-                }
-            } else null;
-
-            const maybe_journal: ?Item = for (state.journals) |*journal| {
-                if (journal.get(name)) |item| {
-                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
-                }
-            } else null;
-
-            return finalize(maybe_note, maybe_journal);
+            return whatFromName(state, name);
         },
         // for index, we only look at journals, but use the name to do a dir lookup
         // with the condition that the directory must have the same name as the journal
@@ -182,17 +169,26 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
                 return finalizeMatching(state, journal);
             } else return null;
         },
-        // for dates, we only look at journals
         .ByDate => |date| {
             const name = utils.formatDateBuf(date) catch return null;
-            const journal: Item = for (state.journals) |*journal| {
-                if (journal.get(&name)) |item| {
-                    break .{ .JournalEntry = .{ .collection = journal, .item = item } };
-                }
-            } else return null;
-
-            return finalizeMatching(state, journal);
+            return whatFromName(state, &name);
         },
     }
     return null;
+}
+
+fn whatFromName(state: *State, name: []const u8) ?Item {
+    const maybe_note: ?Item = for (state.directories) |*dir| {
+        if (dir.get(name)) |item| {
+            break .{ .Note = .{ .collection = dir, .item = item } };
+        }
+    } else null;
+
+    const maybe_journal: ?Item = for (state.journals) |*journal| {
+        if (journal.get(name)) |item| {
+            break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+        }
+    } else null;
+
+    return finalize(maybe_note, maybe_journal);
 }

@@ -74,13 +74,13 @@ pub const Collection = union(CollectionType) {
     }
 };
 
-pub const ItemType = enum { Note, JournalEntry, NoteWithJournalEntry };
+pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };
 
 pub const TrackedItem = union(ItemType) {
     Note: DirectoryCollection.DirectoryItem,
     JournalEntry: JournalCollection.JournalItem,
-    NoteWithJournalEntry: struct {
-        note: DirectoryCollection.DirectoryItem,
+    DirectoryJournalItems: struct {
+        directory: DirectoryCollection.DirectoryItem,
         journal: JournalCollection.JournalItem,
     },
 
