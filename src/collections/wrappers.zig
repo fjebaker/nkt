@@ -91,6 +91,11 @@ pub const TrackedItem = union(ItemType) {
                     &note_directory.item,
                 );
             },
+            .DirectoryJournalItems => |*both| {
+                try both.directory.collection.readNoteContent(
+                    &both.directory.item,
+                );
+            },
             else => {},
         }
     }

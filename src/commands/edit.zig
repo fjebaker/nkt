@@ -74,9 +74,9 @@ fn createDefaultInDirectory(
     const selection = self.selection.?;
 
     const default_dir: []const u8 = switch (selection) {
+        .ByIndex => return cli.SelectionError.InvalidSelection,
         .ByDate => "diary",
         .ByName => "notes",
-        .ByIndex => return cli.SelectionError.InvalidSelection,
     };
 
     var dir: *State.Directory = blk: {
@@ -93,13 +93,29 @@ fn createDefaultInDirectory(
         } else break :blk state.getDirectory(default_dir).?;
     };
 
-    const name = if (selection == .ByDate)
-        try utils.formatDate(state.allocator, selection.ByDate)
-    else
-        selection.ByName;
-    defer if (selection == .ByDate) state.allocator.free(name);
+    switch (selection) {
+        .ByName => |name| return try dir.newChild(name),
+        .ByIndex, .ByDate => {
+            const date = selection.ByDate;
+            const date_string = try utils.formatDateBuf(date);
+            var item = try dir.newChild(&date_string);
 
-    return try dir.newChild(name);
+            const day = try utils.dayOfWeek(state.allocator, date);
+            defer state.allocator.free(day);
+            const month = try utils.monthOfYear(state.allocator, date);
+            defer state.allocator.free(month);
+
+            const template = try std.fmt.allocPrint(
+                state.allocator,
+                "# {s}: {s} of {s}\n\n",
+                .{ date_string, day, month },
+            );
+            defer state.allocator.free(template);
+
+            try state.fs.overwrite(item.relativePath(), template);
+            return item;
+        },
+    }
 }
 
 fn findOrCreateDefault(self: *Self, state: *State) !State.DirectoryItem {
