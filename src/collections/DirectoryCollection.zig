@@ -165,6 +165,7 @@ pub fn newChild(
         .created = now,
         .name = owned_name,
         .path = try self.childPath(owned_name),
+        .tags = try utils.emptyTagList(self.directory_allocator),
     };
 
     var note = try self.addNote(info, null);

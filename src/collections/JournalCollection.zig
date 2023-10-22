@@ -37,6 +37,7 @@ pub const JournalItem = struct {
             .created = now,
             .modified = now,
             .item = owned_text,
+            .tags = try utils.emptyTagList(alloc),
         };
         _ = try utils.push(
             Journal.Entry.Item,
@@ -183,6 +184,7 @@ pub fn newChild(
         .items = try alloc.alloc(Journal.Entry.Item, 0),
         .name = owned_name,
         .path = path,
+        .tags = try utils.emptyTagList(alloc),
     };
 
     const entry_ptr = try utils.push(

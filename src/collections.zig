@@ -7,6 +7,8 @@ const FileSystem = @import("FileSystem.zig");
 
 const ContentMap = wrappers.ContentMap;
 
+pub const Tag = Topology.Tag;
+
 // union types
 pub const Collection = wrappers.Collection;
 pub const Item = wrappers.TrackedItem;

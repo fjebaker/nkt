@@ -195,3 +195,8 @@ pub fn moveToEnd(comptime T: type, items: []T, index: usize) void {
         swap(T, ptr, next_ptr);
     }
 }
+
+const Tag = @import("collections.zig").Tag;
+pub fn emptyTagList(allocator: std.mem.Allocator) ![]Tag {
+    return try allocator.alloc(Tag, 0);
+}
