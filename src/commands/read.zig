@@ -3,9 +3,7 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const Commands = @import("../main.zig").Commands;
 const State = @import("../NewState.zig");
-const Topology = @import("../Topology.zig");
 
 const Self = @This();
 
@@ -26,11 +24,8 @@ pub const extended_help =
     \\
 ;
 
-const Selection = cli.selections.Selection;
-const ContainerSelection = cli.selections.ContainerSelection;
-
-selection: ?Selection,
-where: ?ContainerSelection,
+selection: ?cli.Selection,
+where: ?cli.SelectedCollection,
 number: usize,
 all: bool,
 
@@ -53,19 +48,19 @@ pub fn init(itt: *cli.ArgIterator) !Self {
             } else if (arg.is(null, "journal")) {
                 if (self.where == null) {
                     const value = try itt.getValue();
-                    self.where = ContainerSelection.from(.Journal, value.string);
+                    self.where = cli.SelectedCollection.from(.Journal, value.string);
                 }
             } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
                 if (self.where == null) {
                     const value = try itt.getValue();
-                    self.where = ContainerSelection.from(.Directory, value.string);
+                    self.where = cli.SelectedCollection.from(.Directory, value.string);
                 }
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
             if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-            self.selection = try Selection.parse(arg.string);
+            self.selection = try cli.Selection.parse(arg.string);
         }
     }
 
@@ -73,6 +68,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 }
 
 const NoSuchCollection = State.Collection.Errors.NoSuchCollection;
+
 pub fn run(
     self: *Self,
     state: *State,
@@ -84,8 +80,10 @@ pub fn run(
 
     if (self.selection) |selection| {
         // if selection is specified
-        const collection = cli.selections.find(state, self.where, selection) orelse
+        var collection = cli.find(state, self.where, selection) orelse
             return NoSuchCollection;
+        // ensure note has been read from file
+        try collection.ensureContent();
 
         switch (collection) {
             .JournalEntry => |journal_entry| {
@@ -94,7 +92,9 @@ pub fn run(
             .NoteWithJournalEntry => |both| {
                 try self.readJournalEntry(both.journal.item, &printer);
             },
-            else => {},
+            .Note => |note_directory| {
+                try self.readNote(note_directory.item, &printer);
+            },
         }
     } else if (self.where) |w| switch (w.container) {
         // if no selection, but a collection
@@ -115,7 +115,7 @@ pub fn run(
 
 fn readJournal(
     self: *Self,
-    journal: *State.TrackedJournal,
+    journal: *State.Journal,
     printer: *Printer,
 ) !void {
     var alloc = printer.mem.allocator();
@@ -141,7 +141,7 @@ fn readJournal(
     printer.reverse();
 }
 
-fn printEntryItem(writer: Printer.Writer, item: Topology.Journal.Entry.Item) Printer.WriteError!void {
+fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
     const date = utils.Date.initUnixMs(item.created);
     const time_of_day = utils.formatTimeBuf(date) catch return Printer.WriteError.DateError;
     try writer.print("{s} - {s}\n", .{ time_of_day, item.item });
@@ -149,11 +149,20 @@ fn printEntryItem(writer: Printer.Writer, item: Topology.Journal.Entry.Item) Pri
 
 fn readJournalEntry(
     _: *Self,
-    entry: *const Topology.Journal.Entry,
+    entry: *const State.Journal.Child,
     printer: *Printer,
 ) !void {
     try printer.addHeading("Journal entry: {s}\n\n", .{entry.name});
     _ = try printer.addItems(entry.items, printEntryItem);
+}
+
+fn readNote(
+    _: *Self,
+    note: State.Directory.Child,
+    printer: *Printer,
+) !void {
+    try printer.addHeading("", .{});
+    _ = try printer.addLine("{s}", .{note.content.?});
 }
 
 const Printer = struct {
@@ -249,7 +258,7 @@ const Printer = struct {
         var chunk = self.current orelse return PrinterError.HeadingMissing;
 
         if (self.allowMore()) {
-            chunk.lines.writer().print(format, args);
+            try chunk.lines.writer().print(format, args);
         }
         return self.subRemainder(1);
     }
@@ -284,105 +293,3 @@ const Printer = struct {
         return true;
     }
 };
-
-// fn readDiary(
-//     entry: notes.diary.Entry,
-//     out_writer: anytype,
-//     limit: usize,
-// ) !void {
-//     try out_writer.print("Notes for {s}\n", .{try utils.formatDateBuf(entry.date)});
-
-//     const offset = @min(entry.notes.len, limit);
-//     const start = entry.notes.len - offset;
-
-//     for (entry.notes[start..]) |note| {
-//         const time_of_day = utils.adjustTimezone(utils.Date.initUnixMs(note.modified));
-//         try time_of_day.format("HH:mm:ss - ", .{}, out_writer);
-//         try out_writer.print("{s}\n", .{note.content});
-//     }
-// }
-
-// fn readDiaryContent(
-//     state: *State,
-//     entry: *notes.diary.Entry,
-//     out_writer: anytype,
-// ) !void {
-//     try out_writer.print(
-//         "Diary entry for {s}\n",
-//         .{try utils.formatDateBuf(entry.date)},
-//     );
-
-//     const content = try entry.readDiary(state);
-//     _ = try out_writer.writeAll(content);
-// }
-
-// fn readLastNotes(
-//     self: Self,
-//     state: *State,
-//     out_writer: anytype,
-// ) !void {
-//     var alloc = state.mem.allocator();
-
-//     var date_list = try list.getDiaryDateList(state);
-//     defer date_list.deinit();
-
-//     date_list.sort();
-
-//     // calculate how many diary entries we need
-//     var needed = std.ArrayList(*notes.diary.Entry).init(alloc);
-//     var note_count: usize = 0;
-//     for (0..date_list.items.len) |i| {
-//         const date = date_list.items[date_list.items.len - i - 1];
-
-//         var entry = try state.openDiaryEntry(date);
-//         try needed.append(entry);
-
-//         // tally how many entries we'd print now
-//         note_count += entry.notes.len;
-//         if (note_count >= self.number) break;
-//     }
-
-//     std.mem.reverse(*notes.diary.Entry, needed.items);
-
-//     // print the first one truncated
-//     const difference = note_count -| self.number;
-//     try readDiary(needed.items[0].*, out_writer, needed.items[0].notes.len - difference);
-
-//     // print the rest
-//     if (needed.items.len > 1) {
-//         for (needed.items[1..]) |entry| {
-//             try readDiary(entry.*, out_writer, note_count);
-//             note_count -|= entry.notes.len;
-//         }
-//     }
-// }
-
-// fn readNamedNode(self: Self, state: *State, out_writer: anytype) !void {
-//     var note = self.selection.?;
-//     const rel_path = try note.getRelPath(state);
-
-//     if (try state.fs.fileExists(rel_path)) {
-//         var content = try state.fs.readFileAlloc(state.mem.allocator(), rel_path);
-//         _ = try out_writer.writeAll(content);
-//     } else {
-//         return notes.NoteError.NoSuchNote;
-//     }
-// }
-
-// fn readEntry(
-//     self: Self,
-//     state: *State,
-//     out_writer: anytype,
-// ) !void {
-//     var note = self.selection.?;
-//     const date = try note.getDate(state);
-
-//     var entry = try state.openDiaryEntry(date);
-
-//     if (entry.has_diary) try readDiaryContent(
-//         state,
-//         entry,
-//         out_writer,
-//     );
-//     try readDiary(entry.*, out_writer, self.number);
-// }

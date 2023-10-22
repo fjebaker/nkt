@@ -4,7 +4,7 @@ const utils = @import("../utils.zig");
 const cli = @import("../cli.zig");
 
 const State = @import("../NewState.zig");
-const TrackedItem = State.TrackedItem;
+const Item = State.Item;
 
 const CollectionType = State.CollectionType;
 const Date = utils.Date;
@@ -27,11 +27,11 @@ fn isDate(string: []const u8) bool {
     return true;
 }
 
-pub const ContainerSelection = struct {
+pub const SelectedCollection = struct {
     container: CollectionType,
     name: []const u8,
 
-    pub fn from(container: CollectionType, name: []const u8) ContainerSelection {
+    pub fn from(container: CollectionType, name: []const u8) SelectedCollection {
         return .{
             .container = container,
             .name = name,
@@ -86,7 +86,7 @@ pub const Selection = union(enum) {
     }
 };
 
-fn finalize(maybe_note: ?TrackedItem, maybe_journal: ?TrackedItem) ?TrackedItem {
+fn finalize(maybe_note: ?Item, maybe_journal: ?Item) ?Item {
     if (maybe_note != null and maybe_journal != null) {
         return .{
             .NoteWithJournalEntry = .{
@@ -100,7 +100,7 @@ fn finalize(maybe_note: ?TrackedItem, maybe_journal: ?TrackedItem) ?TrackedItem 
         null;
 }
 
-fn finalizeMatching(state: *State, journal: TrackedItem) ?TrackedItem {
+fn finalizeMatching(state: *State, journal: Item) ?Item {
     const journal_name = journal.JournalEntry.collection.journal.name;
     const dir = state.getDirectory(journal_name) orelse
         return journal;
@@ -116,13 +116,13 @@ fn finalizeMatching(state: *State, journal: TrackedItem) ?TrackedItem {
 }
 
 /// Search in the user preferred order
-fn findIndexPreferredJournal(state: *State, index: usize) ?TrackedItem {
+fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
     if (state.getJournal("diary")) |journal| {
         if (journal.getIndex(index)) |entry| {
             return .{ .JournalEntry = .{ .collection = journal, .item = entry } };
         }
     }
-    const journal: ?TrackedItem = for (state.journals) |*journal| {
+    const journal: ?Item = for (state.journals) |*journal| {
         if (journal.getIndex(index)) |item| {
             break .{ .JournalEntry = .{ .collection = journal, .item = item } };
         }
@@ -130,7 +130,7 @@ fn findIndexPreferredJournal(state: *State, index: usize) ?TrackedItem {
     return journal;
 }
 
-pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?TrackedItem {
+pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
     if (where) |w| switch (w.container) {
         .Journal => {
             var journal = state.getJournal(w.name) orelse return null;
@@ -160,13 +160,13 @@ pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?Tracked
     switch (what) {
         // for names, we prefer searching in the notes directory first
         .ByName => |name| {
-            const maybe_note: ?TrackedItem = for (state.directories) |*dir| {
+            const maybe_note: ?Item = for (state.directories) |*dir| {
                 if (dir.get(name)) |item| {
                     break .{ .Note = .{ .collection = dir, .item = item } };
                 }
             } else null;
 
-            const maybe_journal: ?TrackedItem = for (state.journals) |*journal| {
+            const maybe_journal: ?Item = for (state.journals) |*journal| {
                 if (journal.get(name)) |item| {
                     break .{ .JournalEntry = .{ .collection = journal, .item = item } };
                 }
@@ -185,7 +185,7 @@ pub fn find(state: *State, where: ?ContainerSelection, what: Selection) ?Tracked
         // for dates, we only look at journals
         .ByDate => |date| {
             const name = utils.formatDateBuf(date) catch return null;
-            const journal: TrackedItem = for (state.journals) |*journal| {
+            const journal: Item = for (state.journals) |*journal| {
                 if (journal.get(&name)) |item| {
                     break .{ .JournalEntry = .{ .collection = journal, .item = item } };
                 }

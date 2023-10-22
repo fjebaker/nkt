@@ -112,7 +112,7 @@ pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
     return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
 }
 
-pub fn iterableNotesDirectory(self: *const Self) !std.fs.IterableDir {
+pub fn iterableDirectoryCollection(self: *const Self) !std.fs.IterableDir {
     return self.dir.openIterableDir(NOTES_DIRECTORY, .{});
 }
 

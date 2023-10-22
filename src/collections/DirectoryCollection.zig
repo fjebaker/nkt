@@ -1,12 +1,12 @@
 const std = @import("std");
 const utils = @import("../utils.zig");
 
-const Topology = @import("../Topology.zig");
+const Topology = @import("Topology.zig");
 const FileSystem = @import("../FileSystem.zig");
 
 const ContentMap = @import("ContentMap.zig");
-const collections = @import("collections.zig");
-const Ordering = collections.Ordering;
+const wrappers = @import("wrappers.zig");
+const Ordering = wrappers.Ordering;
 
 const indexing = @import("indexing.zig");
 const IndexContainer = indexing.IndexContainer;
@@ -15,13 +15,22 @@ const Note = Topology.Note;
 const Directory = Topology.Directory;
 const Self = @This();
 
+// public interface for getting the subtypes
+pub const Parent = Directory;
+pub const Child = Note;
+
+pub const DirectoryItem = struct {
+    collection: *Self,
+    item: Child,
+};
+
 directory_allocator: std.mem.Allocator,
 directory: *Directory,
 content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
 
-pub usingnamespace collections.Mixin(
+pub usingnamespace wrappers.Mixin(
     Self,
     *Note.Info,
     Note,
@@ -94,7 +103,7 @@ pub fn getNote(self: *Self, name: []const u8) ?Note {
 fn readContent(self: *Self, info: Note.Info) ![]const u8 {
     var alloc = self.content.mem.allocator();
     const content = try self.fs.readFileAlloc(alloc, info.path);
-    self.content.putMove(info.name, content);
+    try self.content.putMove(info.name, content);
     return content;
 }
 

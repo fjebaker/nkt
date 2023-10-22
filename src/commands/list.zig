@@ -2,7 +2,6 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const Commands = @import("../main.zig").Commands;
 const State = @import("../NewState.zig");
 
 const Self = @This();
@@ -67,7 +66,7 @@ pub fn init(itt: *cli.ArgIterator) !Self {
 fn listDirectory(
     self: *Self,
     alloc: std.mem.Allocator,
-    directory: *State.NotesDirectory,
+    directory: *State.Directory,
     writer: anytype,
 ) !void {
     var notelist = try directory.getNoteList(alloc);
@@ -123,7 +122,7 @@ fn listNames(
 fn listJournal(
     self: *Self,
     alloc: std.mem.Allocator,
-    journal: *State.TrackedJournal,
+    journal: *State.Journal,
     writer: anytype,
 ) !void {
     var entrylist = try journal.getDatedEntryList(alloc);

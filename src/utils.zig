@@ -111,6 +111,10 @@ pub fn toDate(string: []const u8) !Date {
     return newDate(year, month, day);
 }
 
+pub fn areSameDay(d1: Date, d2: Date) bool {
+    return d1.years == d2.years and d1.months == d2.months and d1.days == d2.days;
+}
+
 pub fn newDate(year: u16, month: u16, day: u16) Date {
     return Date.init(year, month, day, 0, 0, 0);
 }
@@ -154,13 +158,19 @@ fn testToDateAndBack(s: []const u8) !void {
     try std.testing.expectEqualSlices(u8, s, back[0..10]);
 }
 
-pub fn push(comptime T: type, allocator: std.mem.Allocator, list: *[]T, new: T) !void {
+pub fn push(
+    comptime T: type,
+    allocator: std.mem.Allocator,
+    list: *[]T,
+    new: T,
+) !*T {
     var managed_list = std.ArrayList(T).fromOwnedSlice(
         allocator,
         list.*,
     );
     try managed_list.append(new);
     list.* = try managed_list.toOwnedSlice();
+    return &list.*[list.len - 1];
 }
 
 test "to date" {

@@ -33,6 +33,7 @@ pub fn get(self: *Self, key: []const u8) ?[]const u8 {
 }
 
 pub fn deinit(self: *Self) void {
+    self.content_map.deinit();
     self.mem.deinit();
     self.* = undefined;
 }
