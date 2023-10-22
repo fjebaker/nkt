@@ -1,9 +1,8 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
-const notes = @import("../notes.zig");
 
-const State = @import("../NewState.zig");
+const State = @import("../State.zig");
 const Editor = @import("../Editor.zig");
 
 const Self = @This();

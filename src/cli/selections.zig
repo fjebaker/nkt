@@ -3,7 +3,7 @@ const std = @import("std");
 const utils = @import("../utils.zig");
 const cli = @import("../cli.zig");
 
-const State = @import("../NewState.zig");
+const State = @import("../State.zig");
 const Item = State.Item;
 
 const CollectionType = State.CollectionType;

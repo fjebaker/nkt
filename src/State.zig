@@ -1,142 +1,186 @@
 const std = @import("std");
 const utils = @import("utils.zig");
-const notes = @import("notes.zig");
 
-pub const NoteManager = @import("NoteManager.zig");
-pub const FileSystem = @import("FileSystem.zig");
+const collections = @import("collections.zig");
 
-pub const Ordering = enum { Modified, Created };
+pub const CollectionType = collections.CollectionType;
+pub const Collection = collections.Collection;
+pub const ItemType = collections.ItemType;
+pub const Item = collections.Item;
+
+pub const Directory = collections.Directory;
+pub const DirectoryItem = collections.DirectoryItem;
+
+pub const Journal = collections.Journal;
+pub const JournalItem = collections.JournalItem;
+
+pub const Ordering = collections.Ordering;
+
+// interface for interacting with different not items
+// *Entry:     stored by the items representing the underlying note
+
+const Topology = @import("collections/Topology.zig");
+const FileSystem = @import("FileSystem.zig");
 
 const Self = @This();
-
-pub const DiaryMapKey = struct {
-    year: u16,
-    month: u16,
-    day: u16,
-};
-
-fn toKey(date: utils.Date) DiaryMapKey {
-    return .{
-        .year = date.years,
-        .month = date.months,
-        .day = date.days,
-    };
-}
-fn toDate(key: DiaryMapKey) utils.Date {
-    return utils.newDate(key.year, key.month, key.day);
-}
-
-pub const DiaryMap = std.AutoHashMap(DiaryMapKey, notes.diary.Entry);
-pub const NamedNoteMap = std.StringArrayHashMap(notes.named_note.Note);
-
-fs: FileSystem,
-mem: std.heap.ArenaAllocator,
-diary: DiaryMap,
-named_notes: NamedNoteMap,
-manager: NoteManager,
 
 pub const Config = struct {
     root_path: []const u8,
 };
 
-pub fn init(allocator: std.mem.Allocator, config: Config) !Self {
-    var mem = std.heap.ArenaAllocator.init(allocator);
-    errdefer mem.deinit();
+topology: Topology,
+directories: []Directory,
+journals: []Journal,
+fs: FileSystem,
+allocator: std.mem.Allocator,
 
-    var diarymap = DiaryMap.init(mem.child_allocator);
-    errdefer diarymap.deinit();
+fn loadTopologyElseCreate(alloc: std.mem.Allocator, fs: FileSystem) !Topology {
+    if (try fs.fileExists(Topology.DATA_STORE_FILENAME)) {
+        var data = try fs.readFileAlloc(alloc, Topology.DATA_STORE_FILENAME);
+        defer alloc.free(data);
+        return try Topology.init(alloc, data);
+    } else {
+        return try Topology.initNew(alloc);
+    }
+}
 
-    var namedmap = NamedNoteMap.init(mem.child_allocator);
-    errdefer namedmap.deinit();
+pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
+    var fs = try FileSystem.init(config.root_path);
+    errdefer fs.deinit();
 
-    var file_system = try FileSystem.init(config.root_path);
-    errdefer file_system.deinit();
+    var topology = try loadTopologyElseCreate(alloc, fs);
+    errdefer topology.deinit();
 
-    var manager = try NoteManager.init(mem.child_allocator, &file_system);
-    errdefer manager.deinit();
+    var topo_alloc = topology.mem.allocator();
+
+    var directories = try collections.newDirectoryList(
+        alloc,
+        topo_alloc,
+        topology.directories,
+        fs,
+    );
+    errdefer alloc.free(directories);
+
+    var journals = try collections.newJournalList(
+        alloc,
+        topo_alloc,
+        topology.journals,
+        fs,
+    );
+    errdefer alloc.free(journals);
 
     return .{
-        .fs = file_system,
-        .mem = mem,
-        .diary = diarymap,
-        .named_notes = namedmap,
-        .manager = manager,
+        .topology = topology,
+        .directories = directories,
+        .journals = journals,
+        .fs = fs,
+        .allocator = alloc,
     };
-}
-
-pub fn deinit(self: *Self) void {
-    self.diary.deinit();
-    self.named_notes.deinit();
-    self.fs.deinit();
-    self.manager.deinit();
-    self.mem.deinit();
-    self.* = undefined;
-}
-
-/// Lookup a named note in the note map, else open or create it and store
-/// in the note map. Returns a pointer to the Note.
-pub fn openNamedNote(self: *Self, name: []const u8) !*notes.named_note.Note {
-    return self.named_notes.getPtr(name) orelse {
-        var note = try notes.named_note.openOrCreate(self, name);
-        try self.named_notes.put(name, note);
-        return self.named_notes.getPtr(name).?;
-    };
-}
-
-/// Lookup the diary entry in the diary map, else open it and store in
-/// the diary map. Returns a pointer to the Entry.
-pub fn openDiaryEntry(self: *Self, date: utils.Date) !*notes.diary.Entry {
-    const key = toKey(date);
-    return self.diary.getPtr(key) orelse {
-        var entry = try notes.diary.openOrCreate(self, date);
-        try self.diary.put(key, entry);
-        return self.diary.getPtr(key).?;
-    };
-}
-
-pub fn openToday(self: *Self) !*notes.diary.Entry {
-    return self.openDiaryEntry(utils.Date.now());
-}
-
-/// Turn a path relative to the root directory into an absolute file
-/// path. State owns the memory.
-pub fn absPathify(self: *Self, rel_path: []const u8) ![]const u8 {
-    return self.fs.absPathify(self.mem.allocator(), rel_path);
 }
 
 pub fn writeChanges(self: *Self) !void {
-    try self.manager.writeChanges(self);
+    const data = try self.topology.toString(self.allocator);
+    defer self.allocator.free(data);
+
+    try self.fs.overwrite(Topology.DATA_STORE_FILENAME, data);
 }
 
-const NoteList = utils.List(notes.named_note.Note);
-pub fn makeNoteList(self: *Self, ordering: Ordering) !NoteList {
-    var alloc = self.manager.mem.allocator();
+pub fn deinit(self: *Self) void {
+    for (self.directories) |*f| {
+        f.content.deinit();
+        f.index.deinit();
+    }
+    for (self.journals) |*f| {
+        f.mem.deinit();
+        f.index.deinit();
+    }
+    self.allocator.free(self.directories);
+    self.allocator.free(self.journals);
+    self.topology.deinit();
+    self.* = undefined;
+}
 
-    var copy = try alloc.dupe(notes.named_note.Note, self.manager.note_list);
-    errdefer alloc.free(copy);
+pub fn getDirectory(self: *Self, name: []const u8) ?*Directory {
+    for (self.directories) |*f| {
+        if (std.mem.eql(u8, f.directory.name, name)) {
+            return f;
+        }
+    }
+    return null;
+}
 
-    var ordered_list = NoteList.init(alloc, copy);
+pub fn getJournal(self: *Self, name: []const u8) ?*Journal {
+    for (self.journals) |*j| {
+        if (std.mem.eql(u8, j.journal.name, name)) {
+            return j;
+        }
+    }
+    return null;
+}
 
-    switch (ordering) {
-        .Created => std.sort.insertion(
-            notes.named_note.Note,
-            ordered_list.items,
-            {},
-            notes.named_note.sortCreated,
-        ),
-        .Modified => std.sort.insertion(
-            notes.named_note.Note,
-            ordered_list.items,
-            {},
-            notes.named_note.sortModified,
-        ),
+pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []const u8) ?Collection {
+    return switch (collection) {
+        .Journal => .{
+            .Journal = self.getJournal(name) orelse return null,
+        },
+        .Directory => .{
+            .Directory = self.getDirectory(name) orelse return null,
+        },
+        .DirectoryWithJournal => unreachable,
+    };
+}
+
+pub fn getCollection(self: *Self, name: []const u8) ?Collection {
+    var maybe_journal: ?*Journal = null;
+    var maybe_directory: ?*Directory = null;
+
+    for (self.journals) |*journal| {
+        if (std.mem.eql(u8, journal.journal.name, name))
+            maybe_journal = journal;
     }
 
-    return ordered_list;
+    for (self.directories) |*directory| {
+        if (std.mem.eql(u8, directory.directory.name, name))
+            maybe_directory = directory;
+    }
+
+    return Collection.init(maybe_directory, maybe_journal);
 }
 
-pub fn makeDiaryList(self: *Self, ordering: Ordering) !void {
-    _ = self;
-    _ = ordering;
-    // todo
+pub const CollectionNameList = struct {
+    pub const CollectionName = struct {
+        collection: CollectionType,
+        name: []const u8,
+    };
+
+    allocator: std.mem.Allocator,
+    items: []CollectionName,
+
+    pub usingnamespace utils.ListMixin(CollectionNameList, CollectionName);
+};
+
+pub fn getCollectionNames(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+) !CollectionNameList {
+    const N_directories = self.directories.len;
+    const N = N_directories + self.topology.journals.len;
+    var cnames = try alloc.alloc(CollectionNameList.CollectionName, N);
+    errdefer alloc.free(cnames);
+
+    for (0.., self.directories) |i, d| {
+        cnames[i] = .{
+            .collection = .Directory,
+            .name = d.directory.name,
+        };
+    }
+
+    for (N_directories.., self.journals) |i, j| {
+        cnames[i] = .{
+            .collection = .Journal,
+            .name = j.journal.name,
+        };
+    }
+
+    return CollectionNameList.initOwned(alloc, cnames);
 }

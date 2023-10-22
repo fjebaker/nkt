@@ -15,7 +15,8 @@ pub fn Mixin(
     comptime child_field: []const u8,
     comptime prepareItem: fn (*Self, Item) ChildType,
 ) type {
-    if (!@hasField(@typeInfo(Item).Pointer.child, "name"))
+    const ItemChild = @typeInfo(Item).Pointer.child;
+    if (!@hasField(ItemChild, "name"))
         @compileError("ChildType must have 'name' field");
 
     if (!@hasField(Self, "index"))
@@ -36,6 +37,17 @@ pub fn Mixin(
                 }
             }
             return null;
+        }
+
+        pub fn remove(self: *Self, item: Item) !void {
+            var items = &@field(@field(self, parent_field), child_field);
+            const index = for (items.*, 0..) |i, j| {
+                if (std.mem.eql(u8, i.name, item.name)) break j;
+            } else unreachable; // todo: proper error
+            // todo: better remove
+            // this is okay since everything is arena allocator tracked?
+            utils.moveToEnd(ItemChild, items.*, index);
+            items.len -= 1;
         }
     };
 }
@@ -83,6 +95,18 @@ pub const TrackedItem = union(ItemType) {
         directory: DirectoryCollection.DirectoryItem,
         journal: JournalCollection.JournalItem,
     },
+
+    pub fn remove(self: *TrackedItem) !void {
+        switch (self.*) {
+            .DirectoryJournalItems => unreachable, // todo
+            .Note => |d| {
+                try d.collection.remove(d.item.info);
+            },
+            .JournalEntry => |j| {
+                try j.collection.remove(j.item);
+            },
+        }
+    }
 
     pub fn ensureContent(self: *TrackedItem) !void {
         switch (self.*) {

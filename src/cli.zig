@@ -5,9 +5,11 @@ pub const Selection = selections.Selection;
 pub const SelectedCollection = selections.SelectedCollection;
 
 pub const SelectionError = error{
+    AmbiguousSelection,
     InvalidSelection,
     NoSuchDirectory,
     NoSuchJournal,
+    NoSuchEntry,
     UnknownCollection,
 };
 

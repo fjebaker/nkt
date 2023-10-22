@@ -99,6 +99,10 @@ pub fn fileExists(self: *const Self, path: []const u8) !bool {
     return true;
 }
 
+pub fn removeFile(self: *const Self, path: []const u8) !void {
+    try self.dir.deleteFile(path);
+}
+
 pub fn overwrite(self: *const Self, rel_path: []const u8, content: []const u8) !void {
     var fs = try self.openElseCreate(rel_path);
     defer fs.close();

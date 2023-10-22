@@ -3,7 +3,7 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const State = @import("../NewState.zig");
+const State = @import("../State.zig");
 
 const Self = @This();
 
@@ -80,12 +80,12 @@ pub fn run(
 
     if (self.selection) |selection| {
         // if selection is specified
-        var collection = cli.find(state, self.where, selection) orelse
+        var selected = cli.find(state, self.where, selection) orelse
             return NoSuchCollection;
         // ensure note has been read from file
-        try collection.ensureContent();
+        try selected.ensureContent();
 
-        switch (collection) {
+        switch (selected) {
             .JournalEntry => |journal_entry| {
                 try self.readJournalEntry(journal_entry.item, &printer);
             },

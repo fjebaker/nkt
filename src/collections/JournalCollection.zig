@@ -29,7 +29,7 @@ pub const JournalItem = struct {
     collection: *Self,
     item: *Journal.Entry,
 
-    pub fn add(self: *JournalItem, text: []const u8) !void {
+    pub fn add(self: JournalItem, text: []const u8) !void {
         var alloc = self.collection.mem.allocator();
         const now = utils.now();
         const owned_text = try alloc.dupe(u8, text);
@@ -44,6 +44,14 @@ pub const JournalItem = struct {
             &self.item.items,
             item,
         );
+    }
+
+    pub fn remove(self: JournalItem, item: Journal.Entry.Item) !void {
+        const index = for (self.item.items, 0..) |i, j| {
+            if (i.created == item.created) break j;
+        } else unreachable; // todo
+        utils.moveToEnd(Journal.Entry.Item, self.item.items, index);
+        self.item.items.len -= 1;
     }
 };
 

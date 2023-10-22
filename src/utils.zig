@@ -185,3 +185,13 @@ test "time shift" {
     try std.testing.expectEqual(new.hours, 0);
     try std.testing.expectEqual(new.days, 11);
 }
+
+pub fn moveToEnd(comptime T: type, items: []T, index: usize) void {
+    const swap = std.mem.swap;
+    for (items[index..], index + 1..) |*ptr, i| {
+        // check we're not going past the end
+        if (i == items.len) break;
+        const next_ptr = &items[i];
+        swap(T, ptr, next_ptr);
+    }
+}

@@ -3,7 +3,7 @@ const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
 const Commands = @import("../main.zig").Commands;
-const State = @import("../NewState.zig");
+const State = @import("../State.zig");
 
 pub const help = "(Re)Initialize the home directory structure.";
 

@@ -3,7 +3,7 @@ const std = @import("std");
 const cli = @import("cli.zig");
 const utils = @import("utils.zig");
 
-const State = @import("NewState.zig");
+const State = @import("State.zig");
 
 pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
@@ -14,6 +14,7 @@ pub const Commands = union(enum) {
     list: @import("commands/list.zig"),
     log: @import("commands/log.zig"),
     read: @import("commands/read.zig"),
+    remove: @import("commands/remove.zig"),
 
     pub fn run(
         self: *Commands,
