@@ -1,8 +1,9 @@
 const std = @import("std");
+
 const cli = @import("cli.zig");
 const utils = @import("utils.zig");
+
 const State = @import("State.zig");
-const Editor = @import("Editor.zig");
 
 pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
@@ -11,8 +12,9 @@ pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
     init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),
-    note: @import("commands/note.zig"),
+    log: @import("commands/log.zig"),
     read: @import("commands/read.zig"),
+    remove: @import("commands/remove.zig"),
 
     pub fn run(
         self: *Commands,
@@ -27,7 +29,9 @@ pub const Commands = union(enum) {
     pub fn deinit(_: *Commands) void {}
 
     pub fn init(args: *cli.ArgIterator) !Commands {
-        const command = (try args.next()) orelse return CommandError.NoCommandGiven;
+        const command = try args.next() orelse
+            return CommandError.NoCommandGiven;
+
         if (command.flag) return CommandError.UnknownCommand;
 
         inline for (@typeInfo(Commands).Union.fields) |field| {

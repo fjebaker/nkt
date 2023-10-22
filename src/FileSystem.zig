@@ -84,7 +84,7 @@ fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
 }
 
 /// Initialize the home directory with requisite sub paths.
-pub fn setupDirectory(self: *const Self) !void {
+pub fn setupDefaultDirectory(self: *const Self) !void {
     try self.makeDirIfNotExists(DIARY_DIRECTORY);
     try self.makeDirIfNotExists(NOTES_DIRECTORY);
 }
@@ -97,6 +97,10 @@ pub fn fileExists(self: *const Self, path: []const u8) !bool {
         return err;
     };
     return true;
+}
+
+pub fn removeFile(self: *const Self, path: []const u8) !void {
+    try self.dir.deleteFile(path);
 }
 
 pub fn overwrite(self: *const Self, rel_path: []const u8, content: []const u8) !void {
@@ -112,7 +116,7 @@ pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
     return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
 }
 
-pub fn iterableNotesDirectory(self: *const Self) !std.fs.IterableDir {
+pub fn iterableDirectoryCollection(self: *const Self) !std.fs.IterableDir {
     return self.dir.openIterableDir(NOTES_DIRECTORY, .{});
 }
 

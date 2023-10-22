@@ -1,4 +1,19 @@
 const std = @import("std");
+const selections = @import("cli/selections.zig");
+
+pub const Selection = selections.Selection;
+pub const SelectedCollection = selections.SelectedCollection;
+
+pub const SelectionError = error{
+    AmbiguousSelection,
+    InvalidSelection,
+    NoSuchDirectory,
+    NoSuchJournal,
+    NoSuchEntry,
+    UnknownCollection,
+};
+
+pub const find = selections.find;
 
 fn Iterator(comptime T: type) type {
     return struct {
@@ -19,12 +34,13 @@ fn Iterator(comptime T: type) type {
 }
 
 pub const CLIErrors = error{
-    CouldNotParse,
-    NoValueGiven,
     BadArgument,
-    UnknownFlag,
+    CouldNotParse,
+    DuplicateFlag,
+    NoValueGiven,
     TooFewArguments,
     TooManyArguments,
+    UnknownFlag,
 };
 
 pub const Arg = struct {
@@ -184,6 +200,10 @@ fn argIs(arg: Arg, comptime expected: Arg) !void {
     try std.testing.expectEqual(expected.flag, arg.flag);
     try std.testing.expectEqual(expected.index, arg.index);
     try std.testing.expectEqualStrings(expected.string, arg.string);
+}
+
+test "submodules" {
+    _ = selections;
 }
 
 test "argument iteration" {

@@ -19,5 +19,5 @@ pub fn run(
     state: *State,
     _: anytype,
 ) !void {
-    try state.fs.setupDirectory();
+    try state.fs.setupDefaultDirectory();
 }

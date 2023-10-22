@@ -5,27 +5,28 @@ pub const DateError = error{DateStringTooShort};
 
 pub const Date = time.DateTime;
 
-pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
+pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
-        const Self = @This();
+        pub fn initSize(alloc: std.mem.Allocator, N: usize) !Self {
+            var items = try alloc.alloc(T, N);
+            return .{ .allocator = alloc, .items = items };
+        }
 
-        alloc: std.mem.Allocator,
-        items: []T,
-
-        pub fn init(alloc: std.mem.Allocator, items: []T) Self {
-            return .{ .alloc = alloc, .items = items };
+        pub fn initOwned(alloc: std.mem.Allocator, items: []T) Self {
+            if (@hasDecl(Self, "_init")) {
+                @call(.auto, @field(Self, "_init"), .{ alloc, items });
+            } else {
+                return .{ .allocator = alloc, .items = items };
+            }
         }
 
         pub fn deinit(self: *Self) void {
-            self.alloc.free(self.items);
-            self.* = undefined;
-        }
-
-        pub fn sort(self: *Self) void {
-            if (@typeInfo(@TypeOf(lessThan)) == .Void) {
-                @compileError("Cannot call sort with void lessThan function");
+            if (@hasDecl(Self, "_deinit")) {
+                @call(.auto, @field(Self, "_deinit"), .{self});
+            } else {
+                self.allocator.free(self.items);
+                self.* = undefined;
             }
-            std.sort.insertion(T, self.items, {}, lessThan);
         }
 
         pub fn reverse(self: *Self) void {
@@ -35,7 +36,29 @@ pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
 }
 
 pub fn List(comptime T: type) type {
-    return SortableList(T, void);
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+        items: []T,
+
+        pub usingnamespace ListMixin(Self, T);
+    };
+}
+
+pub fn SortableList(comptime T: type, comptime lessThan: anytype) type {
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+        items: []T,
+
+        pub usingnamespace ListMixin(Self, T);
+
+        pub fn sort(self: *Self) void {
+            std.sort.insertion(T, self.items, {}, lessThan);
+        }
+    };
 }
 
 fn dateSort(_: void, lhs: Date, rhs: Date) bool {
@@ -88,6 +111,10 @@ pub fn toDate(string: []const u8) !Date {
     return newDate(year, month, day);
 }
 
+pub fn areSameDay(d1: Date, d2: Date) bool {
+    return d1.years == d2.years and d1.months == d2.months and d1.days == d2.days;
+}
+
 pub fn newDate(year: u16, month: u16, day: u16) Date {
     return Date.init(year, month, day, 0, 0, 0);
 }
@@ -103,6 +130,15 @@ pub fn formatDateBuf(date: Date) ![10]u8 {
     var bufstream = std.io.fixedBufferStream(&buf);
     var writer = bufstream.writer();
     try t_date.format("YYYY-MM-DD", .{}, writer);
+    return buf;
+}
+
+pub fn formatTimeBuf(date: Date) ![8]u8 {
+    const t_date = adjustTimezone(date);
+    var buf: [8]u8 = undefined;
+    var bufstream = std.io.fixedBufferStream(&buf);
+    var writer = bufstream.writer();
+    try t_date.format("HH:mm:ss", .{}, writer);
     return buf;
 }
 
@@ -122,13 +158,19 @@ fn testToDateAndBack(s: []const u8) !void {
     try std.testing.expectEqualSlices(u8, s, back[0..10]);
 }
 
-pub fn push(comptime T: type, allocator: std.mem.Allocator, list: *[]T, new: T) !void {
+pub fn push(
+    comptime T: type,
+    allocator: std.mem.Allocator,
+    list: *[]T,
+    new: T,
+) !*T {
     var managed_list = std.ArrayList(T).fromOwnedSlice(
         allocator,
         list.*,
     );
     try managed_list.append(new);
     list.* = try managed_list.toOwnedSlice();
+    return &list.*[list.len - 1];
 }
 
 test "to date" {
@@ -142,4 +184,14 @@ test "time shift" {
     const new = adjustTimezone(date);
     try std.testing.expectEqual(new.hours, 0);
     try std.testing.expectEqual(new.days, 11);
+}
+
+pub fn moveToEnd(comptime T: type, items: []T, index: usize) void {
+    const swap = std.mem.swap;
+    for (items[index..], index + 1..) |*ptr, i| {
+        // check we're not going past the end
+        if (i == items.len) break;
+        const next_ptr = &items[i];
+        swap(T, ptr, next_ptr);
+    }
 }
