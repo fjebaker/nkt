@@ -74,28 +74,30 @@ fn listDirectory(
 
     notelist.sortBy(self.ordering);
 
+    const collection_name = directory.collectionName();
+
     switch (self.ordering) {
         .Modified => try writer.print(
             "Directory '{s}' ordered by last modified:\n",
-            .{directory.directory.name},
+            .{collection_name},
         ),
         .Created => try writer.print(
             "Directory '{s}' ordered by date created:\n",
-            .{directory.directory.name},
+            .{collection_name},
         ),
     }
 
-    const is_diary = std.mem.eql(u8, "diary", directory.directory.name);
+    const is_diary = std.mem.eql(u8, "diary", collection_name);
     for (notelist.items) |note| {
         if (is_diary) {
-            try writer.print("{s}\n", .{note.info.name});
+            try writer.print("{s}\n", .{note.getName()});
         } else {
             const date = switch (self.ordering) {
                 .Modified => utils.Date.initUnixMs(note.info.modified),
                 .Created => utils.Date.initUnixMs(note.info.created),
             };
             const date_string = try utils.formatDateBuf(date);
-            try writer.print("{s} - {s}\n", .{ date_string, note.info.name });
+            try writer.print("{s} - {s}\n", .{ date_string, note.getName() });
         }
     }
 }
@@ -133,11 +135,11 @@ fn listJournal(
     switch (self.ordering) {
         .Modified => try writer.print(
             "Journal '{s}' ordered by last modified:\n",
-            .{journal.journal.name},
+            .{journal.collectionName()},
         ),
         .Created => try writer.print(
             "Journal '{s}' ordered by date created:\n",
-            .{journal.journal.name},
+            .{journal.collectionName()},
         ),
     }
 

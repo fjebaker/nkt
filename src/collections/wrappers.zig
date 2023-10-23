@@ -81,6 +81,10 @@ pub fn Mixin(
             utils.moveToEnd(ItemChild, items.*, index);
             items.len -= 1;
         }
+
+        pub fn collectionName(self: *const Self) []const u8 {
+            return self.container.name;
+        }
     };
 }
 

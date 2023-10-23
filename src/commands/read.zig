@@ -128,7 +128,7 @@ fn readJournal(
     var line_count: usize = 0;
     const last = for (0.., entry_list.items) |i, *item| {
         try journal.readCollectionContent(item);
-        const N = item.items.?.len;
+        const N = item.children.?.len;
         line_count += N;
         if (!printer.couldFit(line_count)) {
             break i;
@@ -155,7 +155,7 @@ fn readJournalEntry(
     printer: *Printer,
 ) !void {
     try printer.addHeading("Journal entry: {s}\n\n", .{entry.info.name});
-    _ = try printer.addItems(entry.items, printEntryItem);
+    _ = try printer.addItems(entry.children, printEntryItem);
 }
 
 fn readNote(
@@ -164,7 +164,7 @@ fn readNote(
     printer: *Printer,
 ) !void {
     try printer.addHeading("", .{});
-    _ = try printer.addLine("{s}", .{note.content.?});
+    _ = try printer.addLine("{s}", .{note.children.?});
 }
 
 const Printer = struct {

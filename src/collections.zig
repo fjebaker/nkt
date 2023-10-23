@@ -24,37 +24,47 @@ pub const ItemType = wrappers.ItemType;
 
 pub const Ordering = wrappers.Ordering;
 
-pub fn newDirectoryList(
+fn newCollectionList(
+    comptime T: type,
+    comptime K: type,
     alloc: std.mem.Allocator,
-    directories: []Topology.Directory,
+    collections: []K,
     fs: FileSystem,
-) ![]Directory {
-    var list = try std.ArrayList(Directory).initCapacity(alloc, directories.len);
+) ![]T {
+    var list = try std.ArrayList(T).initCapacity(alloc, collections.len);
     errdefer list.deinit();
     errdefer for (list.items) |*d| {
         d.index.deinit();
         d.content.deinit();
     };
 
-    for (directories) |*dir| {
-        var content = try Directory.ContentMap.init(alloc);
+    for (collections) |*col| {
+        var content = try T.ContentMap.init(alloc);
         errdefer content.deinit();
 
-        var index = try indexing.makeIndex(alloc, dir.infos);
+        var index = try indexing.makeIndex(alloc, col.infos);
         errdefer index.deinit();
 
-        const nd: Directory = .{
+        const c: T = .{
             .mem = std.heap.ArenaAllocator.init(alloc),
             .content = content,
-            .directory = dir,
+            .container = col,
             .fs = fs,
             .index = index,
         };
 
-        list.appendAssumeCapacity(nd);
+        list.appendAssumeCapacity(c);
     }
 
     return try list.toOwnedSlice();
+}
+
+pub fn newDirectoryList(
+    alloc: std.mem.Allocator,
+    directories: []Topology.Directory,
+    fs: FileSystem,
+) ![]Directory {
+    return newCollectionList(Directory, Topology.Directory, alloc, directories, fs);
 }
 
 pub fn newJournalList(
@@ -62,30 +72,5 @@ pub fn newJournalList(
     journals: []Topology.Journal,
     fs: FileSystem,
 ) ![]Journal {
-    var list = try std.ArrayList(Journal).initCapacity(alloc, journals.len);
-    errdefer list.deinit();
-    errdefer for (list.items) |*j| {
-        j.index.deinit();
-        j.content.deinit();
-    };
-
-    for (journals) |*j| {
-        var content = try Journal.ContentMap.init(alloc);
-        errdefer content.deinit();
-
-        var index = try indexing.makeIndex(alloc, j.infos);
-        errdefer index.deinit();
-
-        const tj: Journal = .{
-            .mem = std.heap.ArenaAllocator.init(alloc),
-            .journal = j,
-            .index = index,
-            .content = content,
-            .fs = fs,
-        };
-
-        list.appendAssumeCapacity(tj);
-    }
-
-    return try list.toOwnedSlice();
+    return newCollectionList(Journal, Topology.Journal, alloc, journals, fs);
 }

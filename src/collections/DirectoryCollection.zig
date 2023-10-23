@@ -32,7 +32,7 @@ pub const DirectoryItem = struct {
 };
 
 mem: std.heap.ArenaAllocator,
-directory: *Directory,
+container: *Directory,
 content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
@@ -41,14 +41,14 @@ pub usingnamespace wrappers.Mixin(
     Self,
     *Child.Info,
     Child,
-    "directory",
+    "container",
     prepareItem,
 );
 
 fn prepareItem(self: *Self, info: *Child.Info) Child {
     return .{
         .info = info,
-        .content = self.content.get(info.name),
+        .children = self.content.get(info.name),
     };
 }
 
@@ -56,7 +56,7 @@ fn prepareItem(self: *Self, info: *Child.Info) Child {
 /// attempt to read the note content. Use `readNote` to attempt to
 /// read content
 pub fn getNote(self: *Self, name: []const u8) ?Child {
-    for (self.directory.infos) |*info| {
+    for (self.container.infos) |*info| {
         if (std.mem.eql(u8, info.name, name)) {
             return .{
                 .info = info,
@@ -76,13 +76,13 @@ fn readContent(self: *Self, info: Child.Info) ![]const u8 {
 
 pub fn readNote(self: *Self, name: []const u8) !?Child {
     var note = self.getNote(name) orelse return null;
-    note.content = try self.readContent(note.info.*);
+    note.children = try self.readContent(note.info.*);
     return note;
 }
 
 pub fn readCollectionContent(self: *Self, entry: *Child) !void {
-    if (entry.content == null) {
-        entry.content = try self.readContent(entry.info.*);
+    if (entry.children == null) {
+        entry.children = try self.readContent(entry.info.*);
     }
 }
 
@@ -95,7 +95,7 @@ pub fn addNote(
     const info_ptr = try utils.push(
         Child.Info,
         alloc,
-        &self.directory.infos,
+        &self.container.infos,
         info,
     );
 
@@ -105,7 +105,7 @@ pub fn addNote(
 
     return .{
         .info = info_ptr,
-        .content = self.content.get(info.name),
+        .children = self.content.get(info.name),
     };
 }
 
@@ -118,7 +118,7 @@ fn childPath(self: *Self, name: []const u8) ![]const u8 {
     );
     return try std.fs.path.join(
         alloc,
-        &.{ self.directory.path, filename },
+        &.{ self.container.path, filename },
     );
 }
 

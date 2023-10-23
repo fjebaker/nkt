@@ -27,93 +27,92 @@ const InfoScheme = struct {
     }
 };
 
-pub const Note = struct {
-    info: *Info,
-    content: ?[]const u8,
-
-    pub fn init(info: *Info, content: ?[]const u8) Note {
-        return .{ .info = info, .content = content };
-    }
-
-    pub const Info = InfoScheme;
-
-    pub fn sortCreated(_: void, lhs: Note, rhs: Note) bool {
-        return Info.sortCreated({}, lhs.info.*, rhs.info.*);
-    }
-
-    pub fn sortModified(_: void, lhs: Note, rhs: Note) bool {
-        return Info.sortModified({}, lhs.info.*, rhs.info.*);
-    }
-};
-
-pub const Entry = struct {
-    info: *Info,
-    items: ?[]Item,
-
-    pub fn init(info: *Info, content: ?[]Item) Entry {
-        return .{ .info = info, .items = content };
-    }
-
-    pub const Info = InfoScheme;
-
-    pub const Item = struct {
-        created: u64,
-        modified: u64,
-        item: []const u8,
-        tags: []Tag,
-
-        pub fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
-            return lhs.created < rhs.created;
+pub fn ChildScheme(comptime S: type) type {
+    const C = inline for (@typeInfo(S).Struct.fields) |f| {
+        if (std.mem.eql(u8, f.name, "children")) break f.type;
+    } else @compileError("missing field 'children'");
+    const TPtr = @typeInfo(@typeInfo(C).Optional.child).Pointer;
+    const T = TPtr.child;
+    return struct {
+        pub const Info = InfoScheme;
+        pub const Item = T;
+        pub fn init(info: *Info, children: C) S {
+            return .{ .info = info, .children = children };
         }
 
-        pub fn sortModified(_: void, lhs: Item, rhs: Item) bool {
-            return lhs.modified < rhs.modified;
+        pub fn sortCreated(_: void, lhs: S, rhs: S) bool {
+            return Info.sortCreated({}, lhs.info.*, rhs.info.*);
+        }
+
+        pub fn sortModified(_: void, lhs: S, rhs: S) bool {
+            return Info.sortModified({}, lhs.info.*, rhs.info.*);
+        }
+
+        pub fn getName(self: S) []const u8 {
+            return self.info.name;
         }
     };
+}
 
-    pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
-        return Info.sortCreated({}, lhs.info.*, rhs.info.*);
-    }
-
-    pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
-        return Info.sortModified({}, lhs.info.*, rhs.info.*);
-    }
-
-    /// Caller must ensure items exist
-    pub fn timeCreated(self: Entry) u64 {
-        const items = self.items.?;
-        std.debug.assert(items.len > 0);
-        var min: u64 = items[0].created;
-        for (items) |item| {
-            min = @min(min, item.created);
-        }
-        return min;
-    }
-
-    /// Caller must ensure items exist
-    pub fn lastModified(self: Entry) u64 {
-        const items = self.items.?;
-        std.debug.assert(items.len > 0);
-        var max: u64 = items[0].modified;
-        for (items) |item| {
-            max = @max(max, item.modified);
-        }
-        return max;
-    }
-};
-
-pub const Journal = struct {
-    name: []const u8,
-    path: []const u8, // to be used
-    infos: []Entry.Info,
-    tags: []Tag,
-};
-
-pub const Directory = struct {
+pub const CollectionScheme = struct {
     name: []const u8,
     path: []const u8,
-    infos: []Note.Info,
+    infos: []InfoScheme,
     tags: []Tag,
+};
+
+// directories
+pub const Directory = CollectionScheme;
+pub const Note = struct {
+    info: *InfoScheme,
+    children: ?[]const u8,
+    pub usingnamespace ChildScheme(@This());
+};
+
+// journal
+const EntryItem = struct {
+    created: u64,
+    modified: u64,
+    item: []const u8,
+    tags: []Tag,
+
+    pub fn sortCreated(_: void, lhs: EntryItem, rhs: EntryItem) bool {
+        return lhs.created < rhs.created;
+    }
+
+    pub fn sortModified(_: void, lhs: EntryItem, rhs: EntryItem) bool {
+        return lhs.modified < rhs.modified;
+    }
+};
+pub const Journal = CollectionScheme;
+pub const Entry = struct {
+    info: *InfoScheme,
+    children: ?[]EntryItem,
+    pub usingnamespace ChildScheme(@This());
+
+    fn time(self: Entry, comptime field: []const u8, comptime cmp: enum { Min, Max }) u64 {
+        const children = self.children.?;
+        std.debug.assert(children.len > 0);
+
+        var val: u64 = @field(children[0], field);
+        for (children[1..]) |item| {
+            const t = @field(item, field);
+            val = switch (cmp) {
+                .Min => @min(val, t),
+                .Max => @max(val, t),
+            };
+        }
+
+        return val;
+    }
+
+    pub fn timeCreated(self: Entry) u64 {
+        return self.time("created", .Min);
+    }
+
+    pub fn lastModified(self: Entry) u64 {
+        return self.time("modified", .Max);
+    }
 };
 
 pub const TaskList = struct {

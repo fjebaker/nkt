@@ -85,7 +85,7 @@ pub fn run(
         .Note => |d| {
             try out_writer.print(
                 "Delete '{s}' in directory '{s}'?\n",
-                .{ d.item.info.name, d.collection.directory.name },
+                .{ d.item.getName(), d.collection.collectionName() },
             );
             if (try confirmPrompt(state, out_writer)) {
                 try state.fs.removeFile(d.relativePath());
@@ -100,7 +100,7 @@ pub fn run(
             } else {
                 try out_writer.print(
                     "Delete ENTIRE entry '{s}' in journal '{s}'?\n",
-                    .{ j.item.info.name, j.collection.journal.name },
+                    .{ j.item.getName(), j.collection.collectionName() },
                 );
                 if (try confirmPrompt(state, out_writer)) {
                     try item.remove();
@@ -122,7 +122,7 @@ fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out
     try j.collection.readCollectionContent(&j.item);
 
     const ItemType = State.Journal.Child.Item;
-    const marked_item: ItemType = for (j.item.items.?) |i| {
+    const marked_child: ItemType = for (j.item.children.?) |i| {
         const created_time = try utils.formatTimeBuf(
             utils.Date.initUnixMs(i.created),
         );
@@ -133,15 +133,15 @@ fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out
     // print the item
     try out_writer.print(
         "Selected item in {s}:\n\n {s} - {s}\n\n",
-        .{ j.item.info.name, time, marked_item.item },
+        .{ j.item.getName(), time, marked_child.item },
     );
     // delete message
     try out_writer.print(
         "Delete item in entry '{s}' in journal '{s}'?\n",
-        .{ j.item.info.name, j.collection.journal.name },
+        .{ j.item.getName(), j.collection.collectionName() },
     );
     if (try confirmPrompt(state, out_writer)) {
-        try j.remove(marked_item);
+        try j.remove(marked_child);
     }
 }
 

@@ -23,7 +23,7 @@ pub const Parent = Journal;
 pub const Child = Topology.Entry;
 
 mem: std.heap.ArenaAllocator,
-journal: *Journal,
+container: *Journal,
 content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
@@ -32,14 +32,14 @@ pub usingnamespace wrappers.Mixin(
     Self,
     *Child.Info,
     Child,
-    "journal",
+    "container",
     prepareItem,
 );
 
 fn prepareItem(self: *Self, info: *Child.Info) Child {
     return .{
         .info = info,
-        .items = self.content.get(info.name),
+        .children = self.content.get(info.name),
     };
 }
 
@@ -69,12 +69,12 @@ pub const JournalItem = struct {
     }
 
     pub fn remove(self: *JournalItem, item: Child.Item) !void {
-        const index = for (self.item.items.?, 0..) |i, j| {
+        const index = for (self.item.children.?, 0..) |i, j| {
             if (i.created == item.created) break j;
         } else unreachable; // todo
-        utils.moveToEnd(Child.Item, self.item.items.?, index);
-        self.item.items.?.len -= 1;
-        try self.collection.content.putMove(self.item.info.name, self.item.items.?);
+        utils.moveToEnd(Child.Item, self.item.children.?, index);
+        self.item.children.?.len -= 1;
+        try self.collection.content.putMove(self.item.info.name, self.item.children.?);
     }
 };
 
@@ -112,21 +112,21 @@ pub fn addItem(self: *Self, entry: *Child, item: Child.Item) !void {
     var alloc = self.content.allocator();
 
     try self.readCollectionContent(entry);
-    var items = entry.items.?;
+    var children = entry.children.?;
 
-    _ = try utils.push(Child.Item, alloc, &items, item);
-    entry.items = items;
-    try self.content.putMove(entry.info.name, entry.items.?);
+    _ = try utils.push(Child.Item, alloc, &children, item);
+    entry.children = children;
+    try self.content.putMove(entry.getName(), entry.children.?);
 }
 
 pub fn readCollectionContent(self: *Self, entry: *Child) !void {
-    if (entry.items == null) {
-        entry.items = try self.readItems(entry.info.*);
+    if (entry.children == null) {
+        entry.children = try self.readItems(entry.info.*);
     }
 }
 
 pub fn getEntryByDate(self: *Self, date: utils.Date) ?JournalItem {
-    for (self.journal.infos) |*entry| {
+    for (self.container.infos) |*entry| {
         const entry_date = utils.Date.initUnixMs(entry.timeCreated());
         if (utils.areSameDay(entry_date, date)) {
             return .{ .collection = self, .item = entry };
@@ -136,13 +136,13 @@ pub fn getEntryByDate(self: *Self, date: utils.Date) ?JournalItem {
 }
 
 pub fn getEntryByName(self: *Self, name: []const u8) ?JournalItem {
-    for (self.journal.infos) |*info| {
+    for (self.container.infos) |*info| {
         if (std.mem.eql(u8, info.name, name)) {
             return .{
                 .collection = self,
                 .item = .{
                     .info = info,
-                    .items = self.content.get(info.name),
+                    .children = self.content.get(info.name),
                 },
             };
         }
@@ -163,7 +163,7 @@ fn addEntry(
     const info_ptr = try utils.push(
         Child.Info,
         alloc,
-        &self.journal.infos,
+        &self.container.infos,
         info,
     );
 
@@ -171,9 +171,12 @@ fn addEntry(
         try self.content.put(info.name, i);
     }
 
+    // create a corresponding file in the filesystem
+    try self.fs.overwrite(info.path, "{\"items\":[]}");
+
     return .{
         .info = info_ptr,
-        .items = self.content.get(info.name),
+        .children = self.content.get(info.name),
     };
 }
 
@@ -186,7 +189,7 @@ fn childPath(self: *Self, name: []const u8) ![]const u8 {
     );
     return try std.fs.path.join(
         alloc,
-        &.{ self.journal.path, filename },
+        &.{ self.container.path, filename },
     );
 }
 
@@ -213,16 +216,16 @@ pub fn newChild(
 }
 
 pub fn writeChanges(self: *Self, alloc: std.mem.Allocator) !void {
-    for (self.journal.infos) |*info| {
+    for (self.container.infos) |*info| {
         var entry = self.getEntryByName(info.name).?;
-        var items = entry.item.items orelse continue;
+        var children = entry.item.children orelse continue;
 
         // update last modified
         const modified = entry.item.lastModified();
         info.modified = modified;
 
         // write entries back to file
-        const string = try itemsToString(alloc, items);
+        const string = try itemsToString(alloc, children);
         defer alloc.free(string);
 
         try self.fs.overwrite(info.path, string);

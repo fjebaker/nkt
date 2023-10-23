@@ -103,22 +103,21 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn getDirectory(self: *Self, name: []const u8) ?*Directory {
-    for (self.directories) |*f| {
-        if (std.mem.eql(u8, f.directory.name, name)) {
+fn getByName(comptime T: type, items: []T, name: []const u8) ?*T {
+    for (items) |*f| {
+        if (std.mem.eql(u8, f.collectionName(), name)) {
             return f;
         }
     }
     return null;
 }
 
+pub fn getDirectory(self: *Self, name: []const u8) ?*Directory {
+    return getByName(Directory, self.directories, name);
+}
+
 pub fn getJournal(self: *Self, name: []const u8) ?*Journal {
-    for (self.journals) |*j| {
-        if (std.mem.eql(u8, j.journal.name, name)) {
-            return j;
-        }
-    }
-    return null;
+    return getByName(Journal, self.journals, name);
 }
 
 pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []const u8) ?Collection {
@@ -134,19 +133,8 @@ pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []co
 }
 
 pub fn getCollection(self: *Self, name: []const u8) ?Collection {
-    var maybe_journal: ?*Journal = null;
-    var maybe_directory: ?*Directory = null;
-
-    for (self.journals) |*journal| {
-        if (std.mem.eql(u8, journal.journal.name, name))
-            maybe_journal = journal;
-    }
-
-    for (self.directories) |*directory| {
-        if (std.mem.eql(u8, directory.directory.name, name))
-            maybe_directory = directory;
-    }
-
+    const maybe_journal: ?*Journal = self.getJournal(name);
+    const maybe_directory: ?*Directory = self.getDirectory(name);
     return Collection.init(maybe_directory, maybe_journal);
 }
 
@@ -174,14 +162,14 @@ pub fn getCollectionNames(
     for (0.., self.directories) |i, d| {
         cnames[i] = .{
             .collection = .Directory,
-            .name = d.directory.name,
+            .name = d.collectionName(),
         };
     }
 
     for (N_directories.., self.journals) |i, j| {
         cnames[i] = .{
             .collection = .Journal,
-            .name = j.journal.name,
+            .name = j.collectionName(),
         };
     }
 

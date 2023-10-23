@@ -101,11 +101,11 @@ fn finalize(maybe_note: ?Item, maybe_journal: ?Item) ?Item {
 }
 
 fn finalizeMatching(state: *State, journal: Item) ?Item {
-    const journal_name = journal.JournalEntry.collection.journal.name;
+    const journal_name = journal.JournalEntry.collection.collectionName();
     const dir = state.getDirectory(journal_name) orelse
         return journal;
 
-    const entry_name = journal.JournalEntry.item.info.name;
+    const entry_name = journal.JournalEntry.item.getName();
     if (dir.get(entry_name)) |item| {
         return finalize(
             .{ .Note = .{ .collection = dir, .item = item } },
