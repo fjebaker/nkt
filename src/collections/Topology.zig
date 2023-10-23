@@ -104,7 +104,8 @@ pub const TaskList = struct {
     };
     name: []const u8,
     path: []const u8,
-    created: []const u8,
+    created: u64,
+    tasks: []Task,
     tags: []Tag,
 };
 

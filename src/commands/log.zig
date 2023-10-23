@@ -57,8 +57,8 @@ pub fn run(
         try entry.add(self.text.?);
 
         try out_writer.print(
-            "Written text to '{s} : {s}'\n",
-            .{ journal_name, entry.item.name },
+            "Written text to '{s}' in journal '{s}'\n",
+            .{ entry.item.name, journal_name },
         );
     } else {
         // todo

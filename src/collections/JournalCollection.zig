@@ -189,9 +189,10 @@ pub fn newChild(
 
     const entry_ptr = try utils.push(
         Journal.Entry,
-        self.journal_allocator,
+        alloc,
         &(self.journal.entries),
         entry,
     );
+
     return .{ .collection = self, .item = entry_ptr };
 }
