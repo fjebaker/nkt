@@ -5,8 +5,6 @@ const indexing = @import("collections/indexing.zig");
 const Topology = @import("collections/Topology.zig");
 const FileSystem = @import("FileSystem.zig");
 
-const ContentMap = wrappers.ContentMap;
-
 pub const Tag = Topology.Tag;
 
 // union types
@@ -28,7 +26,6 @@ pub const Ordering = wrappers.Ordering;
 
 pub fn newDirectoryList(
     alloc: std.mem.Allocator,
-    directory_allocator: std.mem.Allocator,
     directories: []Topology.Directory,
     fs: FileSystem,
 ) ![]Directory {
@@ -40,16 +37,16 @@ pub fn newDirectoryList(
     };
 
     for (directories) |*dir| {
-        var content = try ContentMap.init(alloc);
+        var content = try Directory.ContentMap.init(alloc);
         errdefer content.deinit();
 
         var index = try indexing.makeIndex(alloc, dir.infos);
         errdefer index.deinit();
 
         const nd: Directory = .{
+            .mem = std.heap.ArenaAllocator.init(alloc),
             .content = content,
             .directory = dir,
-            .directory_allocator = directory_allocator,
             .fs = fs,
             .index = index,
         };
@@ -62,25 +59,29 @@ pub fn newDirectoryList(
 
 pub fn newJournalList(
     alloc: std.mem.Allocator,
-    journal_allocator: std.mem.Allocator,
     journals: []Topology.Journal,
-    _: FileSystem,
+    fs: FileSystem,
 ) ![]Journal {
     var list = try std.ArrayList(Journal).initCapacity(alloc, journals.len);
     errdefer list.deinit();
-    errdefer for (list.items) |*d| {
-        d.index.deinit();
+    errdefer for (list.items) |*j| {
+        j.index.deinit();
+        j.content.deinit();
     };
 
     for (journals) |*j| {
-        var index = try indexing.makeIndex(alloc, j.entries);
+        var content = try Journal.ContentMap.init(alloc);
+        errdefer content.deinit();
+
+        var index = try indexing.makeIndex(alloc, j.infos);
         errdefer index.deinit();
 
         const tj: Journal = .{
             .mem = std.heap.ArenaAllocator.init(alloc),
-            .journal_allocator = journal_allocator,
             .journal = j,
             .index = index,
+            .content = content,
+            .fs = fs,
         };
 
         list.appendAssumeCapacity(tj);

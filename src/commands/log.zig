@@ -58,7 +58,7 @@ pub fn run(
 
         try out_writer.print(
             "Written text to '{s}' in journal '{s}'\n",
-            .{ entry.item.name, journal_name },
+            .{ entry.item.info.name, journal_name },
         );
     } else {
         // todo

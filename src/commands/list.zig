@@ -69,7 +69,7 @@ fn listDirectory(
     directory: *State.Directory,
     writer: anytype,
 ) !void {
-    var notelist = try directory.getNoteList(alloc);
+    var notelist = try directory.getChildList(alloc);
     defer notelist.deinit();
 
     notelist.sortBy(self.ordering);
@@ -125,7 +125,7 @@ fn listJournal(
     journal: *State.Journal,
     writer: anytype,
 ) !void {
-    var entrylist = try journal.getDatedEntryList(alloc);
+    var entrylist = try journal.getChildList(alloc);
     defer entrylist.deinit();
 
     entrylist.sortBy(self.ordering);
@@ -142,7 +142,7 @@ fn listJournal(
     }
 
     for (entrylist.items) |entry| {
-        try writer.print("{s}\n", .{entry.entry.name});
+        try writer.print("{s}\n", .{entry.info.name});
     }
 }
 

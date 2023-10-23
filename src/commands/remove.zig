@@ -93,13 +93,14 @@ pub fn run(
                 _ = try out_writer.writeAll("Note deleted\n");
             }
         },
-        .JournalEntry => |j| {
+        .JournalEntry => |*j| {
             if (self.time) |time| {
+                try item.ensureContent();
                 try removeItemInEntry(state, j, time, out_writer);
             } else {
                 try out_writer.print(
                     "Delete ENTIRE entry '{s}' in journal '{s}'?\n",
-                    .{ j.item.name, j.collection.journal.name },
+                    .{ j.item.info.name, j.collection.journal.name },
                 );
                 if (try confirmPrompt(state, out_writer)) {
                     try item.remove();
@@ -107,9 +108,9 @@ pub fn run(
                 }
             }
         },
-        .DirectoryJournalItems => |items| {
+        .DirectoryJournalItems => |*items| {
             if (self.time) |time| {
-                try removeItemInEntry(state, items.journal, time, out_writer);
+                try removeItemInEntry(state, &items.journal, time, out_writer);
             } else {
                 return cli.SelectionError.AmbiguousSelection;
             }
@@ -117,9 +118,11 @@ pub fn run(
     }
 }
 
-fn removeItemInEntry(state: *State, j: State.JournalItem, time: []const u8, out_writer: anytype) !void {
+fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out_writer: anytype) !void {
+    try j.collection.readCollectionContent(&j.item);
+
     const ItemType = State.Journal.Child.Item;
-    const marked_item: ItemType = for (j.item.items) |i| {
+    const marked_item: ItemType = for (j.item.items.?) |i| {
         const created_time = try utils.formatTimeBuf(
             utils.Date.initUnixMs(i.created),
         );
@@ -130,12 +133,12 @@ fn removeItemInEntry(state: *State, j: State.JournalItem, time: []const u8, out_
     // print the item
     try out_writer.print(
         "Selected item in {s}:\n\n {s} - {s}\n\n",
-        .{ j.item.name, time, marked_item.item },
+        .{ j.item.info.name, time, marked_item.item },
     );
     // delete message
     try out_writer.print(
         "Delete item in entry '{s}' in journal '{s}'?\n",
-        .{ j.item.name, j.collection.journal.name },
+        .{ j.item.info.name, j.collection.journal.name },
     );
     if (try confirmPrompt(state, out_writer)) {
         try j.remove(marked_item);

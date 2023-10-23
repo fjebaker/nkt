@@ -11,25 +11,31 @@ pub const Tag = struct {
     added: []const u8,
 };
 
+const InfoScheme = struct {
+    created: u64,
+    modified: u64,
+    name: []const u8,
+    path: []const u8,
+    tags: []Tag,
+
+    pub fn sortCreated(_: void, lhs: InfoScheme, rhs: InfoScheme) bool {
+        return lhs.created < rhs.created;
+    }
+
+    pub fn sortModified(_: void, lhs: InfoScheme, rhs: InfoScheme) bool {
+        return lhs.modified < rhs.modified;
+    }
+};
+
 pub const Note = struct {
-    pub const Info = struct {
-        created: u64,
-        modified: u64,
-        name: []const u8,
-        path: []const u8,
-        tags: []Tag,
-
-        pub fn sortCreated(_: void, lhs: Info, rhs: Info) bool {
-            return lhs.created < rhs.created;
-        }
-
-        pub fn sortModified(_: void, lhs: Info, rhs: Info) bool {
-            return lhs.modified < rhs.modified;
-        }
-    };
-
     info: *Info,
     content: ?[]const u8,
+
+    pub fn init(info: *Info, content: ?[]const u8) Note {
+        return .{ .info = info, .content = content };
+    }
+
+    pub const Info = InfoScheme;
 
     pub fn sortCreated(_: void, lhs: Note, rhs: Note) bool {
         return Info.sortCreated({}, lhs.info.*, rhs.info.*);
@@ -40,49 +46,66 @@ pub const Note = struct {
     }
 };
 
-pub const Journal = struct {
-    pub const Entry = struct {
-        pub const Item = struct {
-            created: u64,
-            modified: u64,
-            item: []const u8,
-            tags: []Tag,
+pub const Entry = struct {
+    info: *Info,
+    items: ?[]Item,
 
-            pub fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
-                return lhs.created < rhs.created;
-            }
+    pub fn init(info: *Info, content: ?[]Item) Entry {
+        return .{ .info = info, .items = content };
+    }
 
-            pub fn sortModified(_: void, lhs: Item, rhs: Item) bool {
-                return lhs.modified < rhs.modified;
-            }
-        };
+    pub const Info = InfoScheme;
 
-        name: []const u8,
-        path: []const u8, // to be used
-        items: []Item,
+    pub const Item = struct {
+        created: u64,
+        modified: u64,
+        item: []const u8,
         tags: []Tag,
 
-        pub fn timeCreated(self: Entry) u64 {
-            std.debug.assert(self.items.len > 0);
-            var min: u64 = self.items[0].created;
-            for (self.items) |item| {
-                min = @min(min, item.created);
-            }
-            return min;
+        pub fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
+            return lhs.created < rhs.created;
         }
 
-        pub fn lastModified(self: Entry) u64 {
-            std.debug.assert(self.items.len > 0);
-            var max: u64 = self.items[0].modified;
-            for (self.items) |item| {
-                max = @max(max, item.modified);
-            }
-            return max;
+        pub fn sortModified(_: void, lhs: Item, rhs: Item) bool {
+            return lhs.modified < rhs.modified;
         }
     };
+
+    pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
+        return Info.sortCreated({}, lhs.info.*, rhs.info.*);
+    }
+
+    pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
+        return Info.sortModified({}, lhs.info.*, rhs.info.*);
+    }
+
+    /// Caller must ensure items exist
+    pub fn timeCreated(self: Entry) u64 {
+        const items = self.items.?;
+        std.debug.assert(items.len > 0);
+        var min: u64 = items[0].created;
+        for (items) |item| {
+            min = @min(min, item.created);
+        }
+        return min;
+    }
+
+    /// Caller must ensure items exist
+    pub fn lastModified(self: Entry) u64 {
+        const items = self.items.?;
+        std.debug.assert(items.len > 0);
+        var max: u64 = items[0].modified;
+        for (items) |item| {
+            max = @max(max, item.modified);
+        }
+        return max;
+    }
+};
+
+pub const Journal = struct {
     name: []const u8,
     path: []const u8, // to be used
-    entries: []Entry,
+    infos: []Entry.Info,
     tags: []Tag,
 };
 

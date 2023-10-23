@@ -120,14 +120,15 @@ fn readJournal(
     printer: *Printer,
 ) !void {
     var alloc = printer.mem.allocator();
-    var entry_list = try journal.getDatedEntryList(alloc);
+    var entry_list = try journal.getChildList(alloc);
 
     entry_list.sortBy(.Created);
     entry_list.reverse();
 
     var line_count: usize = 0;
-    const last = for (0.., entry_list.items) |i, item| {
-        const N = item.entry.items.len;
+    const last = for (0.., entry_list.items) |i, *item| {
+        try journal.readCollectionContent(item);
+        const N = item.items.?.len;
         line_count += N;
         if (!printer.couldFit(line_count)) {
             break i;
@@ -136,7 +137,7 @@ fn readJournal(
 
     printer.reverse();
     for (entry_list.items[0 .. last + 1]) |entry| {
-        try self.readJournalEntry(entry.entry, printer);
+        try self.readJournalEntry(entry, printer);
         if (!printer.couldFit(1)) break;
     }
     printer.reverse();
@@ -150,10 +151,10 @@ fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printe
 
 fn readJournalEntry(
     _: *Self,
-    entry: *const State.Journal.Child,
+    entry: State.Journal.Child,
     printer: *Printer,
 ) !void {
-    try printer.addHeading("Journal entry: {s}\n\n", .{entry.name});
+    try printer.addHeading("Journal entry: {s}\n\n", .{entry.info.name});
     _ = try printer.addItems(entry.items, printEntryItem);
 }
 
@@ -170,7 +171,12 @@ const Printer = struct {
     const StringList = std.ArrayList(u8);
 
     fn ChildType(comptime T: anytype) type {
-        return @typeInfo(T).Pointer.child;
+        const info = @typeInfo(T);
+        if (info == .Optional) {
+            return @typeInfo(info.Optional.child).Pointer.child;
+        } else {
+            return info.Pointer.child;
+        }
     }
 
     pub const Writer = StringList.Writer;
@@ -239,20 +245,21 @@ const Printer = struct {
         items: anytype,
         comptime write_function: fn (writer: Writer, item: ChildType(@TypeOf(items))) WriteError!void,
     ) !bool {
+        const _items = if (@typeInfo(@TypeOf(items)) == .Optional) items.? else items;
         var chunk = self.current orelse return PrinterError.HeadingMissing;
 
         var writer = chunk.lines.writer();
 
         const start = if (self.remaining) |rem|
-            (items.len -| rem)
+            (_items.len -| rem)
         else
             0;
 
-        for (items[start..]) |item| {
+        for (_items[start..]) |item| {
             try write_function(writer, item);
         }
 
-        return self.subRemainder(items.len - start);
+        return self.subRemainder(_items.len - start);
     }
 
     pub fn addLine(self: *Printer, comptime format: []const u8, args: anytype) !bool {

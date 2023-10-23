@@ -164,12 +164,11 @@ pub fn push(
     list: *[]T,
     new: T,
 ) !*T {
-    var managed_list = std.ArrayList(T).fromOwnedSlice(
-        allocator,
-        list.*,
-    );
-    try managed_list.append(new);
-    list.* = try managed_list.toOwnedSlice();
+    var new_list = try allocator.alloc(T, list.len + 1);
+    for (new_list[0..list.len], list.*) |*i, j| i.* = j;
+    new_list[list.len] = new;
+    allocator.free(list.*);
+    list.* = new_list;
     return &list.*[list.len - 1];
 }
 

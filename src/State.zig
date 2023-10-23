@@ -51,11 +51,8 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
     var topology = try loadTopologyElseCreate(alloc, fs);
     errdefer topology.deinit();
 
-    var topo_alloc = topology.mem.allocator();
-
     var directories = try collections.newDirectoryList(
         alloc,
-        topo_alloc,
         topology.directories,
         fs,
     );
@@ -63,7 +60,6 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
 
     var journals = try collections.newJournalList(
         alloc,
-        topo_alloc,
         topology.journals,
         fs,
     );
@@ -79,6 +75,11 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
 }
 
 pub fn writeChanges(self: *Self) !void {
+    // update the modified in each journal, and write any read items back to file
+    for (self.journals) |*journal| {
+        try journal.writeChanges(self.allocator);
+    }
+
     const data = try self.topology.toString(self.allocator);
     defer self.allocator.free(data);
 
@@ -87,11 +88,13 @@ pub fn writeChanges(self: *Self) !void {
 
 pub fn deinit(self: *Self) void {
     for (self.directories) |*f| {
+        f.mem.deinit();
         f.content.deinit();
         f.index.deinit();
     }
     for (self.journals) |*f| {
         f.mem.deinit();
+        f.content.deinit();
         f.index.deinit();
     }
     self.allocator.free(self.directories);

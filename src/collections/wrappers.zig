@@ -12,7 +12,6 @@ pub fn Mixin(
     comptime Item: type,
     comptime ChildType: type,
     comptime parent_field: []const u8,
-    comptime child_field: []const u8,
     comptime prepareItem: fn (*Self, Item) ChildType,
 ) type {
     const ItemChild = @typeInfo(Item).Pointer.child;
@@ -23,6 +22,39 @@ pub fn Mixin(
         @compileError("Self must have 'index' field");
 
     return struct {
+        pub const List = struct {
+            allocator: std.mem.Allocator,
+            items: []ChildType,
+
+            pub usingnamespace utils.ListMixin(List, ChildType);
+
+            pub fn sortBy(self: *List, ordering: Ordering) void {
+                const sorter = std.sort.insertion;
+                switch (ordering) {
+                    .Created => sorter(ChildType, self.items, {}, ChildType.sortCreated),
+                    .Modified => sorter(ChildType, self.items, {}, ChildType.sortModified),
+                }
+            }
+        };
+
+        pub fn getChildList(
+            self: *const Self,
+            alloc: std.mem.Allocator,
+        ) !List {
+            const items = @field(self, parent_field).infos;
+            var children = try alloc.alloc(ChildType, items.len);
+            errdefer alloc.free(children);
+
+            for (children, items) |*child, *info| {
+                child.* = ChildType.init(
+                    info,
+                    self.content.get(info.name),
+                );
+            }
+
+            return List.initOwned(alloc, children);
+        }
+
         pub fn getIndex(self: *Self, index: usize) ?ChildType {
             const name = self.index.get(index) orelse
                 return null;
@@ -30,7 +62,7 @@ pub fn Mixin(
         }
 
         pub fn get(self: *Self, name: []const u8) ?ChildType {
-            var items = @field(@field(self, parent_field), child_field);
+            var items = @field(self, parent_field).infos;
             for (items) |*item| {
                 if (std.mem.eql(u8, item.name, name)) {
                     return prepareItem(self, item);
@@ -40,7 +72,7 @@ pub fn Mixin(
         }
 
         pub fn remove(self: *Self, item: Item) !void {
-            var items = &@field(@field(self, parent_field), child_field);
+            var items = &@field(self, parent_field).infos;
             const index = for (items.*, 0..) |i, j| {
                 if (std.mem.eql(u8, i.name, item.name)) break j;
             } else unreachable; // todo: proper error
@@ -52,7 +84,6 @@ pub fn Mixin(
     };
 }
 
-pub const ContentMap = @import("ContentMap.zig");
 pub const DirectoryCollection = @import("DirectoryCollection.zig");
 pub const JournalCollection = @import("JournalCollection.zig");
 
@@ -99,28 +130,25 @@ pub const TrackedItem = union(ItemType) {
     pub fn remove(self: *TrackedItem) !void {
         switch (self.*) {
             .DirectoryJournalItems => unreachable, // todo
-            .Note => |d| {
-                try d.collection.remove(d.item.info);
-            },
-            .JournalEntry => |j| {
-                try j.collection.remove(j.item);
-            },
+            inline else => |c| try c.collection.remove(c.item.info),
         }
     }
 
     pub fn ensureContent(self: *TrackedItem) !void {
         switch (self.*) {
-            .Note => |*note_directory| {
-                try note_directory.collection.readNoteContent(
-                    &note_directory.item,
-                );
-            },
             .DirectoryJournalItems => |*both| {
-                try both.directory.collection.readNoteContent(
+                try both.directory.collection.readCollectionContent(
                     &both.directory.item,
                 );
+                try both.journal.collection.readCollectionContent(
+                    &both.journal.item,
+                );
             },
-            else => {},
+            inline else => |*collection| {
+                try collection.collection.readCollectionContent(
+                    &collection.item,
+                );
+            },
         }
     }
 };
