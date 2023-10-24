@@ -153,34 +153,54 @@ pub const Entry = struct {
     }
 };
 
-pub const TaskList = struct {
-    pub const Task = struct {
-        name: []const u8,
-        text: []const u8,
-        created: u64,
-        modified: u64,
-        due: u64,
-        tags: []Tag,
-    };
+pub const Task = struct {
     name: []const u8,
-    path: []const u8,
+    text: []const u8,
     created: u64,
-    tasks: []Task,
+    modified: u64,
+    due: u64,
     tags: []Tag,
+};
+
+pub const TaskListInfo = CollectionScheme;
+pub const TaskList = struct {
+    info: *InfoScheme,
+    children: ?[]Task,
+    pub usingnamespace ChildScheme(@This());
+
+    const TaskScheme = struct { items: []Task };
+
+    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Task {
+        var content = try std.json.parseFromSliceLeaky(
+            TaskScheme,
+            alloc,
+            string,
+            .{ .allocate = .alloc_always },
+        );
+        return content.items;
+    }
+
+    pub fn stringifyContent(alloc: std.mem.Allocator, items: []Task) ![]const u8 {
+        return try std.json.stringifyAlloc(
+            alloc,
+            TaskScheme{ .items = items },
+            .{ .whitespace = .indent_4 },
+        );
+    }
 };
 
 const TopologySchema = struct {
     _schema_version: []const u8,
     editor: []const u8,
     pager: []const u8,
-    tasklists: []TaskList,
+    tasklists: []TaskListInfo,
     directories: []Directory,
     journals: []Journal,
 };
 
 directories: []Directory,
 journals: []Journal,
-tasklists: []TaskList,
+tasklists: []TaskListInfo,
 editor: []const u8,
 pager: []const u8,
 mem: std.heap.ArenaAllocator,
@@ -193,7 +213,7 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
 
     var directories = try temp_alloc.alloc(Directory, 0);
     var journals = try temp_alloc.alloc(Journal, 0);
-    var tasklists = try temp_alloc.alloc(TaskList, 0);
+    var tasklists = try temp_alloc.alloc(TaskListInfo, 0);
     var editor = try temp_alloc.dupe(u8, "vim");
     var pager = try temp_alloc.dupe(u8, "less");
 

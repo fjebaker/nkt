@@ -8,8 +8,7 @@ const FileSystem = @import("FileSystem.zig");
 pub const Tag = Topology.Tag;
 
 // union types
-pub const Collection = wrappers.Collection;
-pub const Item = wrappers.CollectionItem;
+pub const Item = CollectionItem;
 
 // specific types
 pub const Directory = wrappers.DirectoryCollection;
@@ -18,11 +17,71 @@ pub const Journal = wrappers.JournalCollection;
 pub const DirectoryItem = Directory.TrackedChild;
 pub const JournalItem = Journal.TrackedChild;
 
-// enums
-pub const CollectionType = wrappers.CollectionType;
-pub const ItemType = wrappers.ItemType;
-
 pub const Ordering = wrappers.Ordering;
+
+pub const CollectionType = enum { Directory, Journal, DirectoryWithJournal };
+
+pub const Collection = union(CollectionType) {
+    pub const Errors = error{NoSuchCollection};
+    Directory: *Directory,
+    Journal: *Journal,
+    DirectoryWithJournal: struct {
+        journal: *Journal,
+        directory: *Directory,
+    },
+
+    pub fn init(maybe_directory: ?*Directory, maybe_journal: ?*Journal) ?Collection {
+        if (maybe_directory != null and maybe_journal != null) {
+            return .{
+                .DirectoryWithJournal = .{
+                    .journal = maybe_journal.?,
+                    .directory = maybe_directory.?,
+                },
+            };
+        } else if (maybe_journal) |journal| {
+            return .{ .Journal = journal };
+        } else if (maybe_directory) |dir| {
+            return .{ .Directory = dir };
+        }
+        return null;
+    }
+};
+
+pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };
+
+pub const CollectionItem = union(ItemType) {
+    Note: Directory.TrackedChild,
+    JournalEntry: Journal.TrackedChild,
+    DirectoryJournalItems: struct {
+        directory: Directory.TrackedChild,
+        journal: Journal.TrackedChild,
+    },
+
+    pub fn remove(self: *CollectionItem) !void {
+        switch (self.*) {
+            .DirectoryJournalItems => unreachable, // todo
+            inline else => |c| try c.collection.remove(c.item.info),
+        }
+    }
+
+    pub fn ensureContent(self: *CollectionItem) !void {
+        switch (self.*) {
+            .DirectoryJournalItems => |*both| {
+                try both.directory.collection.readChildContent(
+                    &both.directory.item,
+                );
+                try both.journal.collection.readChildContent(
+                    &both.journal.item,
+                );
+            },
+            inline else => |*collection| {
+                try collection.collection.readChildContent(
+                    &collection.item,
+                );
+            },
+        }
+    }
+};
 
 fn newCollectionList(
     comptime T: type,
