@@ -77,7 +77,7 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
 pub fn writeChanges(self: *Self) !void {
     // update the modified in each journal, and write any read items back to file
     for (self.journals) |*journal| {
-        try journal.writeChanges(self.allocator);
+        try collections.writeChanges(journal, self.allocator);
     }
 
     const data = try self.topology.toString(self.allocator);
@@ -88,14 +88,10 @@ pub fn writeChanges(self: *Self) !void {
 
 pub fn deinit(self: *Self) void {
     for (self.directories) |*f| {
-        f.mem.deinit();
-        f.content.deinit();
-        f.index.deinit();
+        f.deinit();
     }
     for (self.journals) |*f| {
-        f.mem.deinit();
-        f.content.deinit();
-        f.index.deinit();
+        f.deinit();
     }
     self.allocator.free(self.directories);
     self.allocator.free(self.journals);

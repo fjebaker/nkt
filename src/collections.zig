@@ -34,25 +34,11 @@ fn newCollectionList(
     var list = try std.ArrayList(T).initCapacity(alloc, collections.len);
     errdefer list.deinit();
     errdefer for (list.items) |*d| {
-        d.index.deinit();
-        d.content.deinit();
+        d.deinit();
     };
 
     for (collections) |*col| {
-        var content = try T.ContentMap.init(alloc);
-        errdefer content.deinit();
-
-        var index = try indexing.makeIndex(alloc, col.infos);
-        errdefer index.deinit();
-
-        const c: T = .{
-            .mem = std.heap.ArenaAllocator.init(alloc),
-            .content = content,
-            .container = col,
-            .fs = fs,
-            .index = index,
-        };
-
+        const c = try T.init(alloc, col, fs);
         list.appendAssumeCapacity(c);
     }
 
@@ -73,4 +59,21 @@ pub fn newJournalList(
     fs: FileSystem,
 ) ![]Journal {
     return newCollectionList(Journal, Topology.Journal, alloc, journals, fs);
+}
+
+pub fn writeChanges(journal: *Journal, alloc: std.mem.Allocator) !void {
+    for (journal.container.infos) |*info| {
+        var entry = journal.get(info.name).?;
+        var children = entry.item.children orelse continue;
+
+        // update last modified
+        const modified = entry.item.lastModified();
+        info.modified = modified;
+
+        // write entries back to file
+        const string = try Journal.Child.stringifyContent(alloc, children);
+        defer alloc.free(string);
+
+        try journal.fs.overwrite(info.path, string);
+    }
 }
