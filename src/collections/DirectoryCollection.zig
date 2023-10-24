@@ -39,41 +39,7 @@ index: IndexContainer,
 
 pub usingnamespace wrappers.Mixin(Self);
 
-/// Reads note. Will return null if note does not exist. Does not
-/// attempt to read the note content. Use `readNote` to attempt to
-/// read content
-pub fn getNote(self: *Self, name: []const u8) ?Child {
-    for (self.container.infos) |*info| {
-        if (std.mem.eql(u8, info.name, name)) {
-            return .{
-                .info = info,
-                .content = self.content.get(name),
-            };
-        }
-    }
-    return null;
-}
-
-fn readContent(self: *Self, info: Child.Info) ![]const u8 {
-    var alloc = self.content.allocator();
-    const content = try self.fs.readFileAlloc(alloc, info.path);
-    try self.content.putMove(info.name, content);
-    return content;
-}
-
-pub fn readNote(self: *Self, name: []const u8) !?Child {
-    var note = self.getNote(name) orelse return null;
-    note.children = try self.readContent(note.info.*);
-    return note;
-}
-
-pub fn readCollectionContent(self: *Self, entry: *Child) !void {
-    if (entry.children == null) {
-        entry.children = try self.readContent(entry.info.*);
-    }
-}
-
-pub fn addNote(
+pub fn addChild(
     self: *Self,
     info: Child.Info,
     content: ?[]const u8,
@@ -94,37 +60,4 @@ pub fn addNote(
         .info = info_ptr,
         .children = self.content.get(info.name),
     };
-}
-
-fn childPath(self: *Self, name: []const u8) ![]const u8 {
-    var alloc = self.mem.allocator();
-    const filename = try std.mem.concat(
-        alloc,
-        u8,
-        &.{ name, DEFAULT_FILE_EXTENSION },
-    );
-    return try std.fs.path.join(
-        alloc,
-        &.{ self.container.path, filename },
-    );
-}
-
-pub fn newChild(
-    self: *Self,
-    name: []const u8,
-) !TrackedChild {
-    var alloc = self.mem.allocator();
-    const owned_name = try alloc.dupe(u8, name);
-
-    const now = utils.now();
-    const info: Child.Info = .{
-        .modified = now,
-        .created = now,
-        .name = owned_name,
-        .path = try self.childPath(owned_name),
-        .tags = try utils.emptyTagList(alloc),
-    };
-
-    var note = try self.addNote(info, null);
-    return .{ .collection = self, .item = note };
 }

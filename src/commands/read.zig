@@ -127,7 +127,7 @@ fn readJournal(
 
     var line_count: usize = 0;
     const last = for (0.., entry_list.items) |i, *item| {
-        try journal.readCollectionContent(item);
+        try journal.readChildContent(item);
         const N = item.children.?.len;
         line_count += N;
         if (!printer.couldFit(line_count)) {

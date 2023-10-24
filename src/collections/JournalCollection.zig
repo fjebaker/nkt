@@ -65,40 +65,10 @@ pub const TrackedChild = struct {
     }
 };
 
-const ItemScheme = struct { items: []Child.Item };
-
-fn readItems(self: *Self, info: Child.Info) ![]Child.Item {
+fn addItem(self: *Self, entry: *Child, item: Child.Item) !void {
     var alloc = self.content.allocator();
 
-    const string = try self.fs.readFileAlloc(
-        alloc,
-        info.path,
-    );
-    defer alloc.free(string);
-
-    var content = try std.json.parseFromSliceLeaky(
-        ItemScheme,
-        alloc,
-        string,
-        .{ .allocate = .alloc_always },
-    );
-
-    try self.content.putMove(info.name, content.items);
-    return content.items;
-}
-
-fn itemsToString(alloc: std.mem.Allocator, items: []Child.Item) ![]const u8 {
-    return try std.json.stringifyAlloc(
-        alloc,
-        ItemScheme{ .items = items },
-        .{ .whitespace = .indent_4 },
-    );
-}
-
-pub fn addItem(self: *Self, entry: *Child, item: Child.Item) !void {
-    var alloc = self.content.allocator();
-
-    try self.readCollectionContent(entry);
+    try self.readChildContent(entry);
     var children = entry.children.?;
 
     _ = try utils.push(Child.Item, alloc, &children, item);
@@ -106,42 +76,11 @@ pub fn addItem(self: *Self, entry: *Child, item: Child.Item) !void {
     try self.content.putMove(entry.getName(), entry.children.?);
 }
 
-pub fn readCollectionContent(self: *Self, entry: *Child) !void {
-    if (entry.children == null) {
-        entry.children = try self.readItems(entry.info.*);
-    }
-}
-
-pub fn getEntryByDate(self: *Self, date: utils.Date) ?TrackedChild {
-    for (self.container.infos) |*entry| {
-        const entry_date = utils.Date.initUnixMs(entry.timeCreated());
-        if (utils.areSameDay(entry_date, date)) {
-            return .{ .collection = self, .item = entry };
-        }
-    }
-    return null;
-}
-
-pub fn getEntryByName(self: *Self, name: []const u8) ?TrackedChild {
-    for (self.container.infos) |*info| {
-        if (std.mem.eql(u8, info.name, name)) {
-            return .{
-                .collection = self,
-                .item = .{
-                    .info = info,
-                    .children = self.content.get(info.name),
-                },
-            };
-        }
-    }
-    return null;
-}
-
 fn assertNoDuplicate(self: *Self, name: []const u8) !void {
-    if (self.getEntryByName(name)) |_| return JournalError.DuplicateEntry;
+    if (self.get(name)) |_| return JournalError.DuplicateEntry;
 }
 
-fn addEntry(
+pub fn addChild(
     self: *Self,
     info: Child.Info,
     items: ?[]Child.Item,
@@ -167,44 +106,9 @@ fn addEntry(
     };
 }
 
-fn childPath(self: *Self, name: []const u8) ![]const u8 {
-    const alloc = self.mem.allocator();
-    const filename = try std.mem.concat(
-        alloc,
-        u8,
-        &.{ name, DEFAULT_FILE_EXTENSION },
-    );
-    return try std.fs.path.join(
-        alloc,
-        &.{ self.container.path, filename },
-    );
-}
-
-pub fn newChild(
-    self: *Self,
-    name: []const u8,
-) !TrackedChild {
-    var alloc = self.mem.allocator();
-    try self.assertNoDuplicate(name);
-
-    var owned_name = try alloc.dupe(u8, name);
-
-    const now = utils.now();
-    const info: Child.Info = .{
-        .modified = now,
-        .created = now,
-        .name = owned_name,
-        .path = try self.childPath(owned_name),
-        .tags = try utils.emptyTagList(alloc),
-    };
-
-    var entry = try self.addEntry(info, null);
-    return .{ .collection = self, .item = entry };
-}
-
 pub fn writeChanges(self: *Self, alloc: std.mem.Allocator) !void {
     for (self.container.infos) |*info| {
-        var entry = self.getEntryByName(info.name).?;
+        var entry = self.get(info.name).?;
         var children = entry.item.children orelse continue;
 
         // update last modified
@@ -212,7 +116,7 @@ pub fn writeChanges(self: *Self, alloc: std.mem.Allocator) !void {
         info.modified = modified;
 
         // write entries back to file
-        const string = try itemsToString(alloc, children);
+        const string = try Child.stringifyContent(alloc, children);
         defer alloc.free(string);
 
         try self.fs.overwrite(info.path, string);

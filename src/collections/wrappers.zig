@@ -70,6 +70,76 @@ pub fn Mixin(
             return null;
         }
 
+        pub fn getByDate(
+            self: *Self,
+            date: utils.Date,
+            order: Ordering,
+        ) ?Self.TrackedChild {
+            var items = self.container.infos;
+            for (items) |*item| {
+                const entry_date = utils.Date.initUnixMs(switch (order) {
+                    .Created => item.timeCreated(),
+                    .Modified => item.timeModified(),
+                });
+                if (utils.areSameDay(entry_date, date)) {
+                    return prepareChild(self, item);
+                }
+            }
+            return null;
+        }
+
+        pub fn getAndRead(self: *Self, name: []const u8) ?Self.TrackedChild {
+            var tc = self.get(name) orelse return null;
+            self.readChildContent(&tc.item);
+            return tc;
+        }
+
+        pub fn readChildContent(self: *Self, entry: *Child) !void {
+            if (entry.children == null) {
+                var alloc = self.content.allocator();
+                const name = entry.getName();
+
+                const string = try self.fs.readFileAlloc(alloc, entry.getPath());
+                const children = try Child.parseContent(alloc, string);
+                try self.content.putMove(entry.getName(), children);
+
+                entry.children = self.content.get(name);
+            }
+        }
+
+        fn childPath(self: *Self, name: []const u8) ![]const u8 {
+            const alloc = self.mem.allocator();
+            const filename = try std.mem.concat(
+                alloc,
+                u8,
+                &.{ name, Self.DEFAULT_FILE_EXTENSION },
+            );
+            return try std.fs.path.join(
+                alloc,
+                &.{ self.container.path, filename },
+            );
+        }
+
+        pub fn newChild(
+            self: *Self,
+            name: []const u8,
+        ) !Self.TrackedChild {
+            var alloc = self.mem.allocator();
+            const owned_name = try alloc.dupe(u8, name);
+
+            const now = utils.now();
+            const info: Child.Info = .{
+                .modified = now,
+                .created = now,
+                .name = owned_name,
+                .path = try childPath(self, owned_name),
+                .tags = try utils.emptyTagList(alloc),
+            };
+
+            var note = try self.addChild(info, null);
+            return .{ .collection = self, .item = note };
+        }
+
         pub fn remove(self: *Self, item: InfoPtr) !void {
             var items = &self.container.infos;
             const index = for (items.*, 0..) |i, j| {
@@ -140,15 +210,15 @@ pub const TrackedItem = union(ItemType) {
     pub fn ensureContent(self: *TrackedItem) !void {
         switch (self.*) {
             .DirectoryJournalItems => |*both| {
-                try both.directory.collection.readCollectionContent(
+                try both.directory.collection.readChildContent(
                     &both.directory.item,
                 );
-                try both.journal.collection.readCollectionContent(
+                try both.journal.collection.readChildContent(
                     &both.journal.item,
                 );
             },
             inline else => |*collection| {
-                try collection.collection.readCollectionContent(
+                try collection.collection.readChildContent(
                     &collection.item,
                 );
             },

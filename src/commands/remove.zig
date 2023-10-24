@@ -119,7 +119,7 @@ pub fn run(
 }
 
 fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out_writer: anytype) !void {
-    try j.collection.readCollectionContent(&j.item);
+    try j.collection.readChildContent(&j.item);
 
     const ItemType = State.Journal.Child.Item;
     const marked_child: ItemType = for (j.item.children.?) |i| {

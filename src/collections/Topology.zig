@@ -51,6 +51,38 @@ pub fn ChildScheme(comptime S: type) type {
         pub fn getName(self: S) []const u8 {
             return self.info.name;
         }
+
+        pub fn getPath(self: S) []const u8 {
+            return self.info.path;
+        }
+
+        fn time(
+            self: S,
+            comptime field: []const u8,
+            comptime cmp: enum { Min, Max },
+        ) u64 {
+            const children = self.children.?;
+            std.debug.assert(children.len > 0);
+
+            var val: u64 = @field(children[0], field);
+            for (children[1..]) |item| {
+                const t = @field(item, field);
+                val = switch (cmp) {
+                    .Min => @min(val, t),
+                    .Max => @max(val, t),
+                };
+            }
+
+            return val;
+        }
+
+        pub fn timeCreated(self: S) u64 {
+            return self.time("created", .Min);
+        }
+
+        pub fn lastModified(self: S) u64 {
+            return self.time("modified", .Max);
+        }
     };
 }
 
@@ -67,6 +99,16 @@ pub const Note = struct {
     info: *InfoScheme,
     children: ?[]const u8,
     pub usingnamespace ChildScheme(@This());
+
+    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]const u8 {
+        _ = alloc;
+        return string;
+    }
+
+    pub fn stringifyContent(alloc: std.mem.Allocator, items: []const u8) ![]const u8 {
+        _ = alloc;
+        return items;
+    }
 };
 
 // journal
@@ -90,28 +132,24 @@ pub const Entry = struct {
     children: ?[]EntryItem,
     pub usingnamespace ChildScheme(@This());
 
-    fn time(self: Entry, comptime field: []const u8, comptime cmp: enum { Min, Max }) u64 {
-        const children = self.children.?;
-        std.debug.assert(children.len > 0);
+    const ItemScheme = struct { items: []Entry.Item };
 
-        var val: u64 = @field(children[0], field);
-        for (children[1..]) |item| {
-            const t = @field(item, field);
-            val = switch (cmp) {
-                .Min => @min(val, t),
-                .Max => @max(val, t),
-            };
-        }
-
-        return val;
+    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Entry.Item {
+        var content = try std.json.parseFromSliceLeaky(
+            ItemScheme,
+            alloc,
+            string,
+            .{ .allocate = .alloc_always },
+        );
+        return content.items;
     }
 
-    pub fn timeCreated(self: Entry) u64 {
-        return self.time("created", .Min);
-    }
-
-    pub fn lastModified(self: Entry) u64 {
-        return self.time("modified", .Max);
+    pub fn stringifyContent(alloc: std.mem.Allocator, items: []Entry.Item) ![]const u8 {
+        return try std.json.stringifyAlloc(
+            alloc,
+            ItemScheme{ .items = items },
+            .{ .whitespace = .indent_4 },
+        );
     }
 };
 

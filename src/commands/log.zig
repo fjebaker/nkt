@@ -51,7 +51,7 @@ pub fn run(
 
     if (std.mem.eql(u8, journal_name, "diary")) {
         const today_string = try utils.formatDateBuf(utils.Date.now());
-        var entry = journal.getEntryByName(&today_string) orelse
+        var entry = journal.get(&today_string) orelse
             try journal.newChild(&today_string);
 
         try entry.add(self.text.?);
