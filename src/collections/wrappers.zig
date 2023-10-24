@@ -192,7 +192,7 @@ pub const Collection = union(CollectionType) {
 
 pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };
 
-pub const TrackedItem = union(ItemType) {
+pub const CollectionItem = union(ItemType) {
     Note: DirectoryCollection.TrackedChild,
     JournalEntry: JournalCollection.TrackedChild,
     DirectoryJournalItems: struct {
@@ -200,14 +200,14 @@ pub const TrackedItem = union(ItemType) {
         journal: JournalCollection.TrackedChild,
     },
 
-    pub fn remove(self: *TrackedItem) !void {
+    pub fn remove(self: *CollectionItem) !void {
         switch (self.*) {
             .DirectoryJournalItems => unreachable, // todo
             inline else => |c| try c.collection.remove(c.item.info),
         }
     }
 
-    pub fn ensureContent(self: *TrackedItem) !void {
+    pub fn ensureContent(self: *CollectionItem) !void {
         switch (self.*) {
             .DirectoryJournalItems => |*both| {
                 try both.directory.collection.readChildContent(

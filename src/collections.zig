@@ -9,7 +9,7 @@ pub const Tag = Topology.Tag;
 
 // union types
 pub const Collection = wrappers.Collection;
-pub const Item = wrappers.TrackedItem;
+pub const Item = wrappers.CollectionItem;
 
 // specific types
 pub const Directory = wrappers.DirectoryCollection;
