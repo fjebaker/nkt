@@ -15,8 +15,8 @@ pub const Item = wrappers.TrackedItem;
 pub const Directory = wrappers.DirectoryCollection;
 pub const Journal = wrappers.JournalCollection;
 
-pub const DirectoryItem = Directory.DirectoryItem;
-pub const JournalItem = Journal.JournalItem;
+pub const DirectoryItem = Directory.TrackedChild;
+pub const JournalItem = Journal.TrackedChild;
 
 // enums
 pub const CollectionType = wrappers.CollectionType;

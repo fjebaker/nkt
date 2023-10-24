@@ -108,7 +108,7 @@ fn finalizeMatching(state: *State, journal: Item) ?Item {
     const entry_name = journal.JournalEntry.item.getName();
     if (dir.get(entry_name)) |item| {
         return finalize(
-            .{ .Note = .{ .collection = dir, .item = item } },
+            .{ .Note = item },
             journal,
         );
     }
@@ -119,12 +119,12 @@ fn finalizeMatching(state: *State, journal: Item) ?Item {
 fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
     if (state.getJournal("diary")) |journal| {
         if (journal.getIndex(index)) |entry| {
-            return .{ .JournalEntry = .{ .collection = journal, .item = entry } };
+            return .{ .JournalEntry = entry };
         }
     }
     const journal: ?Item = for (state.journals) |*journal| {
-        if (journal.getIndex(index)) |item| {
-            break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+        if (journal.getIndex(index)) |entry| {
+            break .{ .JournalEntry = entry };
         }
     } else null;
     return journal;
@@ -142,16 +142,16 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
                     break :blk journal.get(&name);
                 },
             } orelse return null;
-            return .{ .JournalEntry = .{ .collection = journal, .item = entry } };
+            return .{ .JournalEntry = entry };
         },
         .Directory => {
             var dir = state.getDirectory(w.name) orelse return null;
-            const item = switch (what) {
+            const note = switch (what) {
                 .ByName => |name| dir.get(name),
                 .ByIndex => |index| dir.getIndex(index),
                 .ByDate => unreachable,
             } orelse return null;
-            return .{ .Note = .{ .collection = dir, .item = item } };
+            return .{ .Note = note };
         },
         .DirectoryWithJournal => unreachable,
     };
@@ -180,13 +180,13 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
 fn whatFromName(state: *State, name: []const u8) ?Item {
     const maybe_note: ?Item = for (state.directories) |*dir| {
         if (dir.get(name)) |item| {
-            break .{ .Note = .{ .collection = dir, .item = item } };
+            break .{ .Note = item };
         }
     } else null;
 
     const maybe_journal: ?Item = for (state.journals) |*journal| {
         if (journal.get(name)) |item| {
-            break .{ .JournalEntry = .{ .collection = journal, .item = item } };
+            break .{ .JournalEntry = item };
         }
     } else null;
 

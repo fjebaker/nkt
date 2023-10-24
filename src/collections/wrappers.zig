@@ -9,30 +9,22 @@ const FileSystem = @import("../FileSystem.zig");
 
 pub fn Mixin(
     comptime Self: type,
-    comptime Item: type,
-    comptime ChildType: type,
-    comptime parent_field: []const u8,
-    comptime prepareItem: fn (*Self, Item) ChildType,
 ) type {
-    const ItemChild = @typeInfo(Item).Pointer.child;
-    if (!@hasField(ItemChild, "name"))
-        @compileError("ChildType must have 'name' field");
-
-    if (!@hasField(Self, "index"))
-        @compileError("Self must have 'index' field");
+    const InfoPtr = *Self.Child.Info;
+    const Child = Self.Child;
 
     return struct {
         pub const List = struct {
             allocator: std.mem.Allocator,
-            items: []ChildType,
+            items: []Child,
 
-            pub usingnamespace utils.ListMixin(List, ChildType);
+            pub usingnamespace utils.ListMixin(List, Child);
 
             pub fn sortBy(self: *List, ordering: Ordering) void {
                 const sorter = std.sort.insertion;
                 switch (ordering) {
-                    .Created => sorter(ChildType, self.items, {}, ChildType.sortCreated),
-                    .Modified => sorter(ChildType, self.items, {}, ChildType.sortModified),
+                    .Created => sorter(Child, self.items, {}, Child.sortCreated),
+                    .Modified => sorter(Child, self.items, {}, Child.sortModified),
                 }
             }
         };
@@ -41,12 +33,12 @@ pub fn Mixin(
             self: *const Self,
             alloc: std.mem.Allocator,
         ) !List {
-            const items = @field(self, parent_field).infos;
-            var children = try alloc.alloc(ChildType, items.len);
+            const items = self.container.infos;
+            var children = try alloc.alloc(Child, items.len);
             errdefer alloc.free(children);
 
             for (children, items) |*child, *info| {
-                child.* = ChildType.init(
+                child.* = Child.init(
                     info,
                     self.content.get(info.name),
                 );
@@ -55,30 +47,37 @@ pub fn Mixin(
             return List.initOwned(alloc, children);
         }
 
-        pub fn getIndex(self: *Self, index: usize) ?ChildType {
+        pub fn getIndex(self: *Self, index: usize) ?Self.TrackedChild {
             const name = self.index.get(index) orelse
                 return null;
             return self.get(name);
         }
 
-        pub fn get(self: *Self, name: []const u8) ?ChildType {
-            var items = @field(self, parent_field).infos;
+        fn prepareChild(self: *Self, info: InfoPtr) Self.TrackedChild {
+            var item: Child = .{ .children = self.content.get(info.name), .info = info };
+            return .{ .collection = self, .item = item };
+        }
+
+        /// Get the child by name. Will not attempt to read the file with the
+        /// child's content until `ensureContent` is called on the Child.
+        pub fn get(self: *Self, name: []const u8) ?Self.TrackedChild {
+            var items = self.container.infos;
             for (items) |*item| {
                 if (std.mem.eql(u8, item.name, name)) {
-                    return prepareItem(self, item);
+                    return prepareChild(self, item);
                 }
             }
             return null;
         }
 
-        pub fn remove(self: *Self, item: Item) !void {
-            var items = &@field(self, parent_field).infos;
+        pub fn remove(self: *Self, item: InfoPtr) !void {
+            var items = &self.container.infos;
             const index = for (items.*, 0..) |i, j| {
                 if (std.mem.eql(u8, i.name, item.name)) break j;
             } else unreachable; // todo: proper error
             // todo: better remove
             // this is okay since everything is arena allocator tracked?
-            utils.moveToEnd(ItemChild, items.*, index);
+            utils.moveToEnd(Child.Info, items.*, index);
             items.len -= 1;
         }
 
@@ -124,11 +123,11 @@ pub const Collection = union(CollectionType) {
 pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };
 
 pub const TrackedItem = union(ItemType) {
-    Note: DirectoryCollection.DirectoryItem,
-    JournalEntry: JournalCollection.JournalItem,
+    Note: DirectoryCollection.TrackedChild,
+    JournalEntry: JournalCollection.TrackedChild,
     DirectoryJournalItems: struct {
-        directory: DirectoryCollection.DirectoryItem,
-        journal: JournalCollection.JournalItem,
+        directory: DirectoryCollection.TrackedChild,
+        journal: JournalCollection.TrackedChild,
     },
 
     pub fn remove(self: *TrackedItem) !void {

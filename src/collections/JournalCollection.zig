@@ -28,32 +28,19 @@ content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
 
-pub usingnamespace wrappers.Mixin(
-    Self,
-    *Child.Info,
-    Child,
-    "container",
-    prepareItem,
-);
-
-fn prepareItem(self: *Self, info: *Child.Info) Child {
-    return .{
-        .info = info,
-        .children = self.content.get(info.name),
-    };
-}
+pub usingnamespace wrappers.Mixin(Self);
 
 pub const JournalError = error{DuplicateEntry};
 
-pub const JournalItem = struct {
+pub const TrackedChild = struct {
     collection: *Self,
     item: Child,
 
-    pub fn relativePath(self: JournalItem) []const u8 {
+    pub fn relativePath(self: TrackedChild) []const u8 {
         return self.item.info.path;
     }
 
-    pub fn add(self: *JournalItem, text: []const u8) !void {
+    pub fn add(self: *TrackedChild, text: []const u8) !void {
         var alloc = self.collection.content.allocator();
         const now = utils.now();
         const owned_text = try alloc.dupe(u8, text);
@@ -68,7 +55,7 @@ pub const JournalItem = struct {
         try self.collection.addItem(&self.item, item);
     }
 
-    pub fn remove(self: *JournalItem, item: Child.Item) !void {
+    pub fn remove(self: *TrackedChild, item: Child.Item) !void {
         const index = for (self.item.children.?, 0..) |i, j| {
             if (i.created == item.created) break j;
         } else unreachable; // todo
@@ -125,7 +112,7 @@ pub fn readCollectionContent(self: *Self, entry: *Child) !void {
     }
 }
 
-pub fn getEntryByDate(self: *Self, date: utils.Date) ?JournalItem {
+pub fn getEntryByDate(self: *Self, date: utils.Date) ?TrackedChild {
     for (self.container.infos) |*entry| {
         const entry_date = utils.Date.initUnixMs(entry.timeCreated());
         if (utils.areSameDay(entry_date, date)) {
@@ -135,7 +122,7 @@ pub fn getEntryByDate(self: *Self, date: utils.Date) ?JournalItem {
     return null;
 }
 
-pub fn getEntryByName(self: *Self, name: []const u8) ?JournalItem {
+pub fn getEntryByName(self: *Self, name: []const u8) ?TrackedChild {
     for (self.container.infos) |*info| {
         if (std.mem.eql(u8, info.name, name)) {
             return .{
@@ -196,7 +183,7 @@ fn childPath(self: *Self, name: []const u8) ![]const u8 {
 pub fn newChild(
     self: *Self,
     name: []const u8,
-) !JournalItem {
+) !TrackedChild {
     var alloc = self.mem.allocator();
     try self.assertNoDuplicate(name);
 

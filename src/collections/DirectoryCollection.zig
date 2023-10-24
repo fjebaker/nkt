@@ -22,11 +22,11 @@ pub const ContentMap = content_map.ContentMap([]const u8);
 pub const Parent = Directory;
 pub const Child = Topology.Note;
 
-pub const DirectoryItem = struct {
+pub const TrackedChild = struct {
     collection: *Self,
     item: Child,
 
-    pub fn relativePath(self: DirectoryItem) []const u8 {
+    pub fn relativePath(self: TrackedChild) []const u8 {
         return self.item.info.path;
     }
 };
@@ -37,20 +37,7 @@ content: ContentMap,
 fs: FileSystem,
 index: IndexContainer,
 
-pub usingnamespace wrappers.Mixin(
-    Self,
-    *Child.Info,
-    Child,
-    "container",
-    prepareItem,
-);
-
-fn prepareItem(self: *Self, info: *Child.Info) Child {
-    return .{
-        .info = info,
-        .children = self.content.get(info.name),
-    };
-}
+pub usingnamespace wrappers.Mixin(Self);
 
 /// Reads note. Will return null if note does not exist. Does not
 /// attempt to read the note content. Use `readNote` to attempt to
@@ -125,7 +112,7 @@ fn childPath(self: *Self, name: []const u8) ![]const u8 {
 pub fn newChild(
     self: *Self,
     name: []const u8,
-) !DirectoryItem {
+) !TrackedChild {
     var alloc = self.mem.allocator();
     const owned_name = try alloc.dupe(u8, name);
 
