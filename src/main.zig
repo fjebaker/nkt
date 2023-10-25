@@ -11,6 +11,7 @@ pub const Commands = union(enum) {
     edit: @import("commands/edit.zig"),
     help: @import("commands/help.zig"),
     init: @import("commands/init.zig"),
+    import: @import("commands/import.zig"),
     list: @import("commands/list.zig"),
     log: @import("commands/log.zig"),
     read: @import("commands/read.zig"),
@@ -29,7 +30,7 @@ pub const Commands = union(enum) {
 
     pub fn deinit(_: *Commands) void {}
 
-    pub fn init(args: *cli.ArgIterator) !Commands {
+    pub fn init(alloc: std.mem.Allocator, args: *cli.ArgIterator) !Commands {
         const command = try args.next() orelse
             return CommandError.NoCommandGiven;
 
@@ -39,7 +40,7 @@ pub const Commands = union(enum) {
             const is_field = std.mem.eql(u8, command.string, field.name);
             const is_alias = utils.isAlias(field, command.string);
             if (is_field or is_alias) {
-                var instance = try @field(field.type, "init")(args);
+                var instance = try @field(field.type, "init")(alloc, args);
                 return @unionInit(Commands, field.name, instance);
             }
         }
@@ -63,7 +64,11 @@ pub fn main() !void {
     // skip first arg as is command name
     _ = try arg_iterator.next();
 
-    var cmd = Commands.init(&arg_iterator) catch |err| {
+    var mem = std.heap.ArenaAllocator.init(allocator);
+    defer mem.deinit();
+    var arg_parse_alloc = mem.allocator();
+
+    var cmd = Commands.init(arg_parse_alloc, &arg_iterator) catch |err| {
         if (utils.inErrorSet(err, CommandError)) |e| switch (e) {
             CommandError.NoCommandGiven => {
                 try @import("./commands/help.zig").printHelp(stdout_file);

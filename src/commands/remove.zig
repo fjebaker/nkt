@@ -31,7 +31,7 @@ selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
 time: ?[]const u8,
 
-pub fn init(itt: *cli.ArgIterator) !Self {
+pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{
         .selection = null,
         .where = null,

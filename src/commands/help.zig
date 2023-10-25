@@ -12,7 +12,7 @@ pub const help = "Print this help message.";
 
 command: []const u8,
 
-pub fn init(itt: *cli.ArgIterator) !Self {
+pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var command: []const u8 = "";
 
     if (try itt.next()) |arg| {

@@ -238,6 +238,19 @@ const Directory = struct {
             pub fn relativePath(self: @This()) []const u8 {
                 return self.item.info.path;
             }
+
+            pub fn add(
+                self: *@This(),
+                content: []const u8,
+                fs: FileSystem,
+            ) !void {
+                var alloc = self.collection.content.allocator();
+                const owned_text = try alloc.dupe(u8, content);
+
+                try self.collection.addItem(&self.item, owned_text);
+                // write to file
+                try fs.overwrite(self.relativePath(), owned_text);
+            }
         };
     }
 };

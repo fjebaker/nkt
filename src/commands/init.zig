@@ -9,7 +9,7 @@ pub const help = "(Re)Initialize the home directory structure.";
 
 const Self = @This();
 
-pub fn init(itt: *cli.ArgIterator) !Self {
+pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     if (try itt.next()) |_| return cli.CLIErrors.TooManyArguments;
     return .{};
 }
