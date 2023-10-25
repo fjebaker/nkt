@@ -127,8 +127,8 @@ pub fn run(
         return cli.SelectionError.NoSuchJournal;
 
     if (std.mem.eql(u8, name, "todo")) {
-        var tl: State.TaskList.TrackedChild = tasklist.get("items") orelse
-            try tasklist.newChild("items");
+        var tl: State.TaskList.TrackedChild = tasklist.get("general") orelse
+            try tasklist.newChild("general");
 
         const by = if (self.by) |b| b.toUnixMilli() else null;
 
