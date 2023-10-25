@@ -109,6 +109,12 @@ pub const Note = struct {
         _ = alloc;
         return items;
     }
+
+    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
+        _ = alloc;
+        _ = info;
+        return "";
+    }
 };
 
 // journal
@@ -134,6 +140,12 @@ pub const Entry = struct {
 
     const ItemScheme = struct { items: []Entry.Item };
 
+    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
+        _ = alloc;
+        _ = info;
+        return "{\"items\":[]}";
+    }
+
     pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Entry.Item {
         var content = try std.json.parseFromSliceLeaky(
             ItemScheme,
@@ -154,15 +166,17 @@ pub const Entry = struct {
 };
 
 pub const Task = struct {
-    name: []const u8,
+    pub const Importance = enum { low, high, urgent };
     text: []const u8,
+    details: []const u8,
     created: u64,
     modified: u64,
-    due: u64,
+    due: ?u64,
+    importance: Importance,
     tags: []Tag,
 };
 
-pub const TaskListInfo = CollectionScheme;
+pub const TaskListDetails = CollectionScheme;
 pub const TaskList = struct {
     info: *InfoScheme,
     children: ?[]Task,
@@ -187,20 +201,26 @@ pub const TaskList = struct {
             .{ .whitespace = .indent_4 },
         );
     }
+
+    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
+        _ = alloc;
+        _ = info;
+        return "{\"items\":[]}";
+    }
 };
 
 const TopologySchema = struct {
     _schema_version: []const u8,
     editor: []const u8,
     pager: []const u8,
-    tasklists: []TaskListInfo,
+    tasklists: []TaskListDetails,
     directories: []Directory,
     journals: []Journal,
 };
 
 directories: []Directory,
 journals: []Journal,
-tasklists: []TaskListInfo,
+tasklists: []TaskListDetails,
 editor: []const u8,
 pager: []const u8,
 mem: std.heap.ArenaAllocator,
@@ -213,7 +233,7 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
 
     var directories = try temp_alloc.alloc(Directory, 0);
     var journals = try temp_alloc.alloc(Journal, 0);
-    var tasklists = try temp_alloc.alloc(TaskListInfo, 0);
+    var tasklists = try temp_alloc.alloc(TaskListDetails, 0);
     var editor = try temp_alloc.dupe(u8, "vim");
     var pager = try temp_alloc.dupe(u8, "less");
 

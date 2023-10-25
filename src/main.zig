@@ -15,6 +15,7 @@ pub const Commands = union(enum) {
     log: @import("commands/log.zig"),
     read: @import("commands/read.zig"),
     remove: @import("commands/remove.zig"),
+    task: @import("commands/task.zig"),
 
     pub fn run(
         self: *Commands,

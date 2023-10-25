@@ -13,13 +13,20 @@ pub const Item = CollectionItem;
 // specific types
 pub const Directory = wrappers.DirectoryCollection;
 pub const Journal = wrappers.JournalCollection;
+pub const TaskList = wrappers.TaskListCollection;
 
 pub const DirectoryItem = Directory.TrackedChild;
 pub const JournalItem = Journal.TrackedChild;
+pub const TaskListItem = TaskList.TrackedChild;
 
 pub const Ordering = wrappers.Ordering;
 
-pub const CollectionType = enum { Directory, Journal, DirectoryWithJournal };
+pub const CollectionType = enum {
+    Directory,
+    Journal,
+    DirectoryWithJournal,
+    TaskList,
+};
 
 pub const Collection = union(CollectionType) {
     pub const Errors = error{NoSuchCollection};
@@ -29,8 +36,9 @@ pub const Collection = union(CollectionType) {
         journal: *Journal,
         directory: *Directory,
     },
+    TaskList: *TaskList,
 
-    pub fn init(maybe_directory: ?*Directory, maybe_journal: ?*Journal) ?Collection {
+    pub fn initDirectoryJournal(maybe_directory: ?*Directory, maybe_journal: ?*Journal) ?Collection {
         if (maybe_directory != null and maybe_journal != null) {
             return .{
                 .DirectoryWithJournal = .{
@@ -109,7 +117,13 @@ pub fn newDirectoryList(
     directories: []Topology.Directory,
     fs: FileSystem,
 ) ![]Directory {
-    return newCollectionList(Directory, Topology.Directory, alloc, directories, fs);
+    return newCollectionList(
+        Directory,
+        Topology.Directory,
+        alloc,
+        directories,
+        fs,
+    );
 }
 
 pub fn newJournalList(
@@ -117,12 +131,38 @@ pub fn newJournalList(
     journals: []Topology.Journal,
     fs: FileSystem,
 ) ![]Journal {
-    return newCollectionList(Journal, Topology.Journal, alloc, journals, fs);
+    return newCollectionList(
+        Journal,
+        Topology.Journal,
+        alloc,
+        journals,
+        fs,
+    );
 }
 
-pub fn writeChanges(journal: *Journal, alloc: std.mem.Allocator) !void {
-    for (journal.container.infos) |*info| {
-        var entry = journal.get(info.name).?;
+pub fn newTaskListList(
+    alloc: std.mem.Allocator,
+    tasklists: []Topology.TaskListDetails,
+    fs: FileSystem,
+) ![]TaskList {
+    return try newCollectionList(
+        TaskList,
+        Topology.TaskListDetails,
+        alloc,
+        tasklists,
+        fs,
+    );
+}
+
+pub fn writeChanges(
+    collection: anytype,
+    alloc: std.mem.Allocator,
+) !void {
+    if (@typeInfo(@TypeOf(collection)) != .Pointer)
+        @compileError("Must be a pointer");
+
+    for (collection.container.infos) |*info| {
+        var entry = collection.get(info.name).?;
         var children = entry.item.children orelse continue;
 
         // update last modified
@@ -133,6 +173,6 @@ pub fn writeChanges(journal: *Journal, alloc: std.mem.Allocator) !void {
         const string = try Journal.Child.stringifyContent(alloc, children);
         defer alloc.free(string);
 
-        try journal.fs.overwrite(info.path, string);
+        try collection.fs.overwrite(info.path, string);
     }
 }

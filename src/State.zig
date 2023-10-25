@@ -9,10 +9,12 @@ pub const ItemType = collections.ItemType;
 pub const Item = collections.Item;
 
 pub const Directory = collections.Directory;
-pub const DirectoryItem = collections.DirectoryItem;
-
 pub const Journal = collections.Journal;
+pub const TaskList = collections.TaskList;
+
+pub const DirectoryItem = collections.DirectoryItem;
 pub const JournalItem = collections.JournalItem;
+pub const TaskListItem = collections.TaskListItem;
 
 pub const Ordering = collections.Ordering;
 
@@ -31,6 +33,7 @@ pub const Config = struct {
 topology: Topology,
 directories: []Directory,
 journals: []Journal,
+tasklists: []TaskList,
 fs: FileSystem,
 allocator: std.mem.Allocator,
 
@@ -65,9 +68,17 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
     );
     errdefer alloc.free(journals);
 
+    var tasklists = try collections.newTaskListList(
+        alloc,
+        topology.tasklists,
+        fs,
+    );
+    errdefer alloc.free(tasklists);
+
     return .{
         .topology = topology,
         .directories = directories,
+        .tasklists = tasklists,
         .journals = journals,
         .fs = fs,
         .allocator = alloc,
@@ -93,8 +104,12 @@ pub fn deinit(self: *Self) void {
     for (self.journals) |*f| {
         f.deinit();
     }
+    for (self.tasklists) |*f| {
+        f.deinit();
+    }
     self.allocator.free(self.directories);
     self.allocator.free(self.journals);
+    self.allocator.free(self.tasklists);
     self.topology.deinit();
     self.* = undefined;
 }
@@ -116,6 +131,10 @@ pub fn getJournal(self: *Self, name: []const u8) ?*Journal {
     return getByName(Journal, self.journals, name);
 }
 
+pub fn getTaskList(self: *Self, name: []const u8) ?*TaskList {
+    return getByName(TaskList, self.tasklists, name);
+}
+
 pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []const u8) ?Collection {
     return switch (collection) {
         .Journal => .{
@@ -131,7 +150,7 @@ pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []co
 pub fn getCollection(self: *Self, name: []const u8) ?Collection {
     const maybe_journal: ?*Journal = self.getJournal(name);
     const maybe_directory: ?*Directory = self.getDirectory(name);
-    return Collection.init(maybe_directory, maybe_journal);
+    return Collection.initDirectoryJournal(maybe_directory, maybe_journal);
 }
 
 pub const CollectionNameList = struct {
@@ -150,22 +169,31 @@ pub fn getCollectionNames(
     self: *const Self,
     alloc: std.mem.Allocator,
 ) !CollectionNameList {
+    const N_tasklists = self.tasklists.len;
     const N_directories = self.directories.len;
-    const N = N_directories + self.topology.journals.len;
+    const N_journals = self.journals.len;
+    const N = N_directories + N_tasklists + N_journals;
     var cnames = try alloc.alloc(CollectionNameList.CollectionName, N);
     errdefer alloc.free(cnames);
 
-    for (0.., self.directories) |i, d| {
+    for (0.., self.directories) |i, c| {
         cnames[i] = .{
             .collection = .Directory,
-            .name = d.collectionName(),
+            .name = c.collectionName(),
         };
     }
 
-    for (N_directories.., self.journals) |i, j| {
+    for (N_directories.., self.journals) |i, c| {
         cnames[i] = .{
             .collection = .Journal,
-            .name = j.collectionName(),
+            .name = c.collectionName(),
+        };
+    }
+
+    for (N_directories + N_journals.., self.tasklists) |i, c| {
+        cnames[i] = .{
+            .collection = .TaskList,
+            .name = c.collectionName(),
         };
     }
 

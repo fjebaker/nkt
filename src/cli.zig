@@ -1,5 +1,5 @@
 const std = @import("std");
-const selections = @import("cli/selections.zig");
+pub const selections = @import("cli/selections.zig");
 
 pub const Selection = selections.Selection;
 pub const SelectedCollection = selections.SelectedCollection;

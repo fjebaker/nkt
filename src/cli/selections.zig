@@ -9,20 +9,27 @@ const Item = State.Item;
 const CollectionType = State.CollectionType;
 const Date = utils.Date;
 
-fn isNumeric(c: u8) bool {
+pub fn isNumeric(c: u8) bool {
     return (c >= '0' and c <= '9');
 }
 
-fn allNumeric(string: []const u8) bool {
+pub fn allNumeric(string: []const u8) bool {
     for (string) |c| {
         if (!isNumeric(c)) return false;
     }
     return true;
 }
 
-fn isDate(string: []const u8) bool {
+pub fn isDate(string: []const u8) bool {
     for (string) |c| {
         if (!isNumeric(c) and c != '-') return false;
+    }
+    return true;
+}
+
+pub fn isTime(string: []const u8) bool {
+    for (string) |c| {
+        if (!isNumeric(c) and c != ':') return false;
     }
     return true;
 }
@@ -154,6 +161,7 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
             return .{ .Note = note };
         },
         .DirectoryWithJournal => unreachable,
+        .TaskList => unreachable,
     };
 
     // don't know if journal or entry, so we try both

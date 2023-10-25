@@ -79,8 +79,10 @@ pub fn isAlias(
     return false;
 }
 
+const TIMEZONE: u16 = 1;
+
 pub fn adjustTimezone(date: Date) Date {
-    var modified = date.addHours(1);
+    var modified = date.addHours(TIMEZONE);
     if (modified.hours >= 24) {
         const rem = modified.hours % 24;
         const days = modified.hours / 24;
@@ -109,6 +111,16 @@ pub fn toDate(string: []const u8) !Date {
     const day = try std.fmt.parseInt(u16, string[8..10], 10) - 1;
 
     return newDate(year, month, day);
+}
+
+pub const TimeStamp = struct { h: u16, m: u16, s: u16 };
+
+pub fn toTime(string: []const u8) !TimeStamp {
+    if (string.len < 8) return DateError.DateStringTooShort;
+    const hour = try std.fmt.parseInt(u16, string[0..2], 10);
+    const minute = try std.fmt.parseInt(u16, string[3..5], 10);
+    const seconds = try std.fmt.parseInt(u16, string[6..8], 10);
+    return .{ .h = hour - TIMEZONE, .m = minute, .s = seconds };
 }
 
 pub fn areSameDay(d1: Date, d2: Date) bool {

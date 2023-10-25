@@ -191,7 +191,7 @@ pub fn CollectionTemplate(
             }
 
             // write a template to the file
-            try self.fs.overwrite(info.path, Container.contentTemplate(alloc, info));
+            try self.fs.overwrite(info.path, Child.contentTemplate(alloc, info));
 
             return .{
                 .info = info_ptr,
@@ -240,11 +240,6 @@ const Directory = struct {
             }
         };
     }
-    pub fn contentTemplate(alloc: std.mem.Allocator, info: Child.Info) []const u8 {
-        _ = alloc;
-        _ = info;
-        return "";
-    }
 };
 
 const Journal = struct {
@@ -282,18 +277,74 @@ const Journal = struct {
                 } else unreachable; // todo
                 utils.moveToEnd(Child.Item, self.item.children.?, index);
                 self.item.children.?.len -= 1;
-                try self.collection.content.putMove(self.item.info.name, self.item.children.?);
+                try self.collection.content.putMove(
+                    self.item.info.name,
+                    self.item.children.?,
+                );
             }
         };
     }
-    pub fn contentTemplate(alloc: std.mem.Allocator, info: Child.Info) []const u8 {
-        _ = alloc;
-        _ = info;
-        return "{\"items\":[]}";
+};
+
+const TaskListDetails = struct {
+    pub const DEFAULT_FILE_EXTENSION = ".json";
+    pub const Child = Topology.TaskList;
+    pub const ContentMap = content_map.ContentMap([]Child.Item);
+    pub fn TrackedChild(comptime Self: type) type {
+        return struct {
+            collection: *Self,
+            item: Child,
+
+            pub fn relativePath(self: @This()) []const u8 {
+                return self.item.info.path;
+            }
+
+            pub const TaskOptions = struct {
+                due: ?u64 = null,
+                importance: Child.Item.Importance = .low,
+                details: []const u8 = "",
+            };
+
+            pub fn add(
+                self: *@This(),
+                text: []const u8,
+                options: TaskOptions,
+            ) !void {
+                var alloc = self.collection.content.allocator();
+                const now = utils.now();
+                const owned_text = try alloc.dupe(u8, text);
+                const owned_details = try alloc.dupe(u8, options.details);
+
+                const item: Child.Item = .{
+                    .text = owned_text,
+                    .details = owned_details,
+                    .created = now,
+                    .modified = now,
+                    .due = options.due,
+                    .importance = options.importance,
+                    .tags = try utils.emptyTagList(alloc),
+                };
+
+                try self.collection.addItem(&self.item, item);
+            }
+
+            pub fn remove(self: *@This(), item: Child.Item) !void {
+                const index = for (self.item.children.?, 0..) |i, j| {
+                    if (i.created == item.created) break j;
+                } else unreachable; // todo
+                utils.moveToEnd(Child.Item, self.item.children.?, index);
+                self.item.children.?.len -= 1;
+                try self.collection.content.putMove(
+                    self.item.info.name,
+                    self.item.children.?,
+                );
+            }
+        };
     }
 };
 
 pub const DirectoryCollection = CollectionTemplate(Directory);
 pub const JournalCollection = CollectionTemplate(Journal);
+pub const TaskListCollection = CollectionTemplate(TaskListDetails);
 
 pub const Ordering = enum { Modified, Created };

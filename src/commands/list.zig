@@ -14,9 +14,9 @@ pub const help = "List notes in various ways.";
 pub const extended_help =
     \\List notes in various ways to the terminal.
     \\  nkt list
-    \\     [what]                list journals, directories, or notes with a
-    \\                             `directory` to list. this option may also be
-    \\                             `all` to list everything (default: all)
+    \\     [what]                list journals, directories, tasklists, or notes
+    \\                             with a `directory` to list. this option may
+    \\                             also be `all` to list everything (default: all)
     \\     [-n/--limit int]      maximum number of entries to list (default: 25)
     \\     [--all]               list all entries (ignores `--limit`)
     \\     [--modified]          sort by last modified (default)
@@ -111,6 +111,7 @@ fn listNames(
     switch (what) {
         .Directory => try writer.print("Directories list:\n", .{}),
         .Journal => try writer.print("Journals list:\n", .{}),
+        .TaskList => try writer.print("Tasklist list:\n", .{}),
         .DirectoryWithJournal => unreachable,
     }
 
@@ -163,6 +164,7 @@ pub fn run(
 
         try self.listNames(cnames, .Directory, out_writer);
         try self.listNames(cnames, .Journal, out_writer);
+        try self.listNames(cnames, .TaskList, out_writer);
     } else if (is(self.selection, "directories") or is(self.selection, "dirs")) {
         var cnames = try state.getCollectionNames(state.allocator);
         defer cnames.deinit();
@@ -173,6 +175,11 @@ pub fn run(
         defer cnames.deinit();
 
         try self.listNames(cnames, .Journal, out_writer);
+    } else if (is(self.selection, "tasklists") or is(self.selection, "tasks")) {
+        var cnames = try state.getCollectionNames(state.allocator);
+        defer cnames.deinit();
+
+        try self.listNames(cnames, .TaskList, out_writer);
     } else {
         var collection = state.getCollection(self.selection) orelse
             return State.Collection.Errors.NoSuchCollection;
@@ -187,6 +194,7 @@ pub fn run(
                 try self.listDirectory(state.allocator, dj.directory, out_writer);
                 try self.listJournal(state.allocator, dj.journal, out_writer);
             },
+            .TaskList => unreachable, // todo
         }
     }
 }
