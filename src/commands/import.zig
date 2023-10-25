@@ -114,13 +114,13 @@ fn importToDirectory(
     const child = try dir.newChild(filename);
 
     if (self.move) {
-        try state.fs.move(
+        try state.fs.moveFromCwd(
             state.allocator,
             path,
             child.item.getPath(),
         );
     } else {
-        try state.fs.copy(
+        try state.fs.copyFromCwd(
             state.allocator,
             path,
             child.item.getPath(),

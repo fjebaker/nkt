@@ -143,6 +143,9 @@ pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []co
         .Directory => .{
             .Directory = self.getDirectory(name) orelse return null,
         },
+        .TaskList => .{
+            .TaskList = self.getTaskList(name) orelse return null,
+        },
         .DirectoryWithJournal => unreachable,
     };
 }

@@ -130,7 +130,7 @@ pub fn absPathify(
     return try self.dir.realpathAlloc(allocator, rel_path);
 }
 
-pub fn move(
+pub fn moveFromCwd(
     self: *Self,
     allocator: std.mem.Allocator,
     cwd_rel_from: []const u8,
@@ -143,7 +143,7 @@ pub fn move(
     try std.fs.renameAbsolute(abs_from, abs_to);
 }
 
-pub fn copy(
+pub fn copyFromCwd(
     self: *Self,
     allocator: std.mem.Allocator,
     cwd_rel_from: []const u8,
@@ -154,4 +154,12 @@ pub fn copy(
     const abs_from = try std.fs.cwd().realpathAlloc(allocator, cwd_rel_from);
     defer allocator.free(abs_from);
     try std.fs.copyFileAbsolute(abs_from, abs_to, .{});
+}
+
+pub fn move(
+    self: *Self,
+    rel_from: []const u8,
+    rel_to: []const u8,
+) !void {
+    try self.dir.rename(rel_from, rel_to);
 }

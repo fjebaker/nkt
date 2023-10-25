@@ -144,16 +144,20 @@ pub fn CollectionTemplate(
             }
         }
 
-        fn childPath(self: *Self, name: []const u8) ![]const u8 {
-            const alloc = self.mem.allocator();
+        fn childPath(
+            alloc: std.mem.Allocator,
+            container_path: []const u8,
+            name: []const u8,
+        ) ![]const u8 {
             const filename = try std.mem.concat(
                 alloc,
                 u8,
                 &.{ name, Container.DEFAULT_FILE_EXTENSION },
             );
+            defer alloc.free(filename);
             return try std.fs.path.join(
                 alloc,
-                &.{ self.container.path, filename },
+                &.{ container_path, filename },
             );
         }
 
@@ -169,7 +173,11 @@ pub fn CollectionTemplate(
                 .modified = now,
                 .created = now,
                 .name = owned_name,
-                .path = try childPath(self, owned_name),
+                .path = try childPath(
+                    self.mem.allocator(),
+                    self.container.path,
+                    owned_name,
+                ),
                 .tags = try utils.emptyTagList(alloc),
             };
 
@@ -231,9 +239,9 @@ const Directory = struct {
     pub const DEFAULT_FILE_EXTENSION = ".md";
     pub const Child = Topology.Note;
     pub const ContentMap = content_map.ContentMap([]const u8);
-    pub fn TrackedChild(comptime Self: type) type {
+    pub fn TrackedChild(comptime Super: type) type {
         return struct {
-            collection: *Self,
+            collection: *Super,
             item: Child,
             pub fn relativePath(self: @This()) []const u8 {
                 return self.item.info.path;
@@ -251,6 +259,17 @@ const Directory = struct {
                 // write to file
                 try fs.overwrite(self.relativePath(), owned_text);
             }
+
+            pub fn rename(self: *@This(), name: []const u8) !void {
+                const new_path = try Super.childPath(
+                    self.collection.mem.allocator(),
+                    self.collection.container.path,
+                    name,
+                );
+                try self.collection.fs.move(self.item.info.path, new_path);
+                self.item.info.name = name;
+                self.item.info.path = new_path;
+            }
         };
     }
 };
@@ -260,9 +279,9 @@ const Journal = struct {
     pub const Child = Topology.Entry;
     pub const ContentMap = content_map.ContentMap([]Child.Item);
     pub const JournalError = error{DuplicateEntry};
-    pub fn TrackedChild(comptime Self: type) type {
+    pub fn TrackedChild(comptime Super: type) type {
         return struct {
-            collection: *Self,
+            collection: *Super,
             item: Child,
 
             pub fn relativePath(self: @This()) []const u8 {
@@ -303,9 +322,9 @@ const TaskListDetails = struct {
     pub const DEFAULT_FILE_EXTENSION = ".json";
     pub const Child = Topology.TaskList;
     pub const ContentMap = content_map.ContentMap([]Child.Item);
-    pub fn TrackedChild(comptime Self: type) type {
+    pub fn TrackedChild(comptime Super: type) type {
         return struct {
-            collection: *Self,
+            collection: *Super,
             item: Child,
 
             pub fn relativePath(self: @This()) []const u8 {
@@ -341,7 +360,7 @@ const TaskListDetails = struct {
                 try self.collection.addItem(&self.item, item);
             }
 
-            pub fn remove(self: *@This(), item: Child.Item) !void {
+            pub fn remove(self: @This(), item: Child.Item) !void {
                 const index = for (self.item.children.?, 0..) |i, j| {
                     if (i.created == item.created) break j;
                 } else unreachable; // todo

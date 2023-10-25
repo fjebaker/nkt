@@ -6,10 +6,12 @@ pub const SelectedCollection = selections.SelectedCollection;
 
 pub const SelectionError = error{
     AmbiguousSelection,
+    ChildAlreadyExists,
+    IncompatibleSelection,
     InvalidSelection,
     NoSuchDirectory,
-    NoSuchJournal,
     NoSuchEntry,
+    NoSuchJournal,
     UnknownCollection,
 };
 
@@ -35,6 +37,7 @@ fn Iterator(comptime T: type) type {
 
 pub const CLIErrors = error{
     BadArgument,
+    InvalidFlag,
     CouldNotParse,
     DuplicateFlag,
     NoValueGiven,

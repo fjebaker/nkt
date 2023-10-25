@@ -53,6 +53,13 @@ pub const Collection = union(CollectionType) {
         }
         return null;
     }
+
+    pub fn hasChildName(self: *const Collection, name: []const u8) bool {
+        switch (self.*) {
+            .DirectoryWithJournal => unreachable,
+            inline else => |i| return if (i.get(name)) |_| true else false,
+        }
+    }
 };
 
 pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };
@@ -64,6 +71,21 @@ pub const CollectionItem = union(ItemType) {
         directory: Directory.TrackedChild,
         journal: Journal.TrackedChild,
     },
+
+    pub fn collectionType(self: CollectionItem) CollectionType {
+        return switch (self) {
+            .Note => .Directory,
+            .JournalEntry => .Journal,
+            .DirectoryJournalItems => .DirectoryWithJournal,
+        };
+    }
+
+    pub fn collectionName(self: *const CollectionItem) []const u8 {
+        return switch (self.*) {
+            .DirectoryJournalItems => |i| i.directory.collection.container.name,
+            inline else => |i| i.collection.container.name,
+        };
+    }
 
     pub fn remove(self: *CollectionItem) !void {
         switch (self.*) {

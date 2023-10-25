@@ -200,3 +200,29 @@ fn whatFromName(state: *State, name: []const u8) ?Item {
 
     return finalize(maybe_note, maybe_journal);
 }
+
+fn parseJournalDirectoryItemlistFlag(
+    arg: cli.Arg,
+    itt: *cli.ArgIterator,
+) !?SelectedCollection {
+    if (arg.is(null, "journal")) {
+        const value = try itt.getValue();
+        return cli.SelectedCollection.from(
+            .Journal,
+            value.string,
+        );
+    } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
+        const value = try itt.getValue();
+        return cli.SelectedCollection.from(
+            .Directory,
+            value.string,
+        );
+    } else if (arg.is(null, "tasklist")) {
+        const value = try itt.getValue();
+        return cli.SelectedCollection.from(
+            .TaskList,
+            value.string,
+        );
+    }
+    return null;
+}
