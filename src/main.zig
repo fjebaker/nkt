@@ -9,9 +9,10 @@ pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
 pub const Commands = union(enum) {
     edit: @import("commands/edit.zig"),
+    find: @import("commands/find.zig"),
     help: @import("commands/help.zig"),
-    init: @import("commands/init.zig"),
     import: @import("commands/import.zig"),
+    init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),
     log: @import("commands/log.zig"),
     read: @import("commands/read.zig"),
