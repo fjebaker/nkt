@@ -45,16 +45,9 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
                 self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 self.all = true;
-            } else if (arg.is(null, "journal")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Journal, value.string);
-                }
-            } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Directory, value.string);
-                }
+            } else if (try cli.selections.parseJournalDirectoryItemlistFlag(arg, itt, true)) |col| {
+                if (self.where != null) return cli.SelectionError.AmbiguousSelection;
+                self.where = col;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
