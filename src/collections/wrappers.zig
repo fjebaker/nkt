@@ -95,16 +95,28 @@ pub fn CollectionTemplate(
             return .{ .collection = self, .item = item };
         }
 
-        /// Get the child by name. Will not attempt to read the file with the
-        /// child's content until `ensureContent` is called on the Child.
-        pub fn get(self: *Self, name: []const u8) ?Self.TrackedChild {
+        fn getByProperty(
+            self: *Self,
+            comptime property: []const u8,
+            value: []const u8,
+        ) ?TrackedChild {
             var items = self.container.infos;
             for (items) |*item| {
-                if (std.mem.eql(u8, item.name, name)) {
+                if (std.mem.eql(u8, @field(item, property), value)) {
                     return prepareChild(self, item);
                 }
             }
             return null;
+        }
+
+        /// Get the child by name. Will not attempt to read the file with the
+        /// child's content until `ensureContent` is called on the Child.
+        pub fn get(self: *Self, name: []const u8) ?Self.TrackedChild {
+            return getByProperty(self, "name", name);
+        }
+
+        pub fn getByPath(self: *Self, path: []const u8) ?Self.TrackedChild {
+            return getByProperty(self, "path", path);
         }
 
         pub fn getByDate(

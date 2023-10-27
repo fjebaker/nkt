@@ -3,6 +3,7 @@ const cli = @import("../cli.zig");
 
 const State = @import("../State.zig");
 const Self = @This();
+const Printer = @import("../Printer.zig");
 
 pub const alias = [_][]const u8{"f"};
 
@@ -138,7 +139,6 @@ fn directoryNotesUnder(
     dir: *const State.Directory,
 ) ![][]const u8 {
     var paths = std.ArrayList([]const u8).init(alloc);
-    try addPaths(alloc, &paths, dir);
 
     var notelist = try dir.getChildList(alloc);
     defer notelist.deinit();
@@ -165,7 +165,7 @@ fn getAllPaths(alloc: std.mem.Allocator, state: *State) ![][]const u8 {
                 try addPaths(alloc, &paths, state.getDirectory(item.name).?);
             },
             .DirectoryWithJournal => {
-                try addPaths(alloc, &paths, state.getDirectory(item.name).?);
+                // try addPaths(alloc, &paths, state.getDirectory(item.name).?);
             },
             else => {},
         }
@@ -177,13 +177,14 @@ fn getAllPaths(alloc: std.mem.Allocator, state: *State) ![][]const u8 {
 pub fn run(
     self: *Self,
     state: *State,
-    _: anytype,
+    out_writer: anytype,
 ) !void {
+    const dir = state.getDirectory("notes").?;
     var paths: [][]const u8 = if (self.prefix) |p|
         try directoryNotesUnder(
             state.allocator,
             p,
-            state.getDirectory("notes").?,
+            dir,
         )
     else
         try getAllPaths(state.allocator, state);
@@ -195,4 +196,15 @@ pub fn run(
 
     var selected = try fs.subprocFzfRga();
     defer state.allocator.free(selected);
+
+    var printer = Printer.init(state.allocator, null);
+    defer printer.deinit();
+
+    var note = dir.getByPath(std.mem.trim(u8, selected, " \t\n\r")).?;
+
+    try note.collection.readChildContent(&note.item);
+    try printer.addHeading("", .{});
+    _ = try printer.addLine("{s}", .{note.item.children.?});
+
+    try printer.drain(out_writer);
 }
