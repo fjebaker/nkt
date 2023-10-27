@@ -114,17 +114,16 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
                 },
             );
             if (try confirmPrompt(state, stdout)) {
-                if (try state.removeCollection(ctype, index)) {
-                    try out_writer.print(
-                        "{s} {s} deleted\n",
-                        .{
-                            switch (ctype) {
-                                inline else => |i| @tagName(i),
-                            },
-                            name,
+                try state.removeCollection(ctype, index);
+                try out_writer.print(
+                    "{s} {s} deleted\n",
+                    .{
+                        switch (ctype) {
+                            inline else => |i| @tagName(i),
                         },
-                    );
-                } else return cli.SelectionError.InvalidSelection;
+                        name,
+                    },
+                );
             }
         },
     }

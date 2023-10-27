@@ -270,47 +270,49 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !Coll
     }
 }
 
-pub fn removeCollection(self: *Self, ctype: CollectionType, index: usize) !bool {
+fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, index: usize) !void {
+    const C = comptime if (std.mem.eql(u8, field_name, "directories"))
+        Directory
+    else if (std.mem.eql(u8, field_name, "journals"))
+        Journal
+    else if (std.mem.eql(u8, field_name, "tasklists"))
+        TaskList
+    else
+        @compileError("unknown field");
+
+    const T = comptime if (std.mem.eql(u8, field_name, "directories"))
+        Topology.Directory
+    else if (std.mem.eql(u8, field_name, "journals"))
+        Topology.Journal
+    else if (std.mem.eql(u8, field_name, "tasklists"))
+        Topology.TaskListDetails
+    else
+        @compileError("unknown field");
+
+    var items = @field(self, field_name);
+    utils.moveToEnd(C, items, index);
+    var marked = items[items.len - 1];
+
+    marked.deinit();
+    @field(self, field_name) = try self.allocator.realloc(items, items.len - 1);
+
+    utils.moveToEnd(T, @field(self.topology, field_name), index);
+    @field(self.topology, field_name).len -= 1;
+
+    syncPtrs(@field(self.topology, field_name), @field(self, field_name));
+}
+
+pub fn removeCollection(self: *Self, ctype: CollectionType, index: usize) !void {
     switch (ctype) {
         .Directory => {
-            utils.moveToEnd(Directory, self.directories, index);
-            var marked = self.directories[self.directories.len - 1];
-            // remove associated filesystem
-            self.fs.removeDir(marked.container.path);
-            marked.deinit();
-
-            self.directories[self.directories.len - 1].deinit();
-
-            self.directories = try self.allocator.realloc(self.directories, self.directories.len - 1);
-
-            utils.moveToEnd(Topology.Directory, self.topology.directories, index);
-            self.topology.directories.len -= 1;
-
-            syncPtrs(self.topology.directories, self.directories);
+            try removeCollectionNamed(self, "directories", index);
         },
         .Journal => {
-            utils.moveToEnd(Journal, self.journals, index);
-            self.journals[self.journals.len - 1].deinit();
-
-            self.journals = try self.allocator.realloc(self.journals, self.journals.len - 1);
-
-            utils.moveToEnd(Topology.Journal, self.topology.journals, index);
-            self.topology.journals.len -= 1;
-
-            syncPtrs(self.topology.journals, self.journals);
+            try removeCollectionNamed(self, "journals", index);
         },
         .TaskList => {
-            utils.moveToEnd(TaskList, self.tasklists, index);
-            self.tasklists[self.tasklists.len - 1].deinit();
-
-            self.journals = try self.allocator.realloc(self.journals, self.journals.len - 1);
-
-            utils.moveToEnd(Topology.TaskListDetails, self.topology.tasklists, index);
-            self.topology.tasklists.len -= 1;
-
-            syncPtrs(self.topology.tasklists, self.tasklists);
+            try removeCollectionNamed(self, "tasklists", index);
         },
         else => unreachable, // todo
     }
-    return true;
 }
