@@ -20,20 +20,8 @@ collection_type: State.CollectionType,
 name: []const u8,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-    var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-
-    var collection_type: State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
-        .Journal
-    else if (std.mem.eql(u8, "directory", p1.string))
-        .Directory
-    else if (std.mem.eql(u8, "tasklist", p1.string))
-        .TaskList
-    else
-        return cli.CLIErrors.BadArgument;
-    var name = p2.string;
-
-    return .{ .collection_type = collection_type, .name = name };
+    const selected = try cli.selections.getSelectedCollectionPositional(itt);
+    return .{ .collection_type = selected.container, .name = selected.name };
 }
 
 pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
@@ -42,7 +30,7 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
     _ = try state.newCollection(self.collection_type, self.name);
 
     try out_writer.print(
-        "Created new {s} named '{s}'\n",
+        "{s} '{s}' created\n",
         .{
             switch (self.collection_type) {
                 inline else => |i| @tagName(i),

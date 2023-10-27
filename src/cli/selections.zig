@@ -231,3 +231,20 @@ pub fn parseJournalDirectoryItemlistFlag(
     }
     return null;
 }
+
+pub fn getSelectedCollectionPositional(itt: *cli.ArgIterator) !SelectedCollection {
+    var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+    var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+
+    var collection_type: State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
+        .Journal
+    else if (std.mem.eql(u8, "directory", p1.string))
+        .Directory
+    else if (std.mem.eql(u8, "tasklist", p1.string))
+        .TaskList
+    else
+        return cli.CLIErrors.BadArgument;
+    var name = p2.string;
+
+    return SelectedCollection.from(collection_type, name);
+}

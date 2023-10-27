@@ -9,69 +9,129 @@ const Self = @This();
 
 pub const alias = [_][]const u8{"rm"};
 
-pub const help = "Display the contentes of notes in various ways";
+pub const help = "Remove a note from a directory, an entry from a journal, or an item from an entry.";
 pub const extended_help =
     \\Remove a note from a directory, an entry from a journal, or an item from an 
     \\entry.
     \\  nkt remove
+    \\     --collection <type>   remove full collection instead of child of collection (default: false)
     \\     <what>                what to remove: name of a journal entry, or a note.
     \\                             if choice is ambiguous, will fail unless
     \\                             specified with the `--journal` or `--dir`
     \\                             flags. for removing items from an entry,
     \\                             specify the time stamp with `--time`
-    \\     [--time name]         time of the item to remove from the chosen
-    \\                             entry. must be specified in `hh:mm:ss`
-    \\     [--journal name]      name of journal to read from
-    \\     [--dir name]          name of directory to read from
-    \\     [-f]                  don't prompt for removal
+    \\     --time name           time of the item to remove from the chosen
+    \\                            entry. must be specified in `hh:mm:ss`
+    \\     --journal name        name of journal to delete from
+    \\     --dir name            name of directory to delete from
+    \\     -f                    don't prompt for removal
     \\
 ;
 
-selection: ?cli.Selection,
-where: ?cli.SelectedCollection,
-time: ?[]const u8,
+const RemoveChild = struct {
+    selection: ?cli.Selection,
+    where: ?cli.SelectedCollection,
+    time: ?[]const u8,
+};
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+selection: union(enum) {
+    Child: RemoveChild,
+    Collection: cli.SelectedCollection,
+},
+
+fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{
-        .selection = null,
-        .where = null,
-        .time = null,
+        .selection = .{
+            .Child = .{
+                .selection = null,
+                .where = null,
+                .time = null,
+            },
+        },
     };
+    var child = &self.selection.Child;
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
             if (arg.is(null, "time")) {
                 const value = try itt.getValue();
-                self.time = value.string;
+                child.time = value.string;
             } else if (arg.is(null, "journal")) {
-                if (self.where == null) {
+                if (child.where == null) {
                     const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Journal, value.string);
+                    child.where = cli.SelectedCollection.from(.Journal, value.string);
                 }
             } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
-                if (self.where == null) {
+                if (child.where == null) {
                     const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Directory, value.string);
+                    child.where = cli.SelectedCollection.from(.Directory, value.string);
                 }
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
             if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-            self.selection = try cli.Selection.parse(arg.string);
+            child.selection = try cli.Selection.parse(arg.string);
         }
     }
 
-    if (self.selection == null) return cli.CLIErrors.TooFewArguments;
+    if (child.selection == null) return cli.CLIErrors.TooFewArguments;
 
     return self;
 }
 
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    const arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;
+    if (arg.flag and arg.is(null, "collection")) {
+        const selection = try cli.selections.getSelectedCollectionPositional(itt);
+        return .{ .selection = .{ .Collection = selection } };
+    } else {
+        itt.rewind();
+        return try initChild(alloc, itt);
+    }
+}
+
 const NoSuchCollection = State.Collection.Errors.NoSuchCollection;
 
-pub fn run(
-    self: *Self,
+pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
+    switch (self.selection) {
+        .Child => |*c| try runChild(c, state, out_writer),
+        .Collection => |s| {
+            const ctype = s.container;
+            const name = s.name;
+            const index = state.getSelectedCollectionIndex(ctype, name) orelse
+                return cli.SelectionError.InvalidSelection;
+
+            var stdout = std.io.getStdOut().writer();
+            try stdout.print(
+                "Delete ENTIRE COLLECTION {s} '{s}'?\n",
+                .{
+                    switch (ctype) {
+                        inline else => |i| @tagName(i),
+                    },
+                    name,
+                },
+            );
+            if (try confirmPrompt(state, stdout)) {
+                if (try state.removeCollection(ctype, index)) {
+                    try out_writer.print(
+                        "{s} {s} deleted\n",
+                        .{
+                            switch (ctype) {
+                                inline else => |i| @tagName(i),
+                            },
+                            name,
+                        },
+                    );
+                } else return cli.SelectionError.InvalidSelection;
+            }
+        },
+    }
+}
+
+fn runChild(
+    self: *RemoveChild,
     state: *State,
     _: anytype,
 ) !void {

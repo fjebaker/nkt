@@ -114,13 +114,16 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-fn getByName(comptime T: type, items: []T, name: []const u8) ?*T {
-    for (items) |*f| {
-        if (std.mem.eql(u8, f.collectionName(), name)) {
-            return f;
-        }
+pub fn getIndex(comptime T: type, items: []const T, name: []const u8) ?usize {
+    for (0.., items) |i, item| {
+        if (std.mem.eql(u8, item.collectionName(), name)) return i;
     }
     return null;
+}
+
+fn getByName(comptime T: type, items: []T, name: []const u8) ?*T {
+    const index = getIndex(T, items, name) orelse return null;
+    return &items[index];
 }
 
 pub fn getDirectory(self: *Self, name: []const u8) ?*Directory {
@@ -146,6 +149,15 @@ pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []co
         .TaskList => .{
             .TaskList = self.getTaskList(name) orelse return null,
         },
+        .DirectoryWithJournal => unreachable,
+    };
+}
+
+pub fn getSelectedCollectionIndex(self: *Self, collection: CollectionType, name: []const u8) ?usize {
+    return switch (collection) {
+        .Directory => getIndex(Directory, self.directories, name),
+        .Journal => getIndex(Journal, self.journals, name),
+        .TaskList => getIndex(TaskList, self.tasklists, name),
         .DirectoryWithJournal => unreachable,
     };
 }
@@ -258,39 +270,47 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !Coll
     }
 }
 
-fn getIndexOfCollection(comptime T: type, items: []const T, name: []const u8) ?usize {
-    for (0.., items) |i, item| {
-        if (std.mem.eql(u8, item.collectionName(), name)) return i;
-    }
-    return null;
-}
-
-pub fn removeCollection(self: *Self, ctype: CollectionType, name: []const u8) !void {
+pub fn removeCollection(self: *Self, ctype: CollectionType, index: usize) !bool {
     switch (ctype) {
         .Directory => {
-            const index = getIndexOfCollection(Directory, self.directories, name);
             utils.moveToEnd(Directory, self.directories, index);
-            self.directories[self.directories.len].deinit();
-            self.directories.len -= 1;
+            var marked = self.directories[self.directories.len - 1];
+            // remove associated filesystem
+            self.fs.removeDir(marked.container.path);
+            marked.deinit();
+
+            self.directories[self.directories.len - 1].deinit();
+
+            self.directories = try self.allocator.realloc(self.directories, self.directories.len - 1);
+
             utils.moveToEnd(Topology.Directory, self.topology.directories, index);
             self.topology.directories.len -= 1;
+
+            syncPtrs(self.topology.directories, self.directories);
         },
         .Journal => {
-            const index = getIndexOfCollection(Journal, self.journals, name);
-            utils.moveToEnd(Directory, self.journals, index);
-            self.journals[self.journals.len].deinit();
-            self.journals.len -= 1;
+            utils.moveToEnd(Journal, self.journals, index);
+            self.journals[self.journals.len - 1].deinit();
+
+            self.journals = try self.allocator.realloc(self.journals, self.journals.len - 1);
+
             utils.moveToEnd(Topology.Journal, self.topology.journals, index);
             self.topology.journals.len -= 1;
+
+            syncPtrs(self.topology.journals, self.journals);
         },
         .TaskList => {
-            const index = getIndexOfCollection(TaskList, self.tasklists, name);
             utils.moveToEnd(TaskList, self.tasklists, index);
-            self.tasklists[self.tasklists.len].deinit();
-            self.tasklists.len -= 1;
+            self.tasklists[self.tasklists.len - 1].deinit();
+
+            self.journals = try self.allocator.realloc(self.journals, self.journals.len - 1);
+
             utils.moveToEnd(Topology.TaskListDetails, self.topology.tasklists, index);
             self.topology.tasklists.len -= 1;
+
+            syncPtrs(self.topology.tasklists, self.tasklists);
         },
         else => unreachable, // todo
     }
+    return true;
 }
