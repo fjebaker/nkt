@@ -202,3 +202,95 @@ pub fn getCollectionNames(
 
     return CollectionNameList.initOwned(alloc, cnames);
 }
+
+fn syncPtrs(infos: anytype, collections_list: anytype) void {
+    for (infos, collections_list) |*info, *col| {
+        col.container = info;
+    }
+}
+
+pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !Collection {
+    var topo_alloc = self.topology.mem.allocator();
+
+    switch (ctype) {
+        .DirectoryWithJournal => unreachable,
+        .Directory => {
+            const new_dir = try Topology.Directory.new(topo_alloc, "dir.", name);
+            const s_ptr = try utils.push(
+                Topology.Directory,
+                topo_alloc,
+                &self.topology.directories,
+                new_dir,
+            );
+            var dir = try Directory.init(self.allocator, s_ptr, self.fs);
+            errdefer dir.deinit();
+            var dir_ptr = try utils.push(
+                Directory,
+                self.allocator,
+                &self.directories,
+                dir,
+            );
+
+            syncPtrs(self.topology.directories, self.directories);
+            return .{ .Directory = dir_ptr };
+        },
+        .Journal => {
+            const new = try Topology.Journal.new(topo_alloc, "journal.", name);
+            const s_ptr = try utils.push(
+                Topology.Journal,
+                topo_alloc,
+                &self.topology.journals,
+                new,
+            );
+            var journal = try Journal.init(self.allocator, s_ptr, self.fs);
+            errdefer journal.deinit();
+            var journal_ptr = try utils.push(
+                Journal,
+                self.allocator,
+                &self.journals,
+                journal,
+            );
+
+            syncPtrs(self.topology.journals, self.journals);
+            return .{ .Journal = journal_ptr };
+        },
+        else => unreachable, // todo
+    }
+}
+
+fn getIndexOfCollection(comptime T: type, items: []const T, name: []const u8) ?usize {
+    for (0.., items) |i, item| {
+        if (std.mem.eql(u8, item.collectionName(), name)) return i;
+    }
+    return null;
+}
+
+pub fn removeCollection(self: *Self, ctype: CollectionType, name: []const u8) !void {
+    switch (ctype) {
+        .Directory => {
+            const index = getIndexOfCollection(Directory, self.directories, name);
+            utils.moveToEnd(Directory, self.directories, index);
+            self.directories[self.directories.len].deinit();
+            self.directories.len -= 1;
+            utils.moveToEnd(Topology.Directory, self.topology.directories, index);
+            self.topology.directories.len -= 1;
+        },
+        .Journal => {
+            const index = getIndexOfCollection(Journal, self.journals, name);
+            utils.moveToEnd(Directory, self.journals, index);
+            self.journals[self.journals.len].deinit();
+            self.journals.len -= 1;
+            utils.moveToEnd(Topology.Journal, self.topology.journals, index);
+            self.topology.journals.len -= 1;
+        },
+        .TaskList => {
+            const index = getIndexOfCollection(TaskList, self.tasklists, name);
+            utils.moveToEnd(TaskList, self.tasklists, index);
+            self.tasklists[self.tasklists.len].deinit();
+            self.tasklists.len -= 1;
+            utils.moveToEnd(Topology.TaskListDetails, self.topology.tasklists, index);
+            self.topology.tasklists.len -= 1;
+        },
+        else => unreachable, // todo
+    }
+}

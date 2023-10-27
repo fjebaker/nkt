@@ -126,7 +126,12 @@ fn readJournal(
         if (!printer.couldFit(line_count)) {
             break i;
         }
-    } else entry_list.items.len - 1;
+    } else entry_list.items.len -| 1;
+
+    if (last == 0) {
+        try printer.addHeading("-- Empty --\n", .{});
+        return;
+    }
 
     printer.reverse();
     for (entry_list.items[0 .. last + 1]) |entry| {

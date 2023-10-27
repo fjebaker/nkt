@@ -134,6 +134,12 @@ pub const ArgIterator = struct {
         return arg;
     }
 
+    pub fn nextPositional(self: *ArgIterator) CLIErrors!?Arg {
+        var arg = (try self.next()) orelse return null;
+        if (arg.flag) return CLIErrors.UnknownFlag;
+        return arg;
+    }
+
     pub fn next(self: *ArgIterator) CLIErrors!?Arg {
         // check if we need the next argument
         if (self.index >= self.current.len) {

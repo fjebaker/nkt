@@ -91,6 +91,22 @@ pub const CollectionScheme = struct {
     path: []const u8,
     infos: []InfoScheme,
     tags: []Tag,
+
+    pub fn new(alloc: std.mem.Allocator, root: []const u8, name: []const u8) !CollectionScheme {
+        const path = try std.fs.path.join(alloc, &.{ root, name });
+        errdefer alloc.free(path);
+        const infos = try alloc.alloc(InfoScheme, 0);
+        errdefer alloc.free(infos);
+        const tags = try alloc.alloc(Tag, 0);
+        errdefer alloc.free(tags);
+
+        return .{
+            .name = try alloc.dupe(u8, name),
+            .path = path,
+            .infos = infos,
+            .tags = tags,
+        };
+    }
 };
 
 // directories
