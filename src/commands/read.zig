@@ -48,7 +48,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     itt.rewind();
     const prog_name = (try itt.next()).?.string;
-    std.debug.print("pname: '{s}'\n", .{prog_name});
     if (std.mem.eql(u8, prog_name, "rp")) self.pager = true;
 
     itt.counter = 0;
