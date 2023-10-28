@@ -115,7 +115,7 @@ fn importToDirectory(
     if (dir.get(filename) != null)
         return cli.SelectionError.ChildAlreadyExists;
 
-    const child = try dir.newChild(filename);
+    var child = try dir.newChild(filename);
 
     if (self.move) {
         try state.fs.moveFromCwd(
@@ -131,6 +131,9 @@ fn importToDirectory(
         );
     }
 
+    // try different processing pipelines to make modifications to the import
+    try processDendron(state, &child);
+
     try out_writer.print(
         "Imported '{s}' into directory '{s}'\n",
         .{
@@ -138,4 +141,59 @@ fn importToDirectory(
             name,
         },
     );
+}
+
+fn processDendron(state: *State, child: *State.Directory.TrackedChild) !void {
+    try child.collection.readChildContent(&child.item);
+    var content = child.item.children.?;
+
+    var itt = std.mem.tokenize(u8, content, "\n");
+
+    var map = (try parseKeyValue(state.allocator, &itt)) orelse return;
+    defer map.deinit();
+
+    const updated_s = map.get("updated") orelse return;
+    const created_s = map.get("created") orelse return;
+
+    child.item.info.modified = try std.fmt.parseInt(u64, updated_s, 10);
+    child.item.info.created = try std.fmt.parseInt(u64, created_s, 10);
+
+    const title = map.get("title") orelse return;
+
+    const stop = itt.index;
+    var new_content = try std.mem.concat(state.allocator, u8, &.{
+        "# ",
+        title,
+        "\n",
+        content[stop..],
+    });
+    defer state.allocator.free(new_content);
+    child.item.children = new_content;
+
+    try state.fs.overwrite(child.item.getPath(), new_content);
+}
+
+const StringStringMap = std.StringHashMap([]const u8);
+fn parseKeyValue(
+    alloc: std.mem.Allocator,
+    itt: *std.mem.TokenIterator(u8, .any),
+) !?StringStringMap {
+    var map = StringStringMap.init(alloc);
+    errdefer map.deinit();
+
+    const first_line = itt.next() orelse return map;
+    if (!std.mem.eql(u8, std.mem.trim(u8, first_line, " "), "---")) return map;
+
+    while (itt.next()) |line| {
+        const trimmed_line = std.mem.trim(u8, line, " \t");
+        if (std.mem.eql(u8, trimmed_line, "---")) break; // reached end
+        var line_itt = std.mem.tokenize(u8, trimmed_line, ": ");
+
+        const key = line_itt.next().?;
+        const value = line_itt.next().?;
+
+        try map.put(key, value);
+    }
+
+    return map;
 }
