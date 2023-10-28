@@ -8,7 +8,7 @@ const Printer = @import("../Printer.zig");
 
 const Self = @This();
 
-pub const alias = [_][]const u8{"r"};
+pub const alias = [_][]const u8{ "r", "rp" };
 
 pub const help = "Display the contentes of notes in various ways";
 pub const extended_help =
@@ -24,6 +24,9 @@ pub const extended_help =
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
     \\     --filename            use the filename as the print prefix
     \\     --all                 display all items (overwrites `--limit`)
+    \\     -p/--page             read via pager
+    \\
+    \\The alias `rp` is a short hand for `read --page`.
     \\
 ;
 
@@ -33,6 +36,7 @@ number: usize = 20,
 all: bool = false,
 full_date: bool = false,
 filename: bool = false,
+pager: bool = false,
 
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
@@ -42,6 +46,11 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .where = null,
     };
 
+    itt.rewind();
+    const prog_name = (try itt.next()).?.string;
+    std.debug.print("pname: '{s}'\n", .{prog_name});
+    if (std.mem.eql(u8, prog_name, "rp")) self.pager = true;
+
     itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
@@ -50,12 +59,15 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
                 self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 self.all = true;
+            } else if (arg.is('p', "pager")) {
+                self.pager = true;
             } else if (arg.is(null, "date")) {
                 self.full_date = true;
             } else if (arg.is(null, "filename")) {
                 self.filename = true;
             } else if (try parseCollection(arg, itt, true)) |col| {
-                if (self.where != null) return cli.SelectionError.AmbiguousSelection;
+                if (self.where != null)
+                    return cli.SelectionError.AmbiguousSelection;
                 self.where = col;
             } else {
                 return cli.CLIErrors.UnknownFlag;
@@ -74,7 +86,43 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
 const NoSuchCollection = State.Collection.Errors.NoSuchCollection;
 
+fn pipeToPager(
+    allocator: std.mem.Allocator,
+    pager: []const []const u8,
+    s: []const u8,
+) !void {
+    var proc = std.ChildProcess.init(
+        pager,
+        allocator,
+    );
+
+    proc.stdin_behavior = std.ChildProcess.StdIo.Pipe;
+    proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
+    proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+
+    try proc.spawn();
+    _ = try proc.stdin.?.write(s);
+    proc.stdin.?.close();
+    proc.stdin = null;
+    _ = try proc.wait();
+}
+
 pub fn run(
+    self: *Self,
+    state: *State,
+    out_writer: anytype,
+) !void {
+    if (self.pager) {
+        var buf = std.ArrayList(u8).init(state.allocator);
+        defer buf.deinit();
+        try read(self, state, buf.writer());
+        try pipeToPager(state.allocator, state.topology.pager, buf.items);
+    } else {
+        try read(self, state, out_writer);
+    }
+}
+
+fn read(
     self: *Self,
     state: *State,
     out_writer: anytype,
