@@ -20,7 +20,7 @@ pub const extended_help =
 text: ?[]const u8 = null,
 journal: ?[]const u8 = null,
 
-pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{};
 
     while (try itt.next()) |arg| {
@@ -49,19 +49,14 @@ pub fn run(
     var journal = state.getJournal(self.journal.?) orelse
         return cli.SelectionError.NoSuchJournal;
 
-    if (std.mem.eql(u8, journal_name, "diary")) {
-        const today_string = try utils.formatDateBuf(utils.Date.now());
-        var entry = journal.get(&today_string) orelse
-            try journal.newChild(&today_string);
+    const today_string = try utils.formatDateBuf(utils.Date.now());
+    var entry = journal.get(&today_string) orelse
+        try journal.newChild(&today_string);
 
-        try entry.add(self.text.?);
+    try entry.add(self.text.?);
 
-        try out_writer.print(
-            "Written text to '{s}' in journal '{s}'\n",
-            .{ entry.item.info.name, journal_name },
-        );
-    } else {
-        // todo
-        unreachable;
-    }
+    try out_writer.print(
+        "Written text to '{s}' in journal '{s}'\n",
+        .{ entry.item.info.name, journal_name },
+    );
 }
