@@ -81,6 +81,7 @@ pub fn ChildScheme(comptime S: type) type {
         }
 
         pub fn lastModified(self: S) u64 {
+            if (self.children.?.len == 0) return utils.now();
             return self.time("modified", .Max);
         }
     };
@@ -93,7 +94,7 @@ pub const CollectionScheme = struct {
     tags: []Tag,
 
     pub fn new(alloc: std.mem.Allocator, root: []const u8, name: []const u8) !CollectionScheme {
-        const path = try std.fs.path.join(alloc, &.{ root, name });
+        const path = try std.mem.concat(alloc, u8, &.{ root, name });
         errdefer alloc.free(path);
         const infos = try alloc.alloc(InfoScheme, 0);
         errdefer alloc.free(infos);

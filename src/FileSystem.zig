@@ -77,7 +77,7 @@ pub fn readFileAllocElseNull(
     };
 }
 
-fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
+pub fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
     self.dir.makeDir(path) catch |err| {
         if (err != std.os.MakeDirError.PathAlreadyExists) return err;
     };

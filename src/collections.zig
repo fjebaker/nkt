@@ -60,6 +60,13 @@ pub const Collection = union(CollectionType) {
             inline else => |i| return if (i.get(name)) |_| true else false,
         }
     }
+
+    pub fn getPath(self: *const Collection) []const u8 {
+        switch (self.*) {
+            .DirectoryWithJournal => unreachable,
+            inline else => |c| return c.container.path,
+        }
+    }
 };
 
 pub const ItemType = enum { Note, JournalEntry, DirectoryJournalItems };

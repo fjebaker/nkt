@@ -211,3 +211,9 @@ const Tag = @import("collections.zig").Tag;
 pub fn emptyTagList(allocator: std.mem.Allocator) ![]Tag {
     return try allocator.alloc(Tag, 0);
 }
+
+pub fn inferCollectionName(s: []const u8) ?[]const u8 {
+    const end = std.mem.indexOfScalar(u8, s, '/') orelse return null;
+    if (std.mem.eql(u8, s[0..3], "dir")) return s[4..end];
+    unreachable; // todo
+}

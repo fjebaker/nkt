@@ -1,5 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
 const Self = @This();
@@ -70,6 +71,10 @@ const FindState = struct {
 
                 "--bind",
                 try self.concatPaths("change:reload:rga --files-with-matches {q}"),
+
+                // make fzf emit the search term and the result
+                "--bind",
+                "enter:become(echo {q} {})",
             },
             self.mem.child_allocator,
         );
@@ -179,12 +184,11 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    const dir = state.getDirectory("notes").?;
     var paths: [][]const u8 = if (self.prefix) |p|
         try directoryNotesUnder(
             state.allocator,
             p,
-            dir,
+            state.getDirectory("notes").?,
         )
     else
         try getAllPaths(state.allocator, state);
@@ -197,10 +201,29 @@ pub fn run(
     var selected = try fs.subprocFzfRga();
     defer state.allocator.free(selected);
 
+    const out = std.mem.trim(u8, selected, " \t\n\r");
+
+    const sep = std.mem.indexOfScalar(u8, out, ' ') orelse return;
+    const search_term = out[0..sep];
+    _ = search_term;
+    const path = out[sep + 1 ..];
+
+    try readFile(state, path, out_writer);
+}
+
+fn readFile(state: *State, path: []const u8, out_writer: anytype) !void {
     var printer = Printer.init(state.allocator, null);
     defer printer.deinit();
 
-    var note = dir.getByPath(std.mem.trim(u8, selected, " \t\n\r")).?;
+    if (path.len == 0) return;
+    const c_name = utils.inferCollectionName(path).?;
+    var collection = state.getCollection(c_name).?;
+
+    var note = switch (collection) {
+        .DirectoryWithJournal => |*both| both.directory.getByPath(path).?,
+        .Directory => |d| d.getByPath(path).?,
+        else => unreachable,
+    };
 
     try note.collection.readChildContent(&note.item);
     try printer.addHeading("", .{});
