@@ -228,8 +228,8 @@ pub const TaskList = struct {
 
 const TopologySchema = struct {
     _schema_version: []const u8,
-    editor: []const u8,
-    pager: []const u8,
+    editor: [][]const u8,
+    pager: [][]const u8,
     tasklists: []TaskListDetails,
     directories: []Directory,
     journals: []Journal,
@@ -238,8 +238,8 @@ const TopologySchema = struct {
 directories: []Directory,
 journals: []Journal,
 tasklists: []TaskListDetails,
-editor: []const u8,
-pager: []const u8,
+editor: [][]const u8,
+pager: [][]const u8,
 mem: std.heap.ArenaAllocator,
 
 pub fn initNew(alloc: std.mem.Allocator) !Self {
@@ -251,8 +251,8 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
     var directories = try temp_alloc.alloc(Directory, 0);
     var journals = try temp_alloc.alloc(Journal, 0);
     var tasklists = try temp_alloc.alloc(TaskListDetails, 0);
-    var editor = try temp_alloc.dupe(u8, "vim");
-    var pager = try temp_alloc.dupe(u8, "less");
+    var editor = try temp_alloc.dupe([]const u8, &.{"vim"});
+    var pager = try temp_alloc.dupe([]const u8, &.{"less"});
 
     return .{
         .directories = directories,
