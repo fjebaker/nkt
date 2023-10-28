@@ -17,16 +17,18 @@ pub const extended_help =
     \\     <path>                path to the file to import. defaults to
     \\     [path...]               importing to the default directory. can
     \\                             specificy multiple paths
-    \\     [--journal name]      name of journal to import to (needs .json)
-    \\     [--dir name]          name of directory to import to (anything)
-    \\     [--tasklist name]     name of tasklist to import to (needs .json)
-    \\     [--move]              move the file instead of copying
+    \\     --journal name        name of journal to import to (needs .json)
+    \\     --dir name            name of directory to import to (anything)
+    \\     --tasklist name       name of tasklist to import to (needs .json)
+    \\     --move                move the file instead of copying
     \\
 ;
 
 paths: ?[][]const u8,
 where: ?cli.SelectedCollection,
 move: bool = false,
+
+const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{ .where = null, .paths = null };
@@ -36,30 +38,10 @@ pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (arg.is(null, "journal")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(
-                        .Journal,
-                        value.string,
-                    );
-                }
-            } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(
-                        .Directory,
-                        value.string,
-                    );
-                }
-            } else if (arg.is(null, "tasklist")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(
-                        .TaskList,
-                        value.string,
-                    );
-                }
+            if (try parseCollection(arg, itt, true)) |col| {
+                if (self.where != null)
+                    return cli.SelectionError.AmbiguousSelection;
+                self.where = col;
             } else if (arg.is(null, "move")) {
                 self.move = true;
             } else {
@@ -189,8 +171,8 @@ fn parseKeyValue(
         if (std.mem.eql(u8, trimmed_line, "---")) break; // reached end
         var line_itt = std.mem.tokenize(u8, trimmed_line, ": ");
 
-        const key = line_itt.next().?;
-        const value = line_itt.next().?;
+        const key = line_itt.next() orelse continue;
+        const value = line_itt.next() orelse continue;
 
         try map.put(key, value);
     }
