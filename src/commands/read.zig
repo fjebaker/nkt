@@ -18,10 +18,10 @@ pub const extended_help =
     \\                             entry. if choice is ambiguous, will print both,
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
-    \\     [--journal name]      name of journal to read from
-    \\     [--dir name]          name of directory to read from
-    \\     [-n/--limit int]      maximum number of entries to display (default: 25)
-    \\     [--all]               display all items (overwrites `--limit`)
+    \\     -j/--journal name     name of journal to read from
+    \\     -d/--director name    name of directory to read from
+    \\     -n/--limit int        maximum number of entries to display (default: 25)
+    \\     --all                 display all items (overwrites `--limit`)
     \\
 ;
 
@@ -29,6 +29,8 @@ selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
 number: usize,
 all: bool,
+
+const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{
@@ -46,7 +48,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
                 self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 self.all = true;
-            } else if (try cli.selections.parseJournalDirectoryItemlistFlag(arg, itt, true)) |col| {
+            } else if (try parseCollection(arg, itt, true)) |col| {
                 if (self.where != null) return cli.SelectionError.AmbiguousSelection;
                 self.where = col;
             } else {
@@ -116,6 +118,11 @@ fn readJournal(
     var alloc = printer.mem.allocator();
     var entry_list = try journal.getChildList(alloc);
 
+    if (entry_list.items.len == 0) {
+        try printer.addHeading("-- Empty --\n", .{});
+        return;
+    }
+
     entry_list.sortBy(.Created);
     entry_list.reverse();
 
@@ -128,11 +135,6 @@ fn readJournal(
             break i;
         }
     } else entry_list.items.len -| 1;
-
-    if (last == 0) {
-        try printer.addHeading("-- Empty --\n", .{});
-        return;
-    }
 
     printer.reverse();
     for (entry_list.items[0 .. last + 1]) |entry| {

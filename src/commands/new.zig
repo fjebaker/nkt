@@ -27,7 +27,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
     if (self.collection_type == .DirectoryWithJournal) return cli.CLIErrors.BadArgument;
 
-    _ = try state.newCollection(self.collection_type, self.name);
+    const c = try state.newCollection(self.collection_type, self.name);
+    try state.fs.makeDirIfNotExists(c.getPath());
 
     try out_writer.print(
         "{s} '{s}' created\n",

@@ -11,10 +11,11 @@ pub const alias = [_][]const u8{"rm"};
 
 pub const help = "Remove a note from a directory, an entry from a journal, or an item from an entry.";
 pub const extended_help =
-    \\Remove a note from a directory, an entry from a journal, or an item from an 
-    \\entry.
+    \\Remove a note from a directory, an entry from a journal, or an item 
+    \\from an entry.
     \\  nkt remove
-    \\     --collection <type>   remove full collection instead of child of collection (default: false)
+    \\     --collection <type>   remove full collection instead of child of 
+    \\                           collection (default: false)
     \\     <what>                what to remove: name of a journal entry, or a note.
     \\                             if choice is ambiguous, will fail unless
     \\                             specified with the `--journal` or `--dir`
