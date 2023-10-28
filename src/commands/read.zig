@@ -21,14 +21,18 @@ pub const extended_help =
     \\     -j/--journal name     name of journal to read from
     \\     -d/--director name    name of directory to read from
     \\     -n/--limit int        maximum number of entries to display (default: 25)
+    \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
+    \\     --filename            use the filename as the print prefix
     \\     --all                 display all items (overwrites `--limit`)
     \\
 ;
 
 selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
-number: usize,
-all: bool,
+number: usize = 20,
+all: bool = false,
+full_date: bool = false,
+filename: bool = false,
 
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
@@ -36,8 +40,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{
         .selection = null,
         .where = null,
-        .number = 25,
-        .all = false,
     };
 
     itt.counter = 0;
@@ -48,6 +50,10 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
                 self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 self.all = true;
+            } else if (arg.is(null, "date")) {
+                self.full_date = true;
+            } else if (arg.is(null, "filename")) {
+                self.filename = true;
             } else if (try parseCollection(arg, itt, true)) |col| {
                 if (self.where != null) return cli.SelectionError.AmbiguousSelection;
                 self.where = col;
@@ -59,6 +65,9 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             self.selection = try cli.Selection.parse(arg.string);
         }
     }
+
+    if (self.full_date and self.filename)
+        return cli.SelectionError.IncompatibleSelection;
 
     return self;
 }
@@ -146,17 +155,54 @@ fn readJournal(
 
 fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
     const date = utils.Date.initUnixMs(item.created);
-    const time_of_day = utils.formatTimeBuf(date) catch return Printer.WriteError.DateError;
+    const time_of_day = utils.formatTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+
     try writer.print("{s} - {s}\n", .{ time_of_day, item.item });
 }
 
+fn printEntryFullTime(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
+    const date = utils.Date.initUnixMs(item.created);
+    const time = utils.formatDateTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+
+    try writer.print("{s} - {s}\n", .{ time, item.item });
+}
+
+const FilenameClosure = struct { filename: []const u8 };
+fn printEntryItemFilename(
+    fc: FilenameClosure,
+    writer: Printer.Writer,
+    item: State.Journal.Child.Item,
+) Printer.WriteError!void {
+    const date = utils.Date.initUnixMs(item.created);
+    const time_of_day = utils.formatTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+    try writer.print("{s} {s} - {s}\n", .{ fc.filename, time_of_day, item.item });
+}
+
 fn readJournalEntry(
-    _: *Self,
+    self: *Self,
     entry: State.Journal.Child,
     printer: *Printer,
 ) !void {
-    try printer.addHeading("Journal entry: {s}\n\n", .{entry.info.name});
-    _ = try printer.addItems(entry.children, printEntryItem);
+    if (!self.filename) {
+        try printer.addHeading("Journal entry: {s}\n\n", .{entry.info.name});
+        if (self.full_date) {
+            _ = try printer.addItems(entry.children, printEntryFullTime);
+        } else {
+            _ = try printer.addItems(entry.children, printEntryItem);
+        }
+    } else {
+        try printer.addHeading("", .{});
+        var capture: FilenameClosure = .{ .filename = entry.getPath() };
+        _ = try printer.addItemsCtx(
+            FilenameClosure,
+            entry.children,
+            printEntryItemFilename,
+            capture,
+        );
+    }
 }
 
 fn readNote(

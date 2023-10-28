@@ -78,6 +78,25 @@ pub fn addItems(
     items: anytype,
     comptime write_function: fn (writer: Writer, item: ChildType(@TypeOf(items))) WriteError!void,
 ) !bool {
+    const Wrapper = struct {
+        pub fn write_function_wrapper(
+            _: void,
+            writer: Writer,
+            item: ChildType(@TypeOf(items)),
+        ) WriteError!void {
+            return write_function(writer, item);
+        }
+    };
+    return self.addItemsCtx(void, items, Wrapper.write_function_wrapper, {});
+}
+
+pub fn addItemsCtx(
+    self: *Printer,
+    comptime ContextType: type,
+    items: anytype,
+    comptime write_function: fn (ContextType, writer: Writer, item: ChildType(@TypeOf(items))) WriteError!void,
+    context: ContextType,
+) !bool {
     const _items = if (@typeInfo(@TypeOf(items)) == .Optional) items.? else items;
     var chunk = self.current orelse return PrinterError.HeadingMissing;
 
@@ -89,7 +108,7 @@ pub fn addItems(
         0;
 
     for (_items[start..]) |item| {
-        try write_function(writer, item);
+        try write_function(context, writer, item);
     }
 
     return self.subRemainder(_items.len - start);
