@@ -6,7 +6,7 @@ const Self = @This();
 pub const DIARY_DIRECTORY = "log";
 pub const NOTES_DIRECTORY = "notes";
 
-pub const MAXIMUM_BYTES_READ = 16384;
+pub const MAXIMUM_BYTES_READ = std.math.pow(usize, 2, 24);
 
 root_path: []const u8,
 dir: std.fs.Dir,
