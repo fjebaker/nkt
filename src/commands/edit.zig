@@ -18,8 +18,8 @@ pub const extended_help =
     \\                             entry. if choice is ambiguous, will print both,
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
-    \\     [--journal name]      name of journal to read from
-    \\     [--dir name]          name of directory to read from
+    \\     --journal name        name of journal to read from
+    \\     --dir name            name of directory to read from
     \\
     \\Examples:
     \\=========
@@ -33,7 +33,7 @@ pub const extended_help =
 selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
 
-pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{ .selection = null, .where = null };
 
     itt.counter = 0;
@@ -82,13 +82,6 @@ fn createDefaultInDirectory(
         if (self.where) |w| {
             break :blk state.getDirectory(w.name) orelse
                 return cli.SelectionError.UnknownCollection;
-            // var where = state.getCollection(w.name) orelse
-            //     return cli.SelectionError.UnknownCollection;
-            // break :blk switch (where) {
-            //     .Directory => |d| d,
-            //     .DirectoryWithJournal => |d| d.directory,
-            //     else => unreachable,
-            // };
         } else break :blk state.getDirectory(default_dir).?;
     };
 
