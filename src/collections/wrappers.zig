@@ -25,6 +25,7 @@ pub fn CollectionTemplate(
         content: ContentMap,
         fs: FileSystem,
         index: IndexContainer,
+        modified: bool,
 
         pub fn init(alloc: std.mem.Allocator, c: *Topology.CollectionScheme, fs: FileSystem) !Self {
             var mem = std.heap.ArenaAllocator.init(alloc);
@@ -41,6 +42,7 @@ pub fn CollectionTemplate(
                 .content = content,
                 .fs = fs,
                 .index = index,
+                .modified = false,
             };
         }
 
