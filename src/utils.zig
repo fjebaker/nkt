@@ -3,7 +3,11 @@ const time = @import("time");
 
 pub const DateError = error{DateStringTooShort};
 
-pub const Date = time.DateTime;
+pub const Date = time.datetime.Datetime;
+
+pub fn dateFromMs(ms: u64) Date {
+    return Date.fromTimestamp(@intCast(ms));
+}
 
 pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
@@ -79,17 +83,16 @@ pub fn isAlias(
     return false;
 }
 
-const TIMEZONE: u16 = 1;
+const TIMEZONE = time.timezones.GB;
+const EQUINOX = d: {
+    var date = Date.fromDate(2023, 10, 29) catch @compileError("Equinox: bad date");
+    date.time.hour = 2;
+    break :d date;
+};
 
-pub fn adjustTimezone(date: Date) Date {
-    var modified = date.addHours(TIMEZONE);
-    if (modified.hours >= 24) {
-        const rem = modified.hours % 24;
-        const days = modified.hours / 24;
-        modified = date.addDays(days);
-        modified.hours = rem;
-    }
-    return modified;
+fn adjustTimezone(date: Date) Date {
+    if (date.lt(EQUINOX)) return date.shiftHours(1);
+    return date.shiftTimezone(&TIMEZONE);
 }
 
 pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
@@ -107,41 +110,38 @@ pub fn toDate(string: []const u8) !Date {
     if (string.len < 10) return DateError.DateStringTooShort;
     const year = try std.fmt.parseInt(u16, string[0..4], 10);
     // months and day start at zero
-    const month = try std.fmt.parseInt(u16, string[5..7], 10) - 1;
-    const day = try std.fmt.parseInt(u16, string[8..10], 10) - 1;
+    const month = try std.fmt.parseInt(u8, string[5..7], 10) - 1;
+    const day = try std.fmt.parseInt(u8, string[8..10], 10) - 1;
 
     return newDate(year, month, day);
 }
 
-pub const TimeStamp = struct { h: u16, m: u16, s: u16 };
+pub const TimeStamp = struct { h: u8, m: u8, s: u8 };
 
 pub fn toTime(string: []const u8) !TimeStamp {
     if (string.len < 8) return DateError.DateStringTooShort;
-    const hour = try std.fmt.parseInt(u16, string[0..2], 10);
-    const minute = try std.fmt.parseInt(u16, string[3..5], 10);
-    const seconds = try std.fmt.parseInt(u16, string[6..8], 10);
-    return .{ .h = hour - TIMEZONE, .m = minute, .s = seconds };
+    const hour = try std.fmt.parseInt(u8, string[0..2], 10);
+    const minute = try std.fmt.parseInt(u8, string[3..5], 10);
+    const seconds = try std.fmt.parseInt(u8, string[6..8], 10);
+    return .{ .h = hour, .m = minute, .s = seconds };
 }
 
 pub fn areSameDay(d1: Date, d2: Date) bool {
     return d1.years == d2.years and d1.months == d2.months and d1.days == d2.days;
 }
 
-pub fn newDate(year: u16, month: u16, day: u16) Date {
-    return Date.init(year, month, day, 0, 0, 0);
-}
-
-pub fn formatDate(alloc: std.mem.Allocator, date: Date) ![]const u8 {
-    const t_date = adjustTimezone(date);
-    return t_date.formatAlloc(alloc, "YYYY-MM-DD");
+pub fn newDate(year: u16, month: u8, day: u8) !Date {
+    return try Date.fromDate(year, month, day);
 }
 
 pub fn formatDateBuf(date: Date) ![10]u8 {
     const t_date = adjustTimezone(date);
     var buf: [10]u8 = undefined;
     var bufstream = std.io.fixedBufferStream(&buf);
-    var writer = bufstream.writer();
-    try t_date.format("YYYY-MM-DD", .{}, writer);
+    try bufstream.writer().print(
+        "{d:0>4}-{d:0>2}-{d:0>2}",
+        .{ t_date.date.year, t_date.date.month, t_date.date.day },
+    );
     return buf;
 }
 
@@ -149,28 +149,34 @@ pub fn formatTimeBuf(date: Date) ![8]u8 {
     const t_date = adjustTimezone(date);
     var buf: [8]u8 = undefined;
     var bufstream = std.io.fixedBufferStream(&buf);
-    var writer = bufstream.writer();
-    try t_date.format("HH:mm:ss", .{}, writer);
+    try bufstream.writer().print(
+        "{d:0>2}:{d:0>2}:{d:0>2}",
+        .{ t_date.time.hour, t_date.time.minute, t_date.time.second },
+    );
     return buf;
 }
 
 pub fn formatDateTimeBuf(date: Date) ![19]u8 {
-    const t_date = adjustTimezone(date);
     var buf: [19]u8 = undefined;
-    var bufstream = std.io.fixedBufferStream(&buf);
-    var writer = bufstream.writer();
-    try t_date.format("YYYY-MM-DD HH:mm:ss", .{}, writer);
+
+    const date_s = try formatDateBuf(date);
+    const time_s = try formatTimeBuf(date);
+
+    @memcpy(buf[0..10], &date_s);
+    buf[10] = ' ';
+    @memcpy(buf[11..], &time_s);
+
     return buf;
 }
 
 pub fn dayOfWeek(alloc: std.mem.Allocator, date: Date) ![]const u8 {
     const t_date = adjustTimezone(date);
-    return t_date.formatAlloc(alloc, "dddd");
+    return alloc.dupe(u8, t_date.date.weekdayName());
 }
 
 pub fn monthOfYear(alloc: std.mem.Allocator, date: Date) ![]const u8 {
     const t_date = adjustTimezone(date);
-    return t_date.formatAlloc(alloc, "MMMM");
+    return alloc.dupe(u8, t_date.date.monthName());
 }
 
 fn testToDateAndBack(s: []const u8) !void {

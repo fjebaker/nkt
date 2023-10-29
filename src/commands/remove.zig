@@ -184,7 +184,7 @@ fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out
     const ItemType = State.Journal.Child.Item;
     const marked_child: ItemType = for (j.item.children.?) |i| {
         const created_time = try utils.formatTimeBuf(
-            utils.Date.initUnixMs(i.created),
+            utils.dateFromMs(i.created),
         );
         if (std.mem.eql(u8, &created_time, time)) {
             break i;
