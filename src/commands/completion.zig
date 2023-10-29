@@ -70,8 +70,10 @@ fn listCommandHelp(
     var writer = buf.writer();
 
     inline for (@typeInfo(Commands).Union.fields) |field| {
-        const help_text = @field(field.type, "help");
-        try writer.print("'{s}:{s}' ", .{ field.name, help_text });
+        if (!std.mem.eql(u8, field.name, "completion")) {
+            const help_text = @field(field.type, "help");
+            try writer.print("'{s}:{s}' ", .{ field.name, help_text });
+        }
     }
 
     return buf.toOwnedSlice();
@@ -88,7 +90,7 @@ fn printZshCompletionFile(alloc: std.mem.Allocator, writer: anytype) !void {
         \\    local line state
         \\    _arguments -C \
         \\               "1: :->cmds" \
-        \\               "*::arg:->args"
+        \\               "2::arg:->args"
         \\
         \\    case "$state" in
         \\        cmds)
