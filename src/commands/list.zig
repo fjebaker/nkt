@@ -3,6 +3,7 @@ const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
+const TaskPrinter = @import("../TaskPrinter.zig");
 
 const Self = @This();
 
@@ -166,37 +167,21 @@ fn listTasks(
 ) !void {
     const Task = State.TaskList.Child.Item;
     _ = self;
+
     var tasks = try tasklist.getItemList(alloc);
     defer tasks.deinit();
 
     std.sort.insertion(Task, tasks.items, {}, Task.sortDue);
     std.mem.reverse(Task, tasks.items);
 
-    const now = utils.Date.now();
-    const SECONDS_IN_HOUR = 60 * 60;
+    var printer = TaskPrinter.init(alloc);
+    defer printer.deinit();
+
     for (tasks.items) |task| {
-        const duration = d: {
-            if (task.due) |due| {
-                const due_date = utils.dateFromMs(due);
-                const delta = due_date.sub(now);
-                const hours = @divFloor(delta.seconds, SECONDS_IN_HOUR);
-                const minutes = @divFloor(@rem(delta.seconds, SECONDS_IN_HOUR), 60);
-
-                break :d try std.fmt.allocPrint(
-                    alloc,
-                    "{d}d {d}h {d}m",
-                    .{ delta.days, hours, minutes },
-                );
-            }
-            break :d try alloc.dupe(u8, "-");
-        };
-        defer alloc.free(duration);
-
-        try writer.print(
-            "{s} : {s}\n",
-            .{ duration, task.text },
-        );
+        try printer.add(task);
     }
+
+    try printer.drain(writer);
 }
 
 fn is(s: []const u8, other: []const u8) bool {
