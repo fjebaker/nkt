@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const time = b.dependency("time", .{}).module("time");
+    const time = b.dependency("time", .{}).module("zig-datetime");
 
     const exe = b.addExecutable(.{
         .name = "nkt",

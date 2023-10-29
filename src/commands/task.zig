@@ -38,7 +38,7 @@ fn parseDateTimeLike(string: []const u8) !utils.Date {
             break :blk utils.Date.now();
         } else if (std.mem.eql(u8, date_like, "tomorrow")) {
             var today = utils.Date.now();
-            break :blk today.addDays(1);
+            break :blk today.shiftDays(1);
         } else return cli.CLIErrors.BadArgument;
     };
 
@@ -58,9 +58,9 @@ fn parseDateTimeLike(string: []const u8) !utils.Date {
         } else return cli.CLIErrors.BadArgument;
     };
 
-    day.hours = time.h;
-    day.minutes = time.m;
-    day.seconds = time.s;
+    day.time.hour = time.h;
+    day.time.minute = time.m;
+    day.time.second = time.s;
 
     return day;
 }
@@ -73,7 +73,7 @@ by: ?utils.Date = null,
 importance: ?Importance = null,
 details: ?[]const u8 = null,
 
-pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{};
 
     while (try itt.next()) |arg| {
@@ -130,7 +130,7 @@ pub fn run(
         var tl: State.TaskList.TrackedChild = tasklist.get("general") orelse
             try tasklist.newChild("general");
 
-        const by = if (self.by) |b| b.toUnixMilli() else null;
+        const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
 
         try tl.add(
             self.text.?,

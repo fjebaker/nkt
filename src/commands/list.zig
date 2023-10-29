@@ -29,7 +29,7 @@ ordering: State.Ordering,
 number: usize,
 all: bool,
 
-pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var self: Self = .{
         .selection = "",
         .ordering = .Modified,
@@ -93,8 +93,8 @@ fn listDirectory(
             try writer.print("{s}\n", .{note.getName()});
         } else {
             const date = switch (self.ordering) {
-                .Modified => utils.Date.initUnixMs(note.info.modified),
-                .Created => utils.Date.initUnixMs(note.info.created),
+                .Modified => utils.dateFromMs(note.info.modified),
+                .Created => utils.dateFromMs(note.info.created),
             };
             const date_string = try utils.formatDateBuf(date);
             try writer.print("{s} - {s}\n", .{ date_string, note.getName() });

@@ -126,7 +126,7 @@ pub fn CollectionTemplate(
         ) ?Self.TrackedChild {
             var items = self.container.infos;
             for (items) |*item| {
-                const entry_date = utils.Date.initUnixMs(switch (order) {
+                const entry_date = utils.dateFromMs(switch (order) {
                     .Created => item.timeCreated(),
                     .Modified => item.timeModified(),
                 });

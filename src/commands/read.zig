@@ -202,7 +202,7 @@ fn readJournal(
 }
 
 fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
-    const date = utils.Date.initUnixMs(item.created);
+    const date = utils.dateFromMs(item.created);
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
@@ -210,7 +210,7 @@ fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printe
 }
 
 fn printEntryFullTime(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
-    const date = utils.Date.initUnixMs(item.created);
+    const date = utils.dateFromMs(item.created);
     const time = utils.formatDateTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
@@ -223,7 +223,7 @@ fn printEntryItemFilename(
     writer: Printer.Writer,
     item: State.Journal.Child.Item,
 ) Printer.WriteError!void {
-    const date = utils.Date.initUnixMs(item.created);
+    const date = utils.dateFromMs(item.created);
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
     try writer.print("{s} {s} - {s}\n", .{ fc.filename, time_of_day, item.item });
