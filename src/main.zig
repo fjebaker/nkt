@@ -21,6 +21,8 @@ pub const Commands = union(enum) {
     rename: @import("commands/rename.zig"),
     task: @import("commands/task.zig"),
 
+    completion: @import("commands/completion.zig"),
+
     pub fn run(
         self: *Commands,
         state: *State,

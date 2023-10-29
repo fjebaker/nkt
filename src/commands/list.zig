@@ -102,22 +102,28 @@ fn listDirectory(
     }
 }
 
-fn listNames(
-    _: *const Self,
+pub fn listNames(
     cnames: State.CollectionNameList,
     what: State.CollectionType,
     writer: anytype,
+    opts: struct { oneline: bool = false },
 ) !void {
-    switch (what) {
-        .Directory => try writer.print("Directories list:\n", .{}),
-        .Journal => try writer.print("Journals list:\n", .{}),
-        .TaskList => try writer.print("Tasklist list:\n", .{}),
-        .DirectoryWithJournal => unreachable,
+    if (!opts.oneline) {
+        switch (what) {
+            .Directory => try writer.print("Directories list:\n", .{}),
+            .Journal => try writer.print("Journals list:\n", .{}),
+            .TaskList => try writer.print("Tasklist list:\n", .{}),
+            .DirectoryWithJournal => unreachable,
+        }
     }
 
     for (cnames.items) |name| {
-        if (name.collection == what) {
-            try writer.print(" {s}\n", .{name.name});
+        if (name.collection != what) continue;
+
+        if (opts.oneline) {
+            try writer.print("{s} ", .{name.name});
+        } else {
+            try writer.print(" - {s}\n", .{name.name});
         }
     }
 }
@@ -162,24 +168,24 @@ pub fn run(
         var cnames = try state.getCollectionNames(state.allocator);
         defer cnames.deinit();
 
-        try self.listNames(cnames, .Directory, out_writer);
-        try self.listNames(cnames, .Journal, out_writer);
-        try self.listNames(cnames, .TaskList, out_writer);
+        try listNames(cnames, .Directory, out_writer, .{});
+        try listNames(cnames, .Journal, out_writer, .{});
+        try listNames(cnames, .TaskList, out_writer, .{});
     } else if (is(self.selection, "directories") or is(self.selection, "dirs")) {
         var cnames = try state.getCollectionNames(state.allocator);
         defer cnames.deinit();
 
-        try self.listNames(cnames, .Directory, out_writer);
+        try listNames(cnames, .Directory, out_writer, .{});
     } else if (is(self.selection, "journals") or is(self.selection, "jrnl")) {
         var cnames = try state.getCollectionNames(state.allocator);
         defer cnames.deinit();
 
-        try self.listNames(cnames, .Journal, out_writer);
+        try listNames(cnames, .Journal, out_writer, .{});
     } else if (is(self.selection, "tasklists") or is(self.selection, "tasks")) {
         var cnames = try state.getCollectionNames(state.allocator);
         defer cnames.deinit();
 
-        try self.listNames(cnames, .TaskList, out_writer);
+        try listNames(cnames, .TaskList, out_writer, .{});
     } else {
         var collection = state.getCollection(self.selection) orelse
             return State.Collection.Errors.NoSuchCollection;
