@@ -187,8 +187,11 @@ pub fn writeChanges(
     collection: anytype,
     alloc: std.mem.Allocator,
 ) !void {
-    if (@typeInfo(@TypeOf(collection)) != .Pointer)
+    const tinfo = @typeInfo(@TypeOf(collection));
+    if (tinfo != .Pointer)
         @compileError("Must be a pointer");
+
+    const Parent = tinfo.Pointer.child;
 
     for (collection.container.infos) |*info| {
         var entry = collection.get(info.name).?;
@@ -199,7 +202,7 @@ pub fn writeChanges(
         info.modified = modified;
 
         // write entries back to file
-        const string = try Journal.Child.stringifyContent(alloc, children);
+        const string = try Parent.Child.stringifyContent(alloc, children);
         defer alloc.free(string);
 
         try collection.fs.overwrite(info.path, string);

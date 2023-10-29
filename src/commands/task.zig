@@ -55,14 +55,31 @@ fn parseDateTimeLike(string: []const u8) !utils.Date {
             break :blk comptime try utils.toTime("19:00:00");
         } else if (std.mem.eql(u8, time_like, "night")) {
             break :blk comptime try utils.toTime("23:00:00");
-        } else return cli.CLIErrors.BadArgument;
+        } else break :blk utils.Time{ .hour = 13, .minute = 0, .second = 0 };
     };
 
-    day.time.hour = time.h;
-    day.time.minute = time.m;
-    day.time.second = time.s;
+    day.time.hour = time.hour;
+    day.time.minute = time.minute;
+    day.time.second = time.second;
 
     return day;
+}
+
+fn testTimeParsing(s: []const u8, date: utils.Date) !void {
+    const eq = std.testing.expectEqual;
+    const parsed = try parseDateTimeLike(s);
+
+    try eq(parsed.date.day, date.date.day);
+    try eq(parsed.time.hour, date.time.hour);
+}
+
+test "time parsing" {
+    var nowish = utils.Date.now();
+    nowish.time.hour = 13;
+    nowish.time.minute = 0;
+    nowish.time.second = 0;
+
+    try testTimeParsing("tomorrow", nowish.shiftDays(1));
 }
 
 const Importance = State.TaskList.Child.Item.Importance;

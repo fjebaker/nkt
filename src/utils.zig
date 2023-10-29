@@ -3,6 +3,7 @@ const time = @import("time");
 
 pub const DateError = error{DateStringTooShort};
 
+pub const Time = time.datetime.Time;
 pub const Date = time.datetime.Datetime;
 
 pub fn dateFromMs(ms: u64) Date {
@@ -110,20 +111,18 @@ pub fn toDate(string: []const u8) !Date {
     if (string.len < 10) return DateError.DateStringTooShort;
     const year = try std.fmt.parseInt(u16, string[0..4], 10);
     // months and day start at zero
-    const month = try std.fmt.parseInt(u8, string[5..7], 10) - 1;
-    const day = try std.fmt.parseInt(u8, string[8..10], 10) - 1;
+    const month = try std.fmt.parseInt(u8, string[5..7], 10);
+    const day = try std.fmt.parseInt(u8, string[8..10], 10);
 
     return newDate(year, month, day);
 }
 
-pub const TimeStamp = struct { h: u8, m: u8, s: u8 };
-
-pub fn toTime(string: []const u8) !TimeStamp {
+pub fn toTime(string: []const u8) !Time {
     if (string.len < 8) return DateError.DateStringTooShort;
     const hour = try std.fmt.parseInt(u8, string[0..2], 10);
     const minute = try std.fmt.parseInt(u8, string[3..5], 10);
     const seconds = try std.fmt.parseInt(u8, string[6..8], 10);
-    return .{ .h = hour, .m = minute, .s = seconds };
+    return .{ .hour = hour, .minute = minute, .second = seconds };
 }
 
 pub fn areSameDay(d1: Date, d2: Date) bool {
@@ -179,12 +178,6 @@ pub fn monthOfYear(alloc: std.mem.Allocator, date: Date) ![]const u8 {
     return alloc.dupe(u8, t_date.date.monthName());
 }
 
-fn testToDateAndBack(s: []const u8) !void {
-    const date = try toDate(s);
-    const back = try formatDateBuf(date);
-    try std.testing.expectEqualSlices(u8, s, back[0..10]);
-}
-
 pub fn push(
     comptime T: type,
     allocator: std.mem.Allocator,
@@ -199,6 +192,12 @@ pub fn push(
     return &list.*[list.len - 1];
 }
 
+fn testToDateAndBack(s: []const u8) !void {
+    const date = try toDate(s);
+    const back = try formatDateBuf(date);
+    try std.testing.expectEqualSlices(u8, s, back[0..10]);
+}
+
 test "to date" {
     try testToDateAndBack("2023-01-10");
     try testToDateAndBack("2010-02-19");
@@ -206,10 +205,16 @@ test "to date" {
 }
 
 test "time shift" {
-    var date = Date.init(2023, 10, 10, 23, 13, 0);
+    var date = t: {
+        var d = try Date.fromDate(2023, 10, 10);
+        d.time.hour = 23;
+        d.time.minute = 13;
+        d.time.second = 0;
+        break :t d;
+    };
     const new = adjustTimezone(date);
-    try std.testing.expectEqual(new.hours, 0);
-    try std.testing.expectEqual(new.days, 11);
+    try std.testing.expectEqual(new.time.hour, 0);
+    try std.testing.expectEqual(new.date.day, 11);
 }
 
 pub fn moveToEnd(comptime T: type, items: []T, index: usize) void {

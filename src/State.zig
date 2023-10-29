@@ -90,6 +90,9 @@ pub fn writeChanges(self: *Self) !void {
     for (self.journals) |*journal| {
         try collections.writeChanges(journal, self.allocator);
     }
+    for (self.tasklists) |*tls| {
+        try collections.writeChanges(tls, self.allocator);
+    }
 
     const data = try self.topology.toString(self.allocator);
     defer self.allocator.free(data);
