@@ -156,7 +156,7 @@ pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
             const note = switch (what) {
                 .ByName => |name| dir.get(name),
                 .ByIndex => |index| dir.getIndex(index),
-                .ByDate => unreachable,
+                .ByDate => return null,
             } orelse return null;
             return .{ .Note = note };
         },

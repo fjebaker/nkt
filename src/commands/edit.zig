@@ -117,7 +117,8 @@ fn findOrCreateDefault(self: *Self, state: *State) !State.DirectoryItem {
         state,
         self.where,
         selection,
-    ) orelse return try createDefaultInDirectory(self, state);
+    ) orelse
+        return try createDefaultInDirectory(self, state);
 
     switch (item) {
         .DirectoryJournalItems => |d| return d.directory,
