@@ -168,7 +168,12 @@ pub fn getSelectedCollectionIndex(self: *Self, collection: CollectionType, name:
 pub fn getCollection(self: *Self, name: []const u8) ?Collection {
     const maybe_journal: ?*Journal = self.getJournal(name);
     const maybe_directory: ?*Directory = self.getDirectory(name);
-    return Collection.initDirectoryJournal(maybe_directory, maybe_journal);
+    const maybe_tasklist: ?*TaskList = self.getTaskList(name);
+    return Collection.initMaybe(
+        maybe_directory,
+        maybe_journal,
+        maybe_tasklist,
+    );
 }
 
 pub const CollectionNameList = struct {

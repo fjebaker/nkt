@@ -6,7 +6,7 @@ const State = @import("../State.zig");
 
 const Self = @This();
 
-pub const alias = [_][]const u8{"todo"};
+pub const alias = [_][]const u8{ "todo", "t" };
 
 pub const help = "Add a task to a specified task list.";
 

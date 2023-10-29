@@ -14,28 +14,31 @@ pub const help = "List notes in various ways.";
 pub const extended_help =
     \\List notes in various ways to the terminal.
     \\  nkt list
-    \\     [what]                list journals, directories, tasklists, or notes
+    \\     <what>                list journals, directories, tasklists, or notes
     \\                             with a `directory` to list. this option may
     \\                             also be `all` to list everything (default: all)
-    \\     [-n/--limit int]      maximum number of entries to list (default: 25)
-    \\     [--all]               list all entries (ignores `--limit`)
-    \\     [--modified]          sort by last modified (default)
-    \\     [--created]           sort by date created
+    \\     -n/--limit int        maximum number of entries to list (default: 25)
+    \\     --all                 list all entries (ignores `--limit`)
+    \\     --modified            sort by last modified (default)
+    \\     --created             sort by date created
+    \\     --pretty/--nopretty   pretty format the output, or don't (default
+    \\                           is to pretty format)
+    \\
+    \\When the `<what>` is a task list, the additional options are
+    \\     --due                 list in order of when something is due (default)
+    \\     --importance          list in order of importance
+    \\     --done                list also those tasks marked as done
     \\
 ;
 
-selection: []const u8,
-ordering: State.Ordering,
-number: usize,
-all: bool,
+selection: []const u8 = "",
+ordering: State.Ordering = .Modified,
+number: usize = 25,
+all: bool = false,
+pretty: bool = true,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var self: Self = .{
-        .selection = "",
-        .ordering = .Modified,
-        .number = 25,
-        .all = false,
-    };
+    var self: Self = .{};
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
@@ -155,6 +158,47 @@ fn listJournal(
     }
 }
 
+fn listTasks(
+    self: *Self,
+    alloc: std.mem.Allocator,
+    tasklist: *State.TaskList,
+    writer: anytype,
+) !void {
+    const Task = State.TaskList.Child.Item;
+    _ = self;
+    var tasks = try tasklist.getItemList(alloc);
+    defer tasks.deinit();
+
+    std.sort.insertion(Task, tasks.items, {}, Task.sortDue);
+    std.mem.reverse(Task, tasks.items);
+
+    const now = utils.Date.now();
+    const SECONDS_IN_HOUR = 60 * 60;
+    for (tasks.items) |task| {
+        const duration = d: {
+            if (task.due) |due| {
+                const due_date = utils.dateFromMs(due);
+                const delta = due_date.sub(now);
+                const hours = @divFloor(delta.seconds, SECONDS_IN_HOUR);
+                const minutes = @divFloor(@rem(delta.seconds, SECONDS_IN_HOUR), 60);
+
+                break :d try std.fmt.allocPrint(
+                    alloc,
+                    "{d}d {d}h {d}m",
+                    .{ delta.days, hours, minutes },
+                );
+            }
+            break :d try alloc.dupe(u8, "-");
+        };
+        defer alloc.free(duration);
+
+        try writer.print(
+            "{s} : {s}\n",
+            .{ duration, task.text },
+        );
+    }
+}
+
 fn is(s: []const u8, other: []const u8) bool {
     return std.mem.eql(u8, s, other);
 }
@@ -200,7 +244,9 @@ pub fn run(
                 try self.listDirectory(state.allocator, dj.directory, out_writer);
                 try self.listJournal(state.allocator, dj.journal, out_writer);
             },
-            .TaskList => unreachable, // todo
+            .TaskList => |tl| {
+                try self.listTasks(state.allocator, tl, out_writer);
+            },
         }
     }
 }

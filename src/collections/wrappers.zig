@@ -86,13 +86,31 @@ pub fn CollectionTemplate(
             return List.initOwned(alloc, children);
         }
 
+        const ListOfTasks = utils.List(Child.Item);
+        pub fn getItemList(self: *@This(), alloc: std.mem.Allocator) !ListOfTasks {
+            var childlist = try self.getChildList(alloc);
+            defer childlist.deinit();
+
+            var all_tasks = std.ArrayList(Child.Item).init(alloc);
+            defer all_tasks.deinit();
+
+            for (childlist.items) |*list| {
+                try self.readChildContent(list);
+                for (list.children.?) |task| {
+                    try all_tasks.append(task);
+                }
+            }
+
+            return ListOfTasks.initOwned(alloc, try all_tasks.toOwnedSlice());
+        }
+
         pub fn getIndex(self: *Self, index: usize) ?Self.TrackedChild {
             const name = self.index.get(index) orelse
                 return null;
             return self.get(name);
         }
 
-        fn prepareChild(self: *Self, info: *Child.Info) Self.TrackedChild {
+        pub fn prepareChild(self: *Self, info: *Child.Info) Self.TrackedChild {
             var item: Child = .{ .children = self.content.get(info.name), .info = info };
             return .{ .collection = self, .item = item };
         }
@@ -366,9 +384,11 @@ const TaskListDetails = struct {
                     .details = owned_details,
                     .created = now,
                     .modified = now,
+                    .completed = null,
                     .due = options.due,
                     .importance = options.importance,
                     .tags = try utils.emptyTagList(alloc),
+                    .done = false,
                 };
 
                 try self.collection.addItem(&self.item, item);

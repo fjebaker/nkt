@@ -188,9 +188,32 @@ pub const Task = struct {
     details: []const u8,
     created: u64,
     modified: u64,
+    completed: ?u64,
     due: ?u64,
     importance: Importance,
     tags: []Tag,
+    done: bool,
+
+    pub fn sortCreated(_: void, lhs: Task, rhs: Task) bool {
+        return lhs.created < rhs.created;
+    }
+
+    pub fn sortModified(_: void, lhs: Task, rhs: Task) bool {
+        return lhs.modified < rhs.modified;
+    }
+
+    pub fn sortDue(_: void, lhs: Task, rhs: Task) bool {
+        if (lhs.due == null and rhs.due == null) return true;
+        if (lhs.due == null) return false;
+        if (rhs.due == null) return true;
+        return lhs.due.? < rhs.due.?;
+    }
+
+    pub fn sortImportance(_: void, lhs: Task, rhs: Task) bool {
+        if (lhs.importance == .low and rhs.importance == .high)
+            return true;
+        return false;
+    }
 };
 
 pub const TaskListDetails = CollectionScheme;

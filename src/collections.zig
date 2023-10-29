@@ -38,8 +38,13 @@ pub const Collection = union(CollectionType) {
     },
     TaskList: *TaskList,
 
-    pub fn initDirectoryJournal(maybe_directory: ?*Directory, maybe_journal: ?*Journal) ?Collection {
+    pub fn initMaybe(
+        maybe_directory: ?*Directory,
+        maybe_journal: ?*Journal,
+        maybe_tasklist: ?*TaskList,
+    ) ?Collection {
         if (maybe_directory != null and maybe_journal != null) {
+            if (maybe_tasklist != null) unreachable;
             return .{
                 .DirectoryWithJournal = .{
                     .journal = maybe_journal.?,
@@ -50,6 +55,8 @@ pub const Collection = union(CollectionType) {
             return .{ .Journal = journal };
         } else if (maybe_directory) |dir| {
             return .{ .Directory = dir };
+        } else if (maybe_tasklist) |tl| {
+            return .{ .TaskList = tl };
         }
         return null;
     }
