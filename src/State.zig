@@ -13,9 +13,6 @@ pub const MaybeItem = collections.MaybeItem;
 
 pub const Error = error{NoSuchCollection};
 
-// interface for interacting with different not items
-// *Entry:     stored by the items representing the underlying note
-
 const Topology = @import("collections/Topology.zig");
 const FileSystem = @import("FileSystem.zig");
 
@@ -298,7 +295,7 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
     }
 }
 
-fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, index: usize) !void {
+inline fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, index: usize) !void {
     const T = comptime if (std.mem.eql(u8, field_name, "directories"))
         Topology.Directory
     else if (std.mem.eql(u8, field_name, "journals"))
