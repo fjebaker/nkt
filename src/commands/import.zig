@@ -70,10 +70,9 @@ pub fn run(
                 try self.importToDirectory(path, where.name, state, out_writer);
             }
         },
-        .Journal, .TaskList => {
+        .Journal, .Tasklist => {
             unreachable; // todo
         },
-        .DirectoryWithJournal => unreachable,
     }
 }
 
@@ -97,50 +96,55 @@ fn importToDirectory(
     if (dir.get(filename) != null)
         return cli.SelectionError.ChildAlreadyExists;
 
-    var child = try dir.newChild(filename);
+    var note = try dir.Directory.newNote(filename);
 
     if (self.move) {
         try state.fs.moveFromCwd(
             state.allocator,
             path,
-            child.item.getPath(),
+            note.getPath(),
         );
     } else {
         try state.fs.copyFromCwd(
             state.allocator,
             path,
-            child.item.getPath(),
+            note.getPath(),
         );
     }
 
     // try different processing pipelines to make modifications to the import
-    try processDendron(state, &child);
+    const pipeline = (try processDendron(state, &note));
+    if (pipeline) |pl| {
+        try out_writer.print("- Used {any} pipeline\n", .{pl});
+    }
 
     try out_writer.print(
         "Imported '{s}' into directory '{s}'\n",
         .{
-            child.item.getName(),
+            note.getName(),
             name,
         },
     );
 }
 
-fn processDendron(state: *State, child: *State.Directory.TrackedChild) !void {
-    try child.collection.readChildContent(&child.item);
-    var content = child.item.children.?;
+const ProcessorPipeline = enum { Dendron };
+
+fn processDendron(state: *State, note: *State.Item) !?ProcessorPipeline {
+    var content = try note.Note.read();
 
     var itt = std.mem.tokenize(u8, content, "\n");
 
-    var map = (try parseKeyValue(state.allocator, &itt)) orelse return;
+    var map = (try parseKeyValue(state.allocator, &itt)) orelse
+        return null;
     defer map.deinit();
 
-    const updated_s = map.get("updated") orelse return;
-    const created_s = map.get("created") orelse return;
+    const updated_s = map.get("updated") orelse return null;
+    const created_s = map.get("created") orelse return null;
 
-    child.item.info.modified = try std.fmt.parseInt(u64, updated_s, 10);
-    child.item.info.created = try std.fmt.parseInt(u64, created_s, 10);
+    note.Note.note.modified = try std.fmt.parseInt(u64, updated_s, 10);
+    note.Note.note.created = try std.fmt.parseInt(u64, created_s, 10);
 
-    const title = map.get("title") orelse return;
+    const title = map.get("title") orelse return null;
 
     const stop = itt.index;
     var new_content = try std.mem.concat(state.allocator, u8, &.{
@@ -150,9 +154,11 @@ fn processDendron(state: *State, child: *State.Directory.TrackedChild) !void {
         content[stop..],
     });
     defer state.allocator.free(new_content);
-    child.item.children = new_content;
 
-    try state.fs.overwrite(child.item.getPath(), new_content);
+    try note.Note.dir.content.put(note.Note.note.name, new_content);
+    try state.fs.overwrite(note.getPath(), new_content);
+
+    return .Dendron;
 }
 
 const StringStringMap = std.StringHashMap([]const u8);

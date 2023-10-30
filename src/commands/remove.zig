@@ -93,7 +93,7 @@ pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     }
 }
 
-const NoSuchCollection = State.Collection.Errors.NoSuchCollection;
+const NoSuchCollection = State.Error.NoSuchCollection;
 
 pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
     switch (self.selection) {
@@ -138,70 +138,66 @@ fn runChild(
     // we need to be interactive, so no buffering:
     var out_writer = std.io.getStdOut().writer();
 
-    var item: State.Item = cli.find(state, self.where, self.selection.?) orelse
+    var item: State.MaybeItem = cli.find(state, self.where, self.selection.?) orelse
         return NoSuchCollection;
 
-    switch (item) {
-        .Note => |d| {
+    if (item.note != null and item.day == null) {
+        // no day just note
+        const note = item.note.?;
+        try out_writer.print(
+            "Delete '{s}' in directory '{s}'?\n",
+            .{ note.getName(), note.Note.dir.description.name },
+        );
+        if (try confirmPrompt(state, out_writer)) {
+            try note.remove();
+            _ = try out_writer.writeAll("Note deleted\n");
+        }
+    } else if (item.day) |day| {
+        if (self.time) |time| {
+            // if a time is provided, then we delete the entry
+            try removeItemInEntry(state, day, time, out_writer);
+        } else {
             try out_writer.print(
-                "Delete '{s}' in directory '{s}'?\n",
-                .{ d.item.getName(), d.collection.collectionName() },
+                "Delete ENTIRE entry '{s}' in journal '{s}'?\n",
+                .{ day.getName(), day.Day.journal.description.name },
             );
             if (try confirmPrompt(state, out_writer)) {
-                try state.fs.removeFile(d.relativePath());
-                try item.remove();
-                _ = try out_writer.writeAll("Note deleted\n");
+                try day.remove();
+                _ = try out_writer.writeAll("Entry deleted\n");
             }
-        },
-        .JournalEntry => |*j| {
-            if (self.time) |time| {
-                try item.ensureContent();
-                try removeItemInEntry(state, j, time, out_writer);
-            } else {
-                try out_writer.print(
-                    "Delete ENTIRE entry '{s}' in journal '{s}'?\n",
-                    .{ j.item.getName(), j.collection.collectionName() },
-                );
-                if (try confirmPrompt(state, out_writer)) {
-                    try item.remove();
-                    _ = try out_writer.writeAll("Entry deleted\n");
-                }
-            }
-        },
-        .DirectoryJournalItems => |*items| {
-            if (self.time) |time| {
-                try removeItemInEntry(state, &items.journal, time, out_writer);
-            } else {
-                return cli.SelectionError.AmbiguousSelection;
-            }
-        },
-    }
+        }
+    } else unreachable;
 }
 
-fn removeItemInEntry(state: *State, j: *State.JournalItem, time: []const u8, out_writer: anytype) !void {
-    try j.collection.readChildContent(&j.item);
+fn removeItemInEntry(state: *State, day: State.Item, time: []const u8, out_writer: anytype) !void {
+    var entries = try day.Day.read();
 
-    const ItemType = State.Journal.Child.Item;
-    const marked_child: ItemType = for (j.item.children.?) |i| {
+    // find the selected index
+    const index = for (0..entries.len) |i| {
+        const entry = entries[i];
         const created_time = try utils.formatTimeBuf(
-            utils.dateFromMs(i.created),
+            utils.dateFromMs(entry.created),
         );
         if (std.mem.eql(u8, &created_time, time)) {
             break i;
         }
     } else return cli.SelectionError.InvalidSelection;
+
+    var entry = entries[index];
+
     // print the item
     try out_writer.print(
         "Selected item in {s}:\n\n {s} - {s}\n\n",
-        .{ j.item.getName(), time, marked_child.item },
+        .{ day.getName(), time, entry.item },
     );
     // delete message
     try out_writer.print(
         "Delete item in entry '{s}' in journal '{s}'?\n",
-        .{ j.item.getName(), j.collection.collectionName() },
+        .{ day.getName(), day.Day.journal.description.name },
     );
+
     if (try confirmPrompt(state, out_writer)) {
-        try j.remove(marked_child);
+        try day.Day.removeEntryByIndex(index);
     }
 }
 

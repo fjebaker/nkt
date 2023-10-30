@@ -53,11 +53,11 @@ pub fn run(
     }
 }
 
-fn listDirContents(alloc: std.mem.Allocator, writer: anytype, directory: *State.Directory) !void {
-    var notelist = try directory.getChildList(alloc);
-    defer notelist.deinit();
+fn listDirContents(alloc: std.mem.Allocator, writer: anytype, directory: *State.Collection) !void {
+    var notelist = try directory.getAll(alloc);
+    defer alloc.free(notelist);
 
-    for (notelist.items) |note| {
+    for (notelist) |note| {
         try writer.print("{s} ", .{note.getName()});
     }
 }

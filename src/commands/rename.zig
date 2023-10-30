@@ -85,48 +85,60 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var from = cli.find(
+    var from: State.MaybeItem = cli.find(
         state,
         self.from_where,
         .{ .ByName = self.from.? },
     ) orelse
         return cli.SelectionError.InvalidSelection;
+
+    // make sure selection resolves to a single item
+    if (from.numActive() > 1)
+        return cli.SelectionError.AmbiguousSelection;
+
     const to_where: cli.selections.SelectedCollection = self.to_where orelse blk: {
-        const collection_name = from.collectionName();
-        const collection_type = from.collectionType();
+        const collection_name = try from.collectionName();
+        const collection_type = try from.collectionType();
         break :blk .{
             .container = collection_type,
             .name = collection_name,
         };
     };
 
-    if (from.collectionType() != to_where.container)
+    // ensure the collection types match
+    if (try from.collectionType() != to_where.container)
         return cli.SelectionError.IncompatibleSelection;
 
     // assert the destination name does not already exist in chosen container
     var dest = state.getSelectedCollection(to_where.container, to_where.name) orelse
         return cli.SelectionError.InvalidSelection;
-    if (dest.hasChildName(self.to.?))
+    if (dest.get(self.to.?)) |_|
         return cli.SelectionError.ChildAlreadyExists;
 
-    switch (from) {
-        .Note => |*note| {
-            if (std.mem.eql(u8, from.collectionName(), to_where.name)) {
-                // only need to rename the item and rename the file
-                try note.rename(self.to.?);
-                try out_writer.print(
-                    "Renamed '{s}' in '{s} -> '{s}' in '{s}'\n",
-                    .{
-                        self.from.?,
-                        from.collectionName(),
-                        note.item.getName(),
-                        to_where.name,
-                    },
-                );
-            } else {
-                unreachable; // todo
-            }
+    // all checks passed, rename
+    var item = try from.getActive();
+    try renameItemCollection(item, self.to.?, to_where);
+
+    try out_writer.print(
+        "Renamed '{s}' in '{s} -> '{s}' in '{s}'\n",
+        .{
+            self.from.?,
+            try from.collectionName(),
+            item.getName(),
+            to_where.name,
         },
-        else => unreachable,
+    );
+}
+
+fn renameItemCollection(
+    from: State.Item,
+    to: []const u8,
+    to_where: cli.selections.SelectedCollection,
+) !void {
+    if (std.mem.eql(u8, from.collectionName(), to_where.name)) {
+        // only need to rename the item and rename the file
+        try from.rename(to);
+    } else {
+        unreachable; // todo
     }
 }

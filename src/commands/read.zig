@@ -5,6 +5,7 @@ const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
 const Printer = @import("../Printer.zig");
+const Entry = @import("../collections/Topology.zig").Entry;
 
 const Self = @This();
 
@@ -83,7 +84,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return self;
 }
 
-const NoSuchCollection = State.Collection.Errors.NoSuchCollection;
+const NoSuchCollection = State.Error.NoSuchCollection;
 
 fn pipeToPager(
     allocator: std.mem.Allocator,
@@ -130,24 +131,18 @@ fn read(
     var printer = Printer.init(state.allocator, N);
     defer printer.deinit();
 
-    if (self.selection) |selection| {
-        // if selection is specified
-        var selected = cli.find(state, self.where, selection) orelse
+    if (self.selection) |sel| {
+        var selected: State.MaybeItem = cli.find(state, self.where, sel) orelse
             return NoSuchCollection;
-        // ensure note has been read from file
-        try selected.ensureContent();
-
-        switch (selected) {
-            .JournalEntry => |journal_entry| {
-                try self.readJournalEntry(journal_entry.item, &printer);
-            },
-            .DirectoryJournalItems => |both| {
-                try self.readNote(both.directory.item, &printer);
-                try self.readJournalEntry(both.journal.item, &printer);
-            },
-            .Note => |note_directory| {
-                try self.readNote(note_directory.item, &printer);
-            },
+        if (selected.note) |note| {
+            try self.readNote(note, &printer);
+        }
+        if (selected.day) |day| {
+            try self.readDay(day, &printer);
+        }
+        if (selected.task) |_| {
+            unreachable;
+            // try self.readTask(task, &printer);
         }
     } else if (self.where) |w| switch (w.container) {
         // if no selection, but a collection
@@ -156,7 +151,7 @@ fn read(
                 return NoSuchCollection;
             try self.readJournal(journal, &printer);
         },
-        else => {},
+        else => unreachable, // todo
     } else {
         // default behaviour
         const journal = state.getJournal("diary").?;
@@ -166,97 +161,99 @@ fn read(
     try printer.drain(out_writer);
 }
 
-fn readJournal(
-    self: *Self,
-    journal: *State.Journal,
+fn readNote(
+    _: *Self,
+    note: State.Item,
     printer: *Printer,
 ) !void {
-    var alloc = printer.mem.allocator();
-    var entry_list = try journal.getChildList(alloc);
-
-    if (entry_list.items.len == 0) {
-        try printer.addHeading("-- Empty --\n", .{});
-        return;
-    }
-
-    entry_list.sortBy(.Created);
-    entry_list.reverse();
-
-    var line_count: usize = 0;
-    const last = for (0.., entry_list.items) |i, *item| {
-        try journal.readChildContent(item);
-        const N = item.children.?.len;
-        line_count += N;
-        if (!printer.couldFit(line_count)) {
-            break i;
-        }
-    } else entry_list.items.len -| 1;
-
-    printer.reverse();
-    for (entry_list.items[0 .. last + 1]) |entry| {
-        try self.readJournalEntry(entry, printer);
-        if (!printer.couldFit(1)) break;
-    }
-    printer.reverse();
+    const content = try note.Note.read();
+    try printer.addHeading("", .{});
+    _ = try printer.addLine("{s}", .{content});
 }
 
-fn printEntryItem(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
-    const date = utils.dateFromMs(item.created);
-    const time_of_day = utils.formatTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-
-    try writer.print("{s} - {s}\n", .{ time_of_day, item.item });
-}
-
-fn printEntryFullTime(writer: Printer.Writer, item: State.Journal.Child.Item) Printer.WriteError!void {
-    const date = utils.dateFromMs(item.created);
-    const time = utils.formatDateTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-
-    try writer.print("{s} - {s}\n", .{ time, item.item });
-}
-
-const FilenameClosure = struct { filename: []const u8 };
-fn printEntryItemFilename(
-    fc: FilenameClosure,
-    writer: Printer.Writer,
-    item: State.Journal.Child.Item,
-) Printer.WriteError!void {
-    const date = utils.dateFromMs(item.created);
-    const time_of_day = utils.formatTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-    try writer.print("{s} {s} - {s}\n", .{ fc.filename, time_of_day, item.item });
-}
-
-fn readJournalEntry(
+fn readDay(
     self: *Self,
-    entry: State.Journal.Child,
+    day: State.Item,
     printer: *Printer,
 ) !void {
+    const entries = try day.Day.journal.readEntries(day.Day.day);
+
     if (!self.filename) {
-        try printer.addHeading("Journal entry: {s}\n\n", .{entry.info.name});
+        try printer.addHeading("Journal entry: {s}\n\n", .{day.getName()});
         if (self.full_date) {
-            _ = try printer.addItems(entry.children, printEntryFullTime);
+            _ = try printer.addItems(entries, printEntryFullTime);
         } else {
-            _ = try printer.addItems(entry.children, printEntryItem);
+            _ = try printer.addItems(entries, printEntryItem);
         }
     } else {
         try printer.addHeading("", .{});
-        var capture: FilenameClosure = .{ .filename = entry.getPath() };
+        var capture: FilenameClosure = .{ .filename = day.getPath() };
         _ = try printer.addItemsCtx(
             FilenameClosure,
-            entry.children,
+            entries,
             printEntryItemFilename,
             capture,
         );
     }
 }
 
-fn readNote(
-    _: *Self,
-    note: State.Directory.Child,
+fn readJournal(
+    self: *Self,
+    journal: *State.Collection,
     printer: *Printer,
 ) !void {
-    try printer.addHeading("", .{});
-    _ = try printer.addLine("{s}", .{note.children.?});
+    var alloc = printer.mem.allocator();
+    var day_list = try journal.getAll(alloc);
+
+    if (day_list.len == 0) {
+        try printer.addHeading("-- Empty --\n", .{});
+        return;
+    }
+
+    journal.sort(day_list, .Created);
+    std.mem.reverse(State.Item, day_list);
+
+    var line_count: usize = 0;
+    const last = for (0.., day_list) |i, *day| {
+        const entries = try journal.Journal.readEntries(day.Day.day);
+        line_count += entries.len;
+        if (!printer.couldFit(line_count)) {
+            break i;
+        }
+    } else day_list.len -| 1;
+
+    printer.reverse();
+    for (day_list[0 .. last + 1]) |day| {
+        try self.readDay(day, printer);
+        if (!printer.couldFit(1)) break;
+    }
+    printer.reverse();
+}
+
+fn printEntryItem(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
+    const date = utils.dateFromMs(entry.created);
+    const time_of_day = utils.formatTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+
+    try writer.print("{s} - {s}\n", .{ time_of_day, entry.item });
+}
+
+fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
+    const date = utils.dateFromMs(entry.created);
+    const time = utils.formatDateTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+
+    try writer.print("{s} - {s}\n", .{ time, entry.item });
+}
+
+const FilenameClosure = struct { filename: []const u8 };
+fn printEntryItemFilename(
+    fc: FilenameClosure,
+    writer: Printer.Writer,
+    entry: Entry,
+) Printer.WriteError!void {
+    const date = utils.dateFromMs(entry.created);
+    const time_of_day = utils.formatTimeBuf(date) catch
+        return Printer.WriteError.DateError;
+    try writer.print("{s} {s} - {s}\n", .{ fc.filename, time_of_day, entry.item });
 }

@@ -82,7 +82,7 @@ test "time parsing" {
     try testTimeParsing("tomorrow", nowish.shiftDays(1));
 }
 
-const Importance = State.TaskList.Child.Item.Importance;
+const Importance = @import("../collections/Topology.zig").Task.Importance;
 
 text: ?[]const u8 = null,
 tasklist: ?[]const u8 = null,
@@ -140,30 +140,22 @@ pub fn run(
 ) !void {
     const name = self.tasklist.?;
 
-    var tasklist = state.getTaskList(self.tasklist.?) orelse
+    var tasklist = state.getTasklist(self.tasklist.?) orelse
         return cli.SelectionError.NoSuchJournal;
 
-    if (std.mem.eql(u8, name, "todo")) {
-        var tl: State.TaskList.TrackedChild = tasklist.get("general") orelse
-            try tasklist.newChild("general");
+    const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
 
-        const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
+    try tasklist.Tasklist.addTask(
+        self.text.?,
+        .{
+            .due = by,
+            .importance = self.importance.?,
+            .details = self.details orelse "",
+        },
+    );
 
-        try tl.add(
-            self.text.?,
-            .{
-                .due = by,
-                .importance = self.importance.?,
-                .details = self.details orelse "",
-            },
-        );
-
-        try out_writer.print(
-            "Written task to '{s}' in tasklist '{s}'\n",
-            .{ self.text.?, name },
-        );
-    } else {
-        // todo
-        unreachable;
-    }
+    try out_writer.print(
+        "Written task to '{s}' in tasklist '{s}'\n",
+        .{ self.text.?, name },
+    );
 }

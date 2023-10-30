@@ -34,7 +34,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             self.text = arg.string;
         }
     }
-    self.journal = self.journal orelse "diary";
     self.text = self.text orelse return cli.CLIErrors.TooFewArguments;
     return self;
 }
@@ -44,19 +43,19 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    const journal_name = self.journal.?;
+    const journal_name: []const u8 = self.journal orelse "diary";
 
-    var journal = state.getJournal(self.journal.?) orelse
+    var journal = state.getJournal(journal_name) orelse
         return cli.SelectionError.NoSuchJournal;
 
     const today_string = try utils.formatDateBuf(utils.Date.now());
     var entry = journal.get(&today_string) orelse
-        try journal.newChild(&today_string);
+        try journal.Journal.newDay(&today_string);
 
-    try entry.add(self.text.?);
+    try entry.Day.add(self.text.?);
 
     try out_writer.print(
         "Written text to '{s}' in journal '{s}'\n",
-        .{ entry.item.info.name, journal_name },
+        .{ entry.getName(), journal_name },
     );
 }

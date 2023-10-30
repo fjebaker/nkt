@@ -65,7 +65,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 fn createDefaultInDirectory(
     self: *Self,
     state: *State,
-) !State.DirectoryItem {
+) !State.Item {
     // guard against trying to use journal
     if (self.where) |w| if (w.container == .Journal)
         return cli.SelectionError.InvalidSelection;
@@ -78,7 +78,7 @@ fn createDefaultInDirectory(
         .ByName => "notes",
     };
 
-    var dir: *State.Directory = blk: {
+    var dir: *State.Collection = blk: {
         if (self.where) |w| {
             break :blk state.getDirectory(w.name) orelse
                 return cli.SelectionError.UnknownCollection;
@@ -86,17 +86,22 @@ fn createDefaultInDirectory(
     };
 
     switch (selection) {
-        .ByName => |name| return try dir.newChild(name),
-        .ByIndex, .ByDate => {
+        .ByName => |name| return try dir.Directory.newNote(name),
+        .ByIndex => unreachable,
+        .ByDate => {
+            // format information about the day
             const date = selection.ByDate;
             const date_string = try utils.formatDateBuf(date);
-            var item = try dir.newChild(&date_string);
 
             const day = try utils.dayOfWeek(state.allocator, date);
             defer state.allocator.free(day);
             const month = try utils.monthOfYear(state.allocator, date);
             defer state.allocator.free(month);
 
+            // create the new item
+            var note = try dir.Directory.newNote(&date_string);
+
+            // write the template
             const template = try std.fmt.allocPrint(
                 state.allocator,
                 "# {s}: {s} of {s}\n\n",
@@ -104,32 +109,24 @@ fn createDefaultInDirectory(
             );
             defer state.allocator.free(template);
 
-            try state.fs.overwrite(item.relativePath(), template);
-            return item;
+            try state.fs.overwrite(note.getPath(), template);
+            return note;
         },
     }
 }
 
-fn findOrCreateDefault(self: *Self, state: *State) !State.DirectoryItem {
+fn findOrCreateDefault(self: *Self, state: *State) !State.Item {
     const selection = self.selection.?;
 
-    const item: State.Item = cli.find(
+    const item: State.MaybeItem = cli.find(
         state,
         self.where,
         selection,
     ) orelse
         return try createDefaultInDirectory(self, state);
 
-    switch (item) {
-        .DirectoryJournalItems => |d| return d.directory,
-        .Note => |d| return d,
-        else => {
-            if (selection == .ByDate) {
-                return try createDefaultInDirectory(self, state);
-            }
-            return cli.SelectionError.InvalidSelection;
-        },
-    }
+    return item.note orelse
+        try createDefaultInDirectory(self, state);
 }
 
 pub fn run(
@@ -137,8 +134,8 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var citem = try self.findOrCreateDefault(state);
-    const rel_path = citem.relativePath();
+    var note = try self.findOrCreateDefault(state);
+    const rel_path = note.getPath();
 
     const abs_path = try state.fs.absPathify(state.allocator, rel_path);
     defer state.allocator.free(abs_path);
@@ -153,5 +150,5 @@ pub fn run(
     defer editor.deinit();
 
     try editor.editPath(abs_path);
-    citem.item.info.modified = utils.now();
+    note.Note.note.modified = utils.now();
 }

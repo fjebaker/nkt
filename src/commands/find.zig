@@ -128,30 +128,32 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 fn addPaths(
     alloc: std.mem.Allocator,
     paths: *std.ArrayList([]const u8),
-    dir: *const State.Directory,
+    dir: *State.Collection,
 ) !void {
-    var notelist = try dir.getChildList(alloc);
-    defer notelist.deinit();
+    var notelist = try dir.getAll(alloc);
+    defer alloc.free(notelist);
 
-    for (notelist.items) |child| {
-        try paths.append(child.info.path);
+    for (notelist) |note| {
+        try paths.append(note.getPath());
     }
 }
 
 fn directoryNotesUnder(
     alloc: std.mem.Allocator,
     root: []const u8,
-    dir: *const State.Directory,
+    dir: *State.Collection,
 ) ![][]const u8 {
+    if (dir.* != .Directory) unreachable;
+
     var paths = std.ArrayList([]const u8).init(alloc);
 
-    var notelist = try dir.getChildList(alloc);
-    defer notelist.deinit();
+    var notelist = try dir.getAll(alloc);
+    defer alloc.free(notelist);
 
-    for (notelist.items) |child| {
-        const name = child.info.name;
+    for (notelist) |note| {
+        const name = note.getName();
         if (std.mem.startsWith(u8, name, root)) {
-            try paths.append(child.info.path);
+            try paths.append(note.getPath());
         }
     }
     return paths.toOwnedSlice();
@@ -168,9 +170,6 @@ fn getAllPaths(alloc: std.mem.Allocator, state: *State) ![][]const u8 {
         switch (item.collection) {
             .Directory => {
                 try addPaths(alloc, &paths, state.getDirectory(item.name).?);
-            },
-            .DirectoryWithJournal => {
-                // try addPaths(alloc, &paths, state.getDirectory(item.name).?);
             },
             else => {},
         }
@@ -217,17 +216,13 @@ fn readFile(state: *State, path: []const u8, out_writer: anytype) !void {
 
     if (path.len == 0) return;
     const c_name = utils.inferCollectionName(path).?;
-    var collection = state.getCollection(c_name).?;
+    var collection = state.getCollectionByName(c_name).?;
 
-    var note = switch (collection) {
-        .DirectoryWithJournal => |*both| both.directory.getByPath(path).?,
-        .Directory => |d| d.getByPath(path).?,
-        else => unreachable,
-    };
+    var note = collection.directory.?.getByPath(path).?;
 
-    try note.collection.readChildContent(&note.item);
+    const content = try note.Note.read();
     try printer.addHeading("", .{});
-    _ = try printer.addLine("{s}", .{note.item.children.?});
+    _ = try printer.addLine("{s}", .{content});
 
     try printer.drain(out_writer);
 }

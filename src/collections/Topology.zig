@@ -11,7 +11,7 @@ pub const Tag = struct {
     added: []const u8,
 };
 
-const InfoScheme = struct {
+pub const InfoScheme = struct {
     created: u64,
     modified: u64,
     name: []const u8,
@@ -27,15 +27,12 @@ const InfoScheme = struct {
     }
 };
 
-pub fn ChildScheme(comptime S: type) type {
+fn ChildMixin(comptime S: type) type {
     const C = inline for (@typeInfo(S).Struct.fields) |f| {
         if (std.mem.eql(u8, f.name, "children")) break f.type;
     } else @compileError("missing field 'children'");
-    const TPtr = @typeInfo(@typeInfo(C).Optional.child).Pointer;
-    const T = TPtr.child;
     return struct {
         pub const Info = InfoScheme;
-        pub const Item = T;
         pub fn init(info: *Info, children: C) S {
             return .{ .info = info, .children = children };
         }
@@ -87,13 +84,13 @@ pub fn ChildScheme(comptime S: type) type {
     };
 }
 
-pub const CollectionScheme = struct {
+pub const Description = struct {
     name: []const u8,
     path: []const u8,
     infos: []InfoScheme,
     tags: []Tag,
 
-    pub fn new(alloc: std.mem.Allocator, root: []const u8, name: []const u8) !CollectionScheme {
+    pub fn new(alloc: std.mem.Allocator, root: []const u8, name: []const u8) !Description {
         const path = try std.mem.concat(alloc, u8, &.{ root, name });
         errdefer alloc.free(path);
         const infos = try alloc.alloc(InfoScheme, 0);
@@ -111,80 +108,46 @@ pub const CollectionScheme = struct {
 };
 
 // directories
-pub const Directory = CollectionScheme;
-pub const Note = struct {
-    info: *InfoScheme,
-    children: ?[]const u8,
-    pub usingnamespace ChildScheme(@This());
-
-    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]const u8 {
-        _ = alloc;
-        return string;
-    }
-
-    pub fn stringifyContent(alloc: std.mem.Allocator, items: []const u8) ![]const u8 {
-        _ = alloc;
-        return items;
-    }
-
-    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
-        _ = alloc;
-        _ = info;
-        return "";
-    }
-};
+pub const Directory = Description;
 
 // journal
-const EntryItem = struct {
+const EntryScheme = struct { items: []Entry };
+pub fn parseEntries(alloc: std.mem.Allocator, string: []const u8) ![]Entry {
+    var content = try std.json.parseFromSliceLeaky(
+        EntryScheme,
+        alloc,
+        string,
+        .{ .allocate = .alloc_always },
+    );
+    return content.items;
+}
+pub fn stringifyEntries(alloc: std.mem.Allocator, items: []Entry) ![]const u8 {
+    return try std.json.stringifyAlloc(
+        alloc,
+        EntryScheme{ .items = items },
+        .{ .whitespace = .indent_4 },
+    );
+}
+
+pub const Entry = struct {
     created: u64,
     modified: u64,
     item: []const u8,
     tags: []Tag,
 
-    pub fn sortCreated(_: void, lhs: EntryItem, rhs: EntryItem) bool {
+    pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
         return lhs.created < rhs.created;
     }
 
-    pub fn sortModified(_: void, lhs: EntryItem, rhs: EntryItem) bool {
+    pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
         return lhs.modified < rhs.modified;
     }
 };
-pub const Journal = CollectionScheme;
-pub const Entry = struct {
-    info: *InfoScheme,
-    children: ?[]EntryItem,
-    pub usingnamespace ChildScheme(@This());
-
-    const ItemScheme = struct { items: []Entry.Item };
-
-    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
-        _ = alloc;
-        _ = info;
-        return "{\"items\":[]}";
-    }
-
-    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Entry.Item {
-        var content = try std.json.parseFromSliceLeaky(
-            ItemScheme,
-            alloc,
-            string,
-            .{ .allocate = .alloc_always },
-        );
-        return content.items;
-    }
-
-    pub fn stringifyContent(alloc: std.mem.Allocator, items: []Entry.Item) ![]const u8 {
-        return try std.json.stringifyAlloc(
-            alloc,
-            ItemScheme{ .items = items },
-            .{ .whitespace = .indent_4 },
-        );
-    }
-};
+pub const Journal = Description;
 
 pub const Task = struct {
     pub const Importance = enum { low, high, urgent };
-    text: []const u8,
+    title: []const u8,
     details: []const u8,
     created: u64,
     modified: u64,
@@ -216,13 +179,29 @@ pub const Task = struct {
     }
 };
 
-pub const TaskListDetails = CollectionScheme;
+const TaskScheme = struct { items: []Task };
+pub fn parseTasks(alloc: std.mem.Allocator, string: []const u8) ![]Task {
+    var content = try std.json.parseFromSliceLeaky(
+        TaskScheme,
+        alloc,
+        string,
+        .{ .allocate = .alloc_always },
+    );
+    return content.items;
+}
+pub fn stringifyTasks(alloc: std.mem.Allocator, items: []Task) ![]const u8 {
+    return try std.json.stringifyAlloc(
+        alloc,
+        TaskScheme{ .items = items },
+        .{ .whitespace = .indent_4 },
+    );
+}
+
+pub const TasklistInfo = InfoScheme;
 pub const TaskList = struct {
     info: *InfoScheme,
     children: ?[]Task,
-    pub usingnamespace ChildScheme(@This());
-
-    const TaskScheme = struct { items: []Task };
+    pub usingnamespace ChildMixin(@This());
 
     pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Task {
         var content = try std.json.parseFromSliceLeaky(
@@ -253,14 +232,14 @@ const TopologySchema = struct {
     _schema_version: []const u8,
     editor: [][]const u8,
     pager: [][]const u8,
-    tasklists: []TaskListDetails,
+    tasklists: []TasklistInfo,
     directories: []Directory,
     journals: []Journal,
 };
 
 directories: []Directory,
 journals: []Journal,
-tasklists: []TaskListDetails,
+tasklists: []TasklistInfo,
 editor: [][]const u8,
 pager: [][]const u8,
 mem: std.heap.ArenaAllocator,
@@ -273,7 +252,7 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
 
     var directories = try temp_alloc.alloc(Directory, 0);
     var journals = try temp_alloc.alloc(Journal, 0);
-    var tasklists = try temp_alloc.alloc(TaskListDetails, 0);
+    var tasklists = try temp_alloc.alloc(TasklistInfo, 0);
     var editor = try temp_alloc.dupe([]const u8, &.{"vim"});
     var pager = try temp_alloc.dupe([]const u8, &.{"less"});
 

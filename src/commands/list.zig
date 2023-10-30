@@ -15,8 +15,7 @@ pub const help = "List notes in various ways.";
 pub const extended_help =
     \\List notes in various ways to the terminal.
     \\  nkt list
-    \\     <what>                list journals, directories, tasklists, or notes
-    \\                             with a `directory` to list. this option may
+    \\     <what>                list the notes in a directory, journal, or tasks. this option may
     \\                             also be `all` to list everything (default: all)
     \\     -n/--limit int        maximum number of entries to list (default: 25)
     \\     --all                 list all entries (ignores `--limit`)
@@ -33,7 +32,7 @@ pub const extended_help =
 ;
 
 selection: []const u8 = "",
-ordering: State.Ordering = .Modified,
+ordering: ?State.Ordering = null,
 number: usize = 25,
 all: bool = false,
 pretty: bool = true,
@@ -67,45 +66,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return self;
 }
 
-fn listDirectory(
-    self: *Self,
-    alloc: std.mem.Allocator,
-    directory: *State.Directory,
-    writer: anytype,
-) !void {
-    var notelist = try directory.getChildList(alloc);
-    defer notelist.deinit();
-
-    notelist.sortBy(self.ordering);
-
-    const collection_name = directory.collectionName();
-
-    switch (self.ordering) {
-        .Modified => try writer.print(
-            "Directory '{s}' ordered by last modified:\n",
-            .{collection_name},
-        ),
-        .Created => try writer.print(
-            "Directory '{s}' ordered by date created:\n",
-            .{collection_name},
-        ),
-    }
-
-    const is_diary = std.mem.eql(u8, "diary", collection_name);
-    for (notelist.items) |note| {
-        if (is_diary) {
-            try writer.print("{s}\n", .{note.getName()});
-        } else {
-            const date = switch (self.ordering) {
-                .Modified => utils.dateFromMs(note.info.modified),
-                .Created => utils.dateFromMs(note.info.created),
-            };
-            const date_string = try utils.formatDateBuf(date);
-            try writer.print("{s} - {s}\n", .{ date_string, note.getName() });
-        }
-    }
-}
-
 pub fn listNames(
     cnames: State.CollectionNameList,
     what: State.CollectionType,
@@ -116,14 +76,12 @@ pub fn listNames(
         switch (what) {
             .Directory => try writer.print("Directories list:\n", .{}),
             .Journal => try writer.print("Journals list:\n", .{}),
-            .TaskList => try writer.print("Tasklist list:\n", .{}),
-            .DirectoryWithJournal => unreachable,
+            .Tasklist => try writer.print("Tasklist list:\n", .{}),
         }
     }
 
     for (cnames.items) |name| {
         if (name.collection != what) continue;
-
         if (opts.oneline) {
             try writer.print("{s} ", .{name.name});
         } else {
@@ -132,40 +90,13 @@ pub fn listNames(
     }
 }
 
-fn listJournal(
-    self: *Self,
-    alloc: std.mem.Allocator,
-    journal: *State.Journal,
-    writer: anytype,
-) !void {
-    var entrylist = try journal.getChildList(alloc);
-    defer entrylist.deinit();
-
-    entrylist.sortBy(self.ordering);
-
-    switch (self.ordering) {
-        .Modified => try writer.print(
-            "Journal '{s}' ordered by last modified:\n",
-            .{journal.collectionName()},
-        ),
-        .Created => try writer.print(
-            "Journal '{s}' ordered by date created:\n",
-            .{journal.collectionName()},
-        ),
-    }
-
-    for (entrylist.items) |entry| {
-        try writer.print("{s}\n", .{entry.info.name});
-    }
-}
-
 fn listTasks(
     self: *Self,
     alloc: std.mem.Allocator,
-    tasklist: *State.TaskList,
+    tasklist: *State.Tasklist,
     writer: anytype,
 ) !void {
-    const Task = State.TaskList.Child.Item;
+    const Task = State.Tasklist.Child.Item;
     _ = self;
 
     var tasks = try tasklist.getItemList(alloc);
@@ -193,45 +124,53 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
+    var cnames = try state.getCollectionNames(state.allocator);
+    defer cnames.deinit();
+
     if (is(self.selection, "all")) {
-        var cnames = try state.getCollectionNames(state.allocator);
-        defer cnames.deinit();
-
         try listNames(cnames, .Directory, out_writer, .{});
         try listNames(cnames, .Journal, out_writer, .{});
-        try listNames(cnames, .TaskList, out_writer, .{});
-    } else if (is(self.selection, "directories") or is(self.selection, "dirs")) {
-        var cnames = try state.getCollectionNames(state.allocator);
-        defer cnames.deinit();
-
+        try listNames(cnames, .Tasklist, out_writer, .{});
+    } else if (is(self.selection, "dir") or is(self.selection, "directories")) {
         try listNames(cnames, .Directory, out_writer, .{});
-    } else if (is(self.selection, "journals") or is(self.selection, "jrnl")) {
-        var cnames = try state.getCollectionNames(state.allocator);
-        defer cnames.deinit();
-
+    } else if (is(self.selection, "journals")) {
         try listNames(cnames, .Journal, out_writer, .{});
-    } else if (is(self.selection, "tasklists") or is(self.selection, "tasks")) {
-        var cnames = try state.getCollectionNames(state.allocator);
-        defer cnames.deinit();
-
-        try listNames(cnames, .TaskList, out_writer, .{});
+    } else if (is(self.selection, "tasklists")) {
+        try listNames(cnames, .Tasklist, out_writer, .{});
     } else {
-        var collection = state.getCollection(self.selection) orelse
-            return State.Collection.Errors.NoSuchCollection;
-        switch (collection) {
-            .Directory => |d| {
-                try self.listDirectory(state.allocator, d, out_writer);
-            },
-            .Journal => |j| {
-                try self.listJournal(state.allocator, j, out_writer);
-            },
-            .DirectoryWithJournal => |dj| {
-                try self.listDirectory(state.allocator, dj.directory, out_writer);
-                try self.listJournal(state.allocator, dj.journal, out_writer);
-            },
-            .TaskList => |tl| {
-                try self.listTasks(state.allocator, tl, out_writer);
-            },
+        var collection: State.MaybeCollection = state.getCollectionByName(self.selection) orelse
+            return State.Error.NoSuchCollection;
+
+        if (collection.directory) |c| {
+            try out_writer.print("Notes in directory: '{s}':\n", .{c.getName()});
+            try self.listCollection(state.allocator, c, self.ordering orelse .Modified, out_writer);
         }
+        if (collection.journal) |c| {
+            try out_writer.print("Entries in journal: '{s}':\n", .{c.getName()});
+            try self.listCollection(state.allocator, c, self.ordering orelse .Modified, out_writer);
+        }
+        if (collection.tasklist) |c| {
+            // need to read tasklist from file
+            try c.readAll();
+            try out_writer.print("Tasks in tasklist: '{s}':\n", .{c.getName()});
+            try self.listCollection(state.allocator, c, self.ordering orelse .Due, out_writer);
+        }
+    }
+}
+
+fn listCollection(
+    _: *const Self,
+    alloc: std.mem.Allocator,
+    c: *State.Collection,
+    order: State.Ordering,
+    writer: anytype,
+) !void {
+    var items = try c.getAll(alloc);
+    defer alloc.free(items);
+
+    c.sort(items, order);
+
+    for (items) |item| {
+        try writer.print(" - {s}\n", .{item.getName()});
     }
 }

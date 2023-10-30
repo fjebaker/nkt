@@ -94,7 +94,7 @@ pub fn drain(self: *const TaskPrinter, writer: anytype) !void {
         _ = try writer.writeAll(item.due);
         try writer.writeByteNTimes(' ', due_padding);
 
-        _ = try writer.writeAll(" : ");
+        _ = try writer.writeAll(" - ");
         _ = try writer.writeAll(item.title);
         _ = try writer.writeAll("\n");
     }

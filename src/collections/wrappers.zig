@@ -176,23 +176,6 @@ pub fn CollectionTemplate(
             }
         }
 
-        fn childPath(
-            alloc: std.mem.Allocator,
-            container_path: []const u8,
-            name: []const u8,
-        ) ![]const u8 {
-            const filename = try std.mem.concat(
-                alloc,
-                u8,
-                &.{ name, Container.DEFAULT_FILE_EXTENSION },
-            );
-            defer alloc.free(filename);
-            return try std.fs.path.join(
-                alloc,
-                &.{ container_path, filename },
-            );
-        }
-
         pub fn newChild(
             self: *Self,
             name: []const u8,

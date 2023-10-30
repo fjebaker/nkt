@@ -107,100 +107,101 @@ fn finalize(maybe_note: ?Item, maybe_journal: ?Item) ?Item {
         null;
 }
 
-fn finalizeMatching(state: *State, journal: Item) ?Item {
-    const journal_name = journal.JournalEntry.collection.collectionName();
-    const dir = state.getDirectory(journal_name) orelse
-        return journal;
-
-    const entry_name = journal.JournalEntry.item.getName();
-    if (dir.get(entry_name)) |item| {
-        return finalize(
-            .{ .Note = item },
-            journal,
-        );
-    }
-    return journal;
-}
-
 /// Search in the user preferred order
 fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
-    if (state.getJournal("diary")) |journal| {
-        if (journal.getIndex(index)) |entry| {
-            return .{ .JournalEntry = entry };
-        }
+    var p_journal: ?*State.Collection = state.getJournal("diary");
+
+    if (p_journal) |j| {
+        return j.Journal.getIndex(index);
     }
-    const journal: ?Item = for (state.journals) |*journal| {
-        if (journal.getIndex(index)) |entry| {
-            break .{ .JournalEntry = entry };
-        }
-    } else null;
-    return journal;
+
+    // else search all other journals
+    for (state.journals) |*j| {
+        if (j.Journal.getIndex(index)) |day|
+            return day;
+    }
+    return null;
 }
 
-pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?Item {
+pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?State.MaybeItem {
+    var maybe = findImpl(state, where, what) orelse return null;
+    if (maybe.day == null and maybe.note == null and maybe.task == null) return null;
+    return maybe;
+}
+
+fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) ?State.MaybeItem {
     if (where) |w| switch (w.container) {
         .Journal => {
-            var journal = state.getJournal(w.name) orelse return null;
-            const entry = switch (what) {
-                .ByName => |name| journal.get(name),
-                .ByIndex => |index| journal.getIndex(index),
-                .ByDate => |date| blk: {
+            var journal = state.getJournal(w.name) orelse
+                return null;
+            switch (what) {
+                .ByName => |name| return .{ .day = journal.get(name) },
+                .ByIndex => |index| return .{ .day = journal.Journal.getIndex(index) },
+                .ByDate => |date| {
                     const name = utils.formatDateBuf(date) catch return null;
-                    break :blk journal.get(&name);
+                    return .{ .day = journal.get(&name) };
                 },
-            } orelse return null;
-            return .{ .JournalEntry = entry };
+            }
         },
         .Directory => {
-            var dir = state.getDirectory(w.name) orelse return null;
-            const note = switch (what) {
-                .ByName => |name| dir.get(name),
-                .ByIndex => |index| dir.getIndex(index),
-                .ByDate => return null,
-            } orelse return null;
-            return .{ .Note = note };
+            var dir = state.getDirectory(w.name) orelse
+                return null;
+            switch (what) {
+                .ByName => |name| return .{ .note = dir.get(name) },
+                .ByIndex => unreachable,
+                .ByDate => unreachable,
+            }
         },
-        .DirectoryWithJournal => unreachable,
-        .TaskList => unreachable,
+        .Tasklist => unreachable,
     };
 
     // don't know if journal or entry, so we try both
     switch (what) {
-        .ByName => |name| {
-            return whatFromName(state, name);
-        },
+        .ByName => |name| return noteFromName(state, name),
         // for index, we only look at journals, but use the name to do a dir lookup
         // with the condition that the directory must have the same name as the journal
         .ByIndex => |index| {
-            const maybe_journal = findIndexPreferredJournal(state, index);
-            if (maybe_journal) |journal| {
-                return finalizeMatching(state, journal);
+            const maybe_day = findIndexPreferredJournal(state, index);
+            if (maybe_day) |day| {
+                return withMatchingNote(state, day);
             } else return null;
         },
         .ByDate => |date| {
             const name = utils.formatDateBuf(date) catch return null;
-            return whatFromName(state, &name);
+            return noteFromName(state, &name);
         },
     }
     return null;
 }
 
-fn whatFromName(state: *State, name: []const u8) ?Item {
-    const maybe_note: ?Item = for (state.directories) |*dir| {
-        if (dir.get(name)) |item| {
-            break .{ .Note = item };
-        }
-    } else null;
+fn withMatchingNote(state: *State, day: Item) ?State.MaybeItem {
+    var maybe_item: State.MaybeItem = .{ .day = day };
 
-    const maybe_journal: ?Item = for (state.journals) |*journal| {
-        if (journal.get(name)) |item| {
-            break .{ .JournalEntry = item };
-        }
-    } else null;
+    const jname = day.Day.journal.description.name;
+    const dir = state.getDirectory(jname) orelse
+        return maybe_item;
 
-    return finalize(maybe_note, maybe_journal);
+    if (dir.get(day.getName())) |note| {
+        maybe_item.note = note;
+    }
+    return maybe_item;
 }
 
+fn noteFromName(state: *State, name: []const u8) ?State.MaybeItem {
+    const maybe_note: ?Item = for (state.directories) |*c| {
+        if (c.get(name)) |item| {
+            break item;
+        }
+    } else null;
+    const maybe_day: ?Item = for (state.journals) |*c| {
+        if (c.get(name)) |item| {
+            break item;
+        }
+    } else null;
+    return .{ .day = maybe_day, .note = maybe_note };
+}
+
+///
 pub fn parseJournalDirectoryItemlistFlag(
     arg: cli.Arg,
     itt: *cli.ArgIterator,
@@ -225,7 +226,7 @@ pub fn parseJournalDirectoryItemlistFlag(
     } else if (arg.is(t, "tasklist")) {
         const value = try itt.getValue();
         return cli.SelectedCollection.from(
-            .TaskList,
+            .Tasklist,
             value.string,
         );
     }
@@ -241,7 +242,7 @@ pub fn getSelectedCollectionPositional(itt: *cli.ArgIterator) !SelectedCollectio
     else if (std.mem.eql(u8, "directory", p1.string))
         .Directory
     else if (std.mem.eql(u8, "tasklist", p1.string))
-        .TaskList
+        .Tasklist
     else
         return cli.CLIErrors.BadArgument;
     var name = p2.string;
