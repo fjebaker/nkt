@@ -17,72 +17,7 @@ pub const InfoScheme = struct {
     name: []const u8,
     path: []const u8,
     tags: []Tag,
-
-    pub fn sortCreated(_: void, lhs: InfoScheme, rhs: InfoScheme) bool {
-        return lhs.created < rhs.created;
-    }
-
-    pub fn sortModified(_: void, lhs: InfoScheme, rhs: InfoScheme) bool {
-        return lhs.modified < rhs.modified;
-    }
 };
-
-fn ChildMixin(comptime S: type) type {
-    const C = inline for (@typeInfo(S).Struct.fields) |f| {
-        if (std.mem.eql(u8, f.name, "children")) break f.type;
-    } else @compileError("missing field 'children'");
-    return struct {
-        pub const Info = InfoScheme;
-        pub fn init(info: *Info, children: C) S {
-            return .{ .info = info, .children = children };
-        }
-
-        pub fn sortCreated(_: void, lhs: S, rhs: S) bool {
-            return Info.sortCreated({}, lhs.info.*, rhs.info.*);
-        }
-
-        pub fn sortModified(_: void, lhs: S, rhs: S) bool {
-            return Info.sortModified({}, lhs.info.*, rhs.info.*);
-        }
-
-        pub fn getName(self: S) []const u8 {
-            return self.info.name;
-        }
-
-        pub fn getPath(self: S) []const u8 {
-            return self.info.path;
-        }
-
-        fn time(
-            self: S,
-            comptime field: []const u8,
-            comptime cmp: enum { Min, Max },
-        ) u64 {
-            const children = self.children.?;
-            std.debug.assert(children.len > 0);
-
-            var val: u64 = @field(children[0], field);
-            for (children[1..]) |item| {
-                const t = @field(item, field);
-                val = switch (cmp) {
-                    .Min => @min(val, t),
-                    .Max => @max(val, t),
-                };
-            }
-
-            return val;
-        }
-
-        pub fn timeCreated(self: S) u64 {
-            return self.time("created", .Min);
-        }
-
-        pub fn lastModified(self: S) u64 {
-            if (self.children.?.len == 0) return utils.now();
-            return self.time("modified", .Max);
-        }
-    };
-}
 
 pub const Description = struct {
     name: []const u8,
@@ -134,14 +69,6 @@ pub const Entry = struct {
     modified: u64,
     item: []const u8,
     tags: []Tag,
-
-    pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
-        return lhs.created < rhs.created;
-    }
-
-    pub fn sortModified(_: void, lhs: Entry, rhs: Entry) bool {
-        return lhs.modified < rhs.modified;
-    }
 };
 pub const Journal = Description;
 
@@ -156,27 +83,6 @@ pub const Task = struct {
     importance: Importance,
     tags: []Tag,
     done: bool,
-
-    pub fn sortCreated(_: void, lhs: Task, rhs: Task) bool {
-        return lhs.created < rhs.created;
-    }
-
-    pub fn sortModified(_: void, lhs: Task, rhs: Task) bool {
-        return lhs.modified < rhs.modified;
-    }
-
-    pub fn sortDue(_: void, lhs: Task, rhs: Task) bool {
-        if (lhs.due == null and rhs.due == null) return true;
-        if (lhs.due == null) return false;
-        if (rhs.due == null) return true;
-        return lhs.due.? < rhs.due.?;
-    }
-
-    pub fn sortImportance(_: void, lhs: Task, rhs: Task) bool {
-        if (lhs.importance == .low and rhs.importance == .high)
-            return true;
-        return false;
-    }
 };
 
 const TaskScheme = struct { items: []Task };
@@ -198,35 +104,6 @@ pub fn stringifyTasks(alloc: std.mem.Allocator, items: []Task) ![]const u8 {
 }
 
 pub const TasklistInfo = InfoScheme;
-pub const TaskList = struct {
-    info: *InfoScheme,
-    children: ?[]Task,
-    pub usingnamespace ChildMixin(@This());
-
-    pub fn parseContent(alloc: std.mem.Allocator, string: []const u8) ![]Task {
-        var content = try std.json.parseFromSliceLeaky(
-            TaskScheme,
-            alloc,
-            string,
-            .{ .allocate = .alloc_always },
-        );
-        return content.items;
-    }
-
-    pub fn stringifyContent(alloc: std.mem.Allocator, items: []Task) ![]const u8 {
-        return try std.json.stringifyAlloc(
-            alloc,
-            TaskScheme{ .items = items },
-            .{ .whitespace = .indent_4 },
-        );
-    }
-
-    pub fn contentTemplate(alloc: std.mem.Allocator, info: InfoScheme) []const u8 {
-        _ = alloc;
-        _ = info;
-        return "{\"items\":[]}";
-    }
-};
 
 const TopologySchema = struct {
     _schema_version: []const u8,
