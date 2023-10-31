@@ -423,7 +423,14 @@ pub const Item = union(ItemType) {
                     d.day.path,
                 );
             },
-            .Task => unreachable,
+            .Task => |t| {
+                var tasks = &t.tasklist.tasks.?;
+                const index = for (0.., tasks.*) |j, p| {
+                    if (std.mem.eql(u8, p.title, t.task.title)) break j;
+                } else unreachable;
+                utils.moveToEnd(Topology.Task, tasks.*, index);
+                tasks.len -= 1;
+            },
         }
     }
 

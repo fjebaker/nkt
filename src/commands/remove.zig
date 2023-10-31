@@ -68,6 +68,11 @@ fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self 
                     const value = try itt.getValue();
                     child.where = cli.SelectedCollection.from(.Directory, value.string);
                 }
+            } else if (arg.is(null, "tl") or arg.is(null, "tasklist")) {
+                if (child.where == null) {
+                    const value = try itt.getValue();
+                    child.where = cli.SelectedCollection.from(.Tasklist, value.string);
+                }
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -138,7 +143,7 @@ fn runChild(
     // we need to be interactive, so no buffering:
     var out_writer = std.io.getStdOut().writer();
 
-    var item: State.MaybeItem = cli.find(state, self.where, self.selection.?) orelse
+    var item: State.MaybeItem = (try cli.find(state, self.where, self.selection.?)) orelse
         return NoSuchCollection;
 
     if (item.note != null and item.day == null) {
@@ -165,6 +170,16 @@ fn runChild(
                 try day.remove();
                 _ = try out_writer.writeAll("Entry deleted\n");
             }
+        }
+    } else if (item.task) |task_item| {
+        const task = task_item.Task;
+        try out_writer.print(
+            "Delete '{s}' in tasklist '{s}'?\n",
+            .{ task_item.getName(), task.tasklist.info.name },
+        );
+        if (try confirmPrompt(state, out_writer)) {
+            try task_item.remove();
+            _ = try out_writer.writeAll("Task deleted\n");
         }
     } else unreachable;
 }

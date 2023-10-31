@@ -118,11 +118,11 @@ fn createDefaultInDirectory(
 fn findOrCreateDefault(self: *Self, state: *State) !State.Item {
     const selection = self.selection.?;
 
-    const item: State.MaybeItem = cli.find(
+    const item: State.MaybeItem = (try cli.find(
         state,
         self.where,
         selection,
-    ) orelse
+    )) orelse
         return try createDefaultInDirectory(self, state);
 
     return item.note orelse

@@ -85,11 +85,11 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var from: State.MaybeItem = cli.find(
+    var from: State.MaybeItem = (try cli.find(
         state,
         self.from_where,
         .{ .ByName = self.from.? },
-    ) orelse
+    )) orelse
         return cli.SelectionError.InvalidSelection;
 
     // make sure selection resolves to a single item

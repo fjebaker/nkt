@@ -118,7 +118,9 @@ fn listTasks(
     defer printer.deinit();
 
     for (tasks) |task| {
-        try printer.add(task.Task.task.*);
+        if (task.Task.task.completed == null) {
+            try printer.add(task.Task.task.*);
+        }
     }
 
     try printer.drain(writer);

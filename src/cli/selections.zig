@@ -123,13 +123,13 @@ fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
     return null;
 }
 
-pub fn find(state: *State, where: ?SelectedCollection, what: Selection) ?State.MaybeItem {
-    var maybe = findImpl(state, where, what) orelse return null;
+pub fn find(state: *State, where: ?SelectedCollection, what: Selection) !?State.MaybeItem {
+    var maybe = try findImpl(state, where, what) orelse return null;
     if (maybe.day == null and maybe.note == null and maybe.task == null) return null;
     return maybe;
 }
 
-fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) ?State.MaybeItem {
+fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.MaybeItem {
     if (where) |w| switch (w.container) {
         .Journal => {
             var journal = state.getJournal(w.name) orelse
@@ -152,12 +152,21 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) ?State.M
                 .ByDate => unreachable,
             }
         },
-        .Tasklist => unreachable,
+        .Tasklist => {
+            var tasklist = state.getTasklist(w.name) orelse
+                return null;
+            try tasklist.readAll();
+            switch (what) {
+                .ByName => |name| return .{ .task = tasklist.get(name) },
+                .ByIndex => unreachable,
+                .ByDate => unreachable,
+            }
+        },
     };
 
     // don't know if journal or entry, so we try both
     switch (what) {
-        .ByName => |name| return noteFromName(state, name),
+        .ByName => |name| return itemFromName(state, name),
         // for index, we only look at journals, but use the name to do a dir lookup
         // with the condition that the directory must have the same name as the journal
         .ByIndex => |index| {
@@ -168,7 +177,7 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) ?State.M
         },
         .ByDate => |date| {
             const name = utils.formatDateBuf(date) catch return null;
-            return noteFromName(state, &name);
+            return itemFromName(state, &name);
         },
     }
     return null;
@@ -187,7 +196,7 @@ fn withMatchingNote(state: *State, day: Item) ?State.MaybeItem {
     return maybe_item;
 }
 
-fn noteFromName(state: *State, name: []const u8) ?State.MaybeItem {
+fn itemFromName(state: *State, name: []const u8) ?State.MaybeItem {
     const maybe_note: ?Item = for (state.directories) |*c| {
         if (c.get(name)) |item| {
             break item;

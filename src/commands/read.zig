@@ -138,7 +138,7 @@ fn read(
     defer printer.deinit();
 
     if (self.selection) |sel| {
-        var selected: State.MaybeItem = cli.find(state, self.where, sel) orelse
+        var selected: State.MaybeItem = (try cli.find(state, self.where, sel)) orelse
             return NoSuchCollection;
         if (selected.note) |note| {
             try self.readNote(note, &printer);
