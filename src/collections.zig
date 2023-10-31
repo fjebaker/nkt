@@ -388,6 +388,20 @@ pub const Item = union(ItemType) {
     Task: struct {
         tasklist: *Tasklist,
         task: *Tasklist.Task,
+
+        pub fn isDone(self: @This()) bool {
+            return self.task.done;
+        }
+
+        pub fn setDone(self: @This()) void {
+            self.task.done = true;
+            self.task.completed = utils.now();
+        }
+
+        pub fn setTodo(self: @This()) void {
+            self.task.done = false;
+            self.task.completed = null;
+        }
     },
 
     inline fn commonRemove(

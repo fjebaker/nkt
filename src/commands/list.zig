@@ -36,6 +36,7 @@ ordering: ?State.Ordering = null,
 number: usize = 25,
 all: bool = false,
 pretty: ?bool = null,
+done: bool = false,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{};
@@ -49,6 +50,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.all = true;
             } else if (arg.is(null, "modified")) {
                 self.ordering = .Modified;
+            } else if (arg.is(null, "done")) {
+                self.done = true;
             } else if (arg.is(null, "created")) {
                 self.ordering = .Created;
             } else if (arg.is(null, "nopretty")) {
@@ -118,9 +121,10 @@ fn listTasks(
     defer printer.deinit();
 
     for (tasks) |task| {
-        if (task.Task.task.completed == null) {
-            try printer.add(task.Task.task.*);
+        if (!self.done and task.Task.task.completed != null) {
+            continue;
         }
+        try printer.add(task.Task.task.*);
     }
 
     try printer.drain(writer);

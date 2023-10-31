@@ -166,7 +166,7 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.
 
     // don't know if journal or entry, so we try both
     switch (what) {
-        .ByName => |name| return itemFromName(state, name),
+        .ByName => |name| return try itemFromName(state, name),
         // for index, we only look at journals, but use the name to do a dir lookup
         // with the condition that the directory must have the same name as the journal
         .ByIndex => |index| {
@@ -177,7 +177,7 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.
         },
         .ByDate => |date| {
             const name = utils.formatDateBuf(date) catch return null;
-            return itemFromName(state, &name);
+            return try itemFromName(state, &name);
         },
     }
     return null;
@@ -196,7 +196,7 @@ fn withMatchingNote(state: *State, day: Item) ?State.MaybeItem {
     return maybe_item;
 }
 
-fn itemFromName(state: *State, name: []const u8) ?State.MaybeItem {
+fn itemFromName(state: *State, name: []const u8) !?State.MaybeItem {
     const maybe_note: ?Item = for (state.directories) |*c| {
         if (c.get(name)) |item| {
             break item;
@@ -207,7 +207,13 @@ fn itemFromName(state: *State, name: []const u8) ?State.MaybeItem {
             break item;
         }
     } else null;
-    return .{ .day = maybe_day, .note = maybe_note };
+    const maybe_task: ?Item = for (state.tasklists) |*c| {
+        try c.readAll();
+        if (c.get(name)) |item| {
+            break item;
+        }
+    } else null;
+    return .{ .day = maybe_day, .note = maybe_note, .task = maybe_task };
 }
 
 ///
