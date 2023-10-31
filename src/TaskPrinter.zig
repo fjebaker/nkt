@@ -110,28 +110,49 @@ fn strLen(s: []const u8) usize {
     return s.len;
 }
 
-pub fn drain(self: *const TaskPrinter, writer: anytype) !void {
+pub fn drain(self: *TaskPrinter, writer: anytype) !void {
     const col_widths = self.columnWidth();
 
     _ = try writer.writeAll("\n");
-    for (self.entries.items) |item| {
-        try printTask(item, col_widths, writer, self.pretty);
+    for (0.., self.entries.items) |i, item| {
+        const index = self.entries.items.len - 1 - i;
+        try printTask(index, item, col_widths, writer, self.pretty);
         _ = try writer.writeAll("\n");
     }
     _ = try writer.writeAll("\n");
 }
 
-fn printTask(entry: FormattedEntry, padding: Padding, writer: anytype, pretty: bool) !void {
+fn printTask(
+    index: usize,
+    entry: FormattedEntry,
+    padding: Padding,
+    writer: anytype,
+    pretty: bool,
+) !void {
+    comptime var cham = Chameleon.init(.Auto);
+    if (pretty) try writeColour(cham.dim(), writer, .Open);
+    try writer.print(" {d: >3}", .{index});
+    if (pretty) try writeColour(cham.dim(), writer, .Close);
+
+    try writer.writeByteNTimes(' ', padding.due - strLen(entry.due));
+
     if (pretty) try duePretty(entry.status, writer, .Open);
     try writer.print(" {s}", .{entry.due});
     if (pretty) try duePretty(entry.status, writer, .Close);
 
-    try writer.writeByteNTimes(' ', padding.due - strLen(entry.due));
     _ = try writer.writeAll(" | ");
 
     if (pretty) try importancePretty(entry.importance, writer, .Open);
     try writer.print(" {s}", .{entry.title});
     if (pretty) try importancePretty(entry.importance, writer, .Close);
+}
+
+fn writeColour(comptime c: Chameleon, writer: anytype, which: OpenClose) !void {
+    const open = switch (which) {
+        .Open => true,
+        .Close => false,
+    };
+    _ = try writer.writeAll(if (open) c.open else c.close);
 }
 
 const OpenClose = enum { Open, Close };
