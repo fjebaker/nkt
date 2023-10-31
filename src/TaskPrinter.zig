@@ -10,9 +10,8 @@ const Status = enum { PastDue, NearlyDue, NoStatus, Done };
 const FormattedEntry = struct {
     due: []const u8,
     completed: []const u8,
-    title: []const u8,
+    task: Task,
     status: Status,
-    importance: Task.Importance,
 };
 
 entries: std.ArrayList(FormattedEntry),
@@ -92,10 +91,9 @@ pub fn add(self: *TaskPrinter, task: Task) !void {
     try self.entries.append(
         .{
             .due = due,
-            .title = task.title,
             .status = if (task.done) .Done else self.pastDue(task.due),
             .completed = completed,
-            .importance = task.importance,
+            .task = task,
         },
     );
 }
@@ -110,7 +108,7 @@ fn columnWidth(self: *const TaskPrinter) Padding {
     var title_width: usize = 0;
     for (self.entries.items) |item| {
         due_width = @max(strLen(item.due), due_width);
-        title_width = @max(strLen(item.title), title_width);
+        title_width = @max(strLen(item.task.title), title_width);
     }
     return .{ .due = due_width, .title = title_width };
 }
@@ -136,24 +134,35 @@ fn printTask(
     writer: anytype,
     pretty: bool,
 ) !void {
-    // comptime var cham = Chameleon.init(.Auto);
+    comptime var cham = Chameleon.init(.Auto);
     // if (pretty) try writeColour(cham.dim(), writer, .Open);
     // try writer.print(" {d: >3}", .{index});
     // if (pretty) try writeColour(cham.dim(), writer, .Close);
 
     const string = if (entry.status == .Done) entry.completed else entry.due;
-    try writer.writeByteNTimes(' ', padding.due - strLen(string));
+    try writer.writeByteNTimes(' ', 1 + padding.due - strLen(string));
 
     if (pretty) try duePretty(entry.status, writer, .Open);
-    try writer.print(" {s}", .{string});
+    try writer.print("{s}", .{string});
     try printStatusIndicator(entry.status, writer);
     if (pretty) try duePretty(entry.status, writer, .Close);
 
     _ = try writer.writeAll("|");
 
-    if (pretty) try importancePretty(entry.importance, writer, .Open);
-    try writer.print(" {s}", .{entry.title});
-    if (pretty) try importancePretty(entry.importance, writer, .Close);
+    if (pretty) try importancePretty(entry.task.importance, writer, .Open);
+    try printImportanceIndicator(entry.task.importance, writer);
+    try writer.print("{s}", .{entry.task.title});
+    if (pretty) try importancePretty(entry.task.importance, writer, .Close);
+
+    const text_pad: usize = p: {
+        if (entry.task.details.len > 0) {
+            if (pretty) try writeColour(cham.dim(), writer, .Open);
+            try printDetailIndicator(writer);
+            if (pretty) try writeColour(cham.dim(), writer, .Close);
+            break :p 4;
+        } else break :p 0;
+    };
+    _ = text_pad;
 }
 
 fn writeColour(comptime c: Chameleon, writer: anytype, which: OpenClose) !void {
@@ -209,12 +218,25 @@ fn importancePretty(importance: Task.Importance, writer: anytype, which: OpenClo
     }
 }
 
+fn printImportanceIndicator(importance: Task.Importance, writer: anytype) !void {
+    const indicator: []const u8 = switch (importance) {
+        .high => "*",
+        .urgent => "!",
+        else => " ",
+    };
+    try writer.print(" {s} ", .{indicator});
+}
+
 fn printStatusIndicator(status: Status, writer: anytype) !void {
     const indicator: []const u8 = switch (status) {
         .Done => "✓",
-        .NearlyDue => "!",
-        .PastDue => "X",
+        .NearlyDue => "*",
+        .PastDue => "!",
         else => " ",
     };
-    _ = try writer.print(" {s} ", .{indicator});
+    try writer.print(" {s} ", .{indicator});
+}
+
+fn printDetailIndicator(writer: anytype) !void {
+    _ = try writer.writeAll(" [+]");
 }
