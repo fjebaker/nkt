@@ -90,26 +90,26 @@ pub fn listNames(
     }
 }
 
+const Task = @import("../collections/Topology.zig").Task;
 fn listTasks(
     self: *Self,
     alloc: std.mem.Allocator,
-    tasklist: *State.Tasklist,
+    c: *State.Collection,
     writer: anytype,
 ) !void {
-    const Task = State.Tasklist.Child.Item;
-    _ = self;
+    // need to read tasklist from file
+    try c.readAll();
+    var tasks = try c.getAll(alloc);
+    defer alloc.free(tasks);
 
-    var tasks = try tasklist.getItemList(alloc);
-    defer tasks.deinit();
-
-    std.sort.insertion(Task, tasks.items, {}, Task.sortDue);
-    std.mem.reverse(Task, tasks.items);
+    c.sort(tasks, self.ordering orelse .Due);
+    std.mem.reverse(State.Item, tasks);
 
     var printer = TaskPrinter.init(alloc);
     defer printer.deinit();
 
-    for (tasks.items) |task| {
-        try printer.add(task);
+    for (tasks) |task| {
+        try printer.add(task.Task.task.*);
     }
 
     try printer.drain(writer);
@@ -143,17 +143,25 @@ pub fn run(
 
         if (collection.directory) |c| {
             try out_writer.print("Notes in directory: '{s}':\n", .{c.getName()});
-            try self.listCollection(state.allocator, c, self.ordering orelse .Modified, out_writer);
+            try self.listCollection(
+                state.allocator,
+                c,
+                self.ordering orelse .Modified,
+                out_writer,
+            );
         }
         if (collection.journal) |c| {
             try out_writer.print("Entries in journal: '{s}':\n", .{c.getName()});
-            try self.listCollection(state.allocator, c, self.ordering orelse .Modified, out_writer);
+            try self.listCollection(
+                state.allocator,
+                c,
+                self.ordering orelse .Modified,
+                out_writer,
+            );
         }
         if (collection.tasklist) |c| {
-            // need to read tasklist from file
-            try c.readAll();
             try out_writer.print("Tasks in tasklist: '{s}':\n", .{c.getName()});
-            try self.listCollection(state.allocator, c, self.ordering orelse .Due, out_writer);
+            try self.listTasks(state.allocator, c, out_writer);
         }
     }
 }

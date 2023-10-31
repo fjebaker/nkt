@@ -1,4 +1,6 @@
 const std = @import("std");
+const Chameleon = @import("chameleon").Chameleon;
+
 const Printer = @import("Printer.zig");
 
 const StringList = std.ArrayList(u8);
@@ -21,7 +23,8 @@ const Chunk = struct {
     lines: StringList,
 
     fn print(self: *Chunk, writer: anytype) !void {
-        _ = try writer.writeAll(self.heading);
+        comptime var cham = Chameleon.init(.Auto);
+        try writer.print(cham.underline().fmt("{s}"), .{self.heading});
         _ = try writer.writeAll(try self.lines.toOwnedSlice());
     }
 };
@@ -54,6 +57,7 @@ pub fn drain(self: *const Printer, writer: anytype) !void {
             try chunk.print(writer);
         }
     }
+    _ = try writer.writeAll("\n");
 }
 
 fn subRemainder(self: *Printer, i: usize) bool {

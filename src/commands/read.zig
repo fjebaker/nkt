@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const Chameleon = @import("chameleon").Chameleon;
+
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
@@ -235,7 +237,8 @@ fn printEntryItem(writer: Printer.Writer, entry: Entry) Printer.WriteError!void 
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
-    try writer.print("{s} - {s}\n", .{ time_of_day, entry.item });
+    comptime var cham = Chameleon.init(.Auto);
+    try writer.print(cham.yellowBright().fmt("{s}") ++ " | {s}\n", .{ time_of_day, entry.item });
 }
 
 fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
@@ -243,7 +246,8 @@ fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!v
     const time = utils.formatDateTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
-    try writer.print("{s} - {s}\n", .{ time, entry.item });
+    comptime var cham = Chameleon.init(.Auto);
+    try writer.print(cham.yellowBright().fmt("{s}") ++ " | {s}\n", .{ time, entry.item });
 }
 
 const FilenameClosure = struct { filename: []const u8 };
@@ -255,5 +259,9 @@ fn printEntryItemFilename(
     const date = utils.dateFromMs(entry.created);
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
-    try writer.print("{s} {s} - {s}\n", .{ fc.filename, time_of_day, entry.item });
+    comptime var cham = Chameleon.init(.Auto);
+    try writer.print(
+        cham.dim().fmt("{s} {s}") ++ " - {s}\n",
+        .{ fc.filename, time_of_day, entry.item },
+    );
 }
