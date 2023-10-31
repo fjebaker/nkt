@@ -35,7 +35,7 @@ pub const Commands = union(enum) {
 
     pub fn deinit(_: *Commands) void {}
 
-    pub fn init(alloc: std.mem.Allocator, args: *cli.ArgIterator) !Commands {
+    pub fn init(alloc: std.mem.Allocator, args: *cli.ArgIterator, options: cli.Options) !Commands {
         const command = try args.next() orelse
             return CommandError.NoCommandGiven;
 
@@ -45,7 +45,7 @@ pub const Commands = union(enum) {
             const is_field = std.mem.eql(u8, command.string, field.name);
             const is_alias = utils.isAlias(field, command.string);
             if (is_field or is_alias) {
-                var instance = try @field(field.type, "init")(alloc, args);
+                var instance = try @field(field.type, "init")(alloc, args, options);
                 return @unionInit(Commands, field.name, instance);
             }
         }
@@ -58,7 +58,8 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     var allocator = gpa.allocator();
 
-    const stdout_file = std.io.getStdOut().writer();
+    const stdout_fd = std.io.getStdOut();
+    const stdout_file = stdout_fd.writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
@@ -73,7 +74,9 @@ pub fn main() !void {
     defer mem.deinit();
     var arg_parse_alloc = mem.allocator();
 
-    var cmd = Commands.init(arg_parse_alloc, &arg_iterator) catch |err| {
+    const opts: cli.Options = .{ .piped = !stdout_fd.isTty() };
+
+    var cmd = Commands.init(arg_parse_alloc, &arg_iterator, opts) catch |err| {
         if (utils.inErrorSet(err, CommandError)) |e| switch (e) {
             CommandError.NoCommandGiven => {
                 try @import("./commands/help.zig").printHelp(stdout_file);

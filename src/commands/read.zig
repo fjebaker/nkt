@@ -40,10 +40,11 @@ all: bool = false,
 full_date: bool = false,
 filename: bool = false,
 pager: bool = false,
+pretty: ?bool = null,
 
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{
         .selection = null,
         .where = null,
@@ -83,6 +84,9 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     if (self.full_date and self.filename)
         return cli.SelectionError.IncompatibleSelection;
 
+    // don't pretty if to pager or being piped
+    self.pretty = self.pretty orelse
+        if (self.pager) false else !opts.piped;
     return self;
 }
 
@@ -130,7 +134,7 @@ fn read(
     out_writer: anytype,
 ) !void {
     const N = if (self.all) null else self.number;
-    var printer = Printer.init(state.allocator, N);
+    var printer = Printer.init(state.allocator, N, self.pretty.?);
     defer printer.deinit();
 
     if (self.selection) |sel| {
@@ -237,8 +241,7 @@ fn printEntryItem(writer: Printer.Writer, entry: Entry) Printer.WriteError!void 
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
-    comptime var cham = Chameleon.init(.Auto);
-    try writer.print(cham.yellowBright().fmt("{s}") ++ " | {s}\n", .{ time_of_day, entry.item });
+    try writer.print("{s} | {s}\n", .{ time_of_day, entry.item });
 }
 
 fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
@@ -246,8 +249,7 @@ fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!v
     const time = utils.formatDateTimeBuf(date) catch
         return Printer.WriteError.DateError;
 
-    comptime var cham = Chameleon.init(.Auto);
-    try writer.print(cham.yellowBright().fmt("{s}") ++ " | {s}\n", .{ time, entry.item });
+    try writer.print("{s} | {s}\n", .{ time, entry.item });
 }
 
 const FilenameClosure = struct { filename: []const u8 };
@@ -259,9 +261,8 @@ fn printEntryItemFilename(
     const date = utils.dateFromMs(entry.created);
     const time_of_day = utils.formatTimeBuf(date) catch
         return Printer.WriteError.DateError;
-    comptime var cham = Chameleon.init(.Auto);
     try writer.print(
-        cham.dim().fmt("{s} {s}") ++ " - {s}\n",
+        "{s} {s} - {s}\n",
         .{ fc.filename, time_of_day, entry.item },
     );
 }

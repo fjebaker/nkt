@@ -17,7 +17,7 @@ const What = enum { journals, directories, notes, zsh };
 what: What,
 where: ?cli.SelectedCollection = null,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     const what_arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;
     var self: Self = .{
         .what = std.meta.stringToEnum(What, what_arg.string) orelse

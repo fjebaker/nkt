@@ -35,9 +35,9 @@ selection: []const u8 = "",
 ordering: ?State.Ordering = null,
 number: usize = 25,
 all: bool = false,
-pretty: bool = true,
+pretty: ?bool = null,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{};
 
     while (try itt.next()) |arg| {
@@ -51,6 +51,12 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
                 self.ordering = .Modified;
             } else if (arg.is(null, "created")) {
                 self.ordering = .Created;
+            } else if (arg.is(null, "nopretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
+                self.pretty = false;
+            } else if (arg.is(null, "pretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
+                self.pretty = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -62,6 +68,9 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     }
 
     if (self.selection.len == 0) self.selection = "all";
+
+    // don't pretty format by default if not tty
+    self.pretty = self.pretty orelse !opts.piped;
 
     return self;
 }
@@ -105,7 +114,7 @@ fn listTasks(
     c.sort(tasks, self.ordering orelse .Due);
     std.mem.reverse(State.Item, tasks);
 
-    var printer = TaskPrinter.init(alloc);
+    var printer = TaskPrinter.init(alloc, self.pretty.?);
     defer printer.deinit();
 
     for (tasks) |task| {

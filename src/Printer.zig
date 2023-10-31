@@ -22,9 +22,13 @@ const Chunk = struct {
     heading: []const u8,
     lines: StringList,
 
-    fn print(self: *Chunk, writer: anytype) !void {
-        comptime var cham = Chameleon.init(.Auto);
-        try writer.print(cham.underline().fmt("{s}"), .{self.heading});
+    fn print(self: *Chunk, writer: anytype, pretty: bool) !void {
+        if (pretty) {
+            comptime var cham = Chameleon.init(.Auto);
+            try writer.print(cham.underline().fmt("{s}"), .{self.heading});
+        } else {
+            try writer.print("{s}", .{self.heading});
+        }
         _ = try writer.writeAll(try self.lines.toOwnedSlice());
     }
 };
@@ -35,26 +39,32 @@ remaining: ?usize,
 mem: std.heap.ArenaAllocator,
 chunks: ChunkList,
 current: ?*Chunk = null,
+pretty: bool,
 
-pub fn init(alloc: std.mem.Allocator, N: ?usize) Printer {
+pub fn init(alloc: std.mem.Allocator, N: ?usize, pretty: bool) Printer {
     var mem = std.heap.ArenaAllocator.init(alloc);
     errdefer mem.deinit();
 
     var list = ChunkList.init(alloc);
 
-    return .{ .remaining = N, .chunks = list, .mem = mem };
+    return .{
+        .remaining = N,
+        .chunks = list,
+        .mem = mem,
+        .pretty = pretty,
+    };
 }
 
 pub fn drain(self: *const Printer, writer: anytype) !void {
     var chunks = self.chunks.items;
     // print first chunk
     if (chunks.len > 0) {
-        try chunks[0].print(writer);
+        try chunks[0].print(writer, self.pretty);
     }
     if (chunks.len > 1) {
         for (chunks[1..]) |*chunk| {
             _ = try writer.writeAll("\n");
-            try chunk.print(writer);
+            try chunk.print(writer, self.pretty);
         }
     }
     _ = try writer.writeAll("\n");

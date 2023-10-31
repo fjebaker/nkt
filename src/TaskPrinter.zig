@@ -11,19 +11,22 @@ const FormattedEntry = struct {
     due: []const u8,
     title: []const u8,
     status: Status,
+    importance: Task.Importance,
 };
 
 entries: std.ArrayList(FormattedEntry),
 mem: std.heap.ArenaAllocator,
 now: utils.Date,
+pretty: bool,
 
-pub fn init(alloc: std.mem.Allocator) TaskPrinter {
+pub fn init(alloc: std.mem.Allocator, pretty: bool) TaskPrinter {
     var mem = std.heap.ArenaAllocator.init(alloc);
     var list = std.ArrayList(FormattedEntry).init(alloc);
     return .{
         .entries = list,
         .mem = mem,
         .now = utils.Date.now(),
+        .pretty = pretty,
     };
 }
 
@@ -83,58 +86,91 @@ pub fn add(self: *TaskPrinter, task: Task) !void {
             .due = due,
             .title = task.title,
             .status = self.pastDue(task.due),
+            .importance = task.importance,
         },
     );
 }
 
 const Padding = struct {
     due: usize,
-    title: usize = 0,
+    title: usize,
 };
 
 fn columnWidth(self: *const TaskPrinter) Padding {
     var due_width: usize = 0;
+    var title_width: usize = 0;
     for (self.entries.items) |item| {
         due_width = @max(strLen(item.due), due_width);
+        title_width = @max(strLen(item.title), title_width);
     }
-    return .{ .due = due_width };
+    return .{ .due = due_width, .title = title_width };
 }
 
 fn strLen(s: []const u8) usize {
-    const alpha = std.ascii.isAlphanumeric;
-
-    var count: usize = 0;
-    for (s) |c| {
-        if (alpha(c) or c == ' ' or c == '~' or c == '-') {
-            count += 1;
-        }
-    }
-    return count;
+    return s.len;
 }
 
 pub fn drain(self: *const TaskPrinter, writer: anytype) !void {
-    const due_column_width = self.columnWidth();
+    const col_widths = self.columnWidth();
 
-    comptime var cham = Chameleon.init(.Auto);
+    _ = try writer.writeAll("\n");
     for (self.entries.items) |item| {
-        const due_padding = due_column_width.due - strLen(item.due);
-
-        switch (item.status) {
-            .PastDue => {
-                try writer.print(cham.redBright().fmt("-{s}"), .{item.due});
-            },
-            .NearlyDue => {
-                try writer.print(cham.yellow().fmt(" {s}"), .{item.due});
-            },
-            else => {
-                try writer.print(" {s}", .{item.due});
-            },
-        }
-        try writer.writeByteNTimes(' ', due_padding);
-
-        _ = try writer.writeAll(" | ");
-        _ = try writer.writeAll(item.title);
+        try printTask(item, col_widths, writer, self.pretty);
         _ = try writer.writeAll("\n");
     }
     _ = try writer.writeAll("\n");
+}
+
+fn printTask(entry: FormattedEntry, padding: Padding, writer: anytype, pretty: bool) !void {
+    if (pretty) try duePretty(entry.status, writer, .Open);
+    try writer.print(" {s}", .{entry.due});
+    if (pretty) try duePretty(entry.status, writer, .Close);
+
+    try writer.writeByteNTimes(' ', padding.due - strLen(entry.due));
+    _ = try writer.writeAll(" | ");
+
+    if (pretty) try importancePretty(entry.importance, writer, .Open);
+    try writer.print(" {s}", .{entry.title});
+    if (pretty) try importancePretty(entry.importance, writer, .Close);
+}
+
+const OpenClose = enum { Open, Close };
+fn duePretty(status: Status, writer: anytype, which: OpenClose) !void {
+    const open = switch (which) {
+        .Open => true,
+        .Close => false,
+    };
+
+    comptime var cham = Chameleon.init(.Auto);
+    switch (status) {
+        .PastDue => {
+            const c = cham.bold().redBright();
+            _ = try writer.writeAll(if (open) c.open else c.close);
+        },
+        .NearlyDue => {
+            const c = cham.yellow();
+            _ = try writer.writeAll(if (open) c.open else c.close);
+        },
+        else => {},
+    }
+}
+
+fn importancePretty(importance: Task.Importance, writer: anytype, which: OpenClose) !void {
+    const open = switch (which) {
+        .Open => true,
+        .Close => false,
+    };
+
+    comptime var cham = Chameleon.init(.Auto);
+    switch (importance) {
+        .high => {
+            const c = cham.yellow();
+            _ = try writer.writeAll(if (open) c.open else c.close);
+        },
+        .urgent => {
+            const c = cham.bold().redBright();
+            _ = try writer.writeAll(if (open) c.open else c.close);
+        },
+        else => {},
+    }
 }

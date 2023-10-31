@@ -90,7 +90,7 @@ by: ?utils.Date = null,
 importance: ?Importance = null,
 details: ?[]const u8 = null,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
 
     while (try itt.next()) |arg| {

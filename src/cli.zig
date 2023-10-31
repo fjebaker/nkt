@@ -17,6 +17,10 @@ pub const SelectionError = error{
 
 pub const find = selections.find;
 
+pub const Options = struct {
+    piped: bool, // output is being piped
+};
+
 fn Iterator(comptime T: type) type {
     return struct {
         data: []const T,
@@ -54,7 +58,7 @@ pub const Arg = struct {
 
     pub fn is(self: *const Arg, short: ?u8, long: ?[]const u8) bool {
         if (short) |s| {
-            if (s == self.string[0]) {
+            if (self.string.len == 1 and s == self.string[0]) {
                 return true;
             }
         }

@@ -112,7 +112,7 @@ const FindError = error{SubProcError};
 
 prefix: ?[]const u8 = null,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
 
     itt.counter = 0;
@@ -211,7 +211,7 @@ pub fn run(
 }
 
 fn readFile(state: *State, path: []const u8, out_writer: anytype) !void {
-    var printer = Printer.init(state.allocator, null);
+    var printer = Printer.init(state.allocator, null, false);
     defer printer.deinit();
 
     if (path.len == 0) return;

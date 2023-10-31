@@ -33,7 +33,7 @@ pub const extended_help =
 selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{ .selection = null, .where = null };
 
     itt.counter = 0;

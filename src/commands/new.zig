@@ -19,7 +19,7 @@ pub const extended_help =
 collection_type: State.CollectionType,
 name: []const u8,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     const selected = try cli.selections.getSelectedCollectionPositional(itt);
     return .{ .collection_type = selected.container, .name = selected.name };
 }

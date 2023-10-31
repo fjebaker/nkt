@@ -30,7 +30,7 @@ move: bool = false,
 
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{ .where = null, .paths = null };
 
     var paths = std.ArrayList([]const u8).init(alloc);

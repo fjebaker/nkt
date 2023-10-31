@@ -40,7 +40,7 @@ selection: union(enum) {
     Collection: cli.SelectedCollection,
 },
 
-fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{
         .selection = .{
             .Child = .{
@@ -82,14 +82,14 @@ fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return self;
 }
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     const arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;
     if (arg.flag and arg.is(null, "collection")) {
         const selection = try cli.selections.getSelectedCollectionPositional(itt);
         return .{ .selection = .{ .Collection = selection } };
     } else {
         itt.rewind();
-        return try initChild(alloc, itt);
+        return try initChild(alloc, itt, opts);
     }
 }
 

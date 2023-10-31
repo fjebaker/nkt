@@ -28,7 +28,7 @@ to: ?[]const u8 = null,
 from_where: ?cli.SelectedCollection = null,
 to_where: ?cli.SelectedCollection = null,
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
 
     var paths = std.ArrayList([]const u8).init(alloc);
