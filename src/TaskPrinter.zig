@@ -12,6 +12,7 @@ const FormattedEntry = struct {
     completed: []const u8,
     task: Task,
     status: Status,
+    index: ?usize,
 };
 
 entries: std.ArrayList(FormattedEntry),
@@ -77,7 +78,7 @@ fn pastDue(self: *const TaskPrinter, due_milis: ?u64) Status {
     return .NoStatus;
 }
 
-pub fn add(self: *TaskPrinter, task: Task) !void {
+pub fn add(self: *TaskPrinter, task: Task, index: ?usize) !void {
     var alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
     const completed: []const u8 = if (task.completed) |cmpl|
@@ -94,6 +95,7 @@ pub fn add(self: *TaskPrinter, task: Task) !void {
             .status = if (task.done) .Done else self.pastDue(task.due),
             .completed = completed,
             .task = task,
+            .index = index,
         },
     );
 }
@@ -135,9 +137,13 @@ fn printTask(
     pretty: bool,
 ) !void {
     comptime var cham = Chameleon.init(.Auto);
-    // if (pretty) try writeColour(cham.dim(), writer, .Open);
-    // try writer.print(" {d: >3}", .{index});
-    // if (pretty) try writeColour(cham.dim(), writer, .Close);
+    if (entry.index) |index| {
+        if (pretty) try writeColour(cham.dim(), writer, .Open);
+        try writer.print(" {d: >3}", .{index});
+        if (pretty) try writeColour(cham.dim(), writer, .Close);
+    } else {
+        try writer.print("    ", .{});
+    }
 
     const string = if (entry.status == .Done) entry.completed else entry.due;
     try writer.writeByteNTimes(' ', 1 + padding.due - strLen(string));

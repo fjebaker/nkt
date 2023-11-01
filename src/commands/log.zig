@@ -46,7 +46,7 @@ pub fn run(
     const journal_name: []const u8 = self.journal orelse "diary";
 
     var journal = state.getJournal(journal_name) orelse
-        return cli.SelectionError.NoSuchJournal;
+        return cli.SelectionError.NoSuchCollection;
 
     const today_string = try utils.formatDateBuf(utils.Date.now());
     var entry = journal.get(&today_string) orelse

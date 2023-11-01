@@ -18,6 +18,7 @@ pub const extended_help =
     \\                             entry. if choice is ambiguous, will print both,
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
+    \\     -n/--new              allow the creation of new notes
     \\     --journal name        name of journal to read from
     \\     --dir name            name of directory to read from
     \\
@@ -32,6 +33,9 @@ pub const extended_help =
 
 selection: ?cli.Selection,
 where: ?cli.SelectedCollection,
+allow_new: bool = false,
+
+const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{ .selection = null, .where = null };
@@ -39,16 +43,12 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (arg.is(null, "journal")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Journal, value.string);
-                }
-            } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
-                if (self.where == null) {
-                    const value = try itt.getValue();
-                    self.where = cli.SelectedCollection.from(.Directory, value.string);
-                }
+            if (try parseCollection(arg, itt, true)) |col| {
+                if (self.where != null)
+                    return cli.SelectionError.AmbiguousSelection;
+                self.where = col;
+            } else if (arg.is('n', "new")) {
+                self.allow_new = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -115,18 +115,30 @@ fn createDefaultInDirectory(
     }
 }
 
-fn findOrCreateDefault(self: *Self, state: *State) !State.Item {
+fn findOrCreateDefault(self: *Self, state: *State) !struct {
+    new: bool,
+    item: State.MaybeItem,
+} {
     const selection = self.selection.?;
 
-    const item: State.MaybeItem = (try cli.find(
+    const item: ?State.MaybeItem = try cli.find(
         state,
         self.where,
         selection,
-    )) orelse
-        return try createDefaultInDirectory(self, state);
+    );
 
-    return item.note orelse
-        try createDefaultInDirectory(self, state);
+    if (item != null) return .{ .new = false, .item = item.? };
+
+    if (self.allow_new) {
+        return .{
+            .new = true,
+            .item = .{
+                .note = try createDefaultInDirectory(self, state),
+            },
+        };
+    } else {
+        return cli.SelectionError.NoSuchItem;
+    }
 }
 
 pub fn run(
@@ -134,21 +146,47 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var note = try self.findOrCreateDefault(state);
-    const rel_path = note.getPath();
+    var iteminfo = try self.findOrCreateDefault(state);
+    var item = iteminfo.item;
 
-    const abs_path = try state.fs.absPathify(state.allocator, rel_path);
-    defer state.allocator.free(abs_path);
+    if (item.note) |note| {
+        const rel_path = note.getPath();
 
-    if (try state.fs.fileExists(rel_path)) {
-        try out_writer.print("Opening file '{s}'\n", .{rel_path});
+        const abs_path = try state.fs.absPathify(state.allocator, rel_path);
+        defer state.allocator.free(abs_path);
+
+        if (iteminfo.new) {
+            try out_writer.print(
+                "Creating new file '{s}' in '{s}'\n",
+                .{ rel_path, note.collectionName() },
+            );
+        } else {
+            try out_writer.print("Opening file '{s}'\n", .{rel_path});
+        }
+
+        var editor = try Editor.init(state.allocator);
+        defer editor.deinit();
+
+        try editor.editPath(abs_path);
+        note.Note.note.modified = utils.now();
+    } else if (item.task) |task| {
+        var editor = try Editor.init(state.allocator);
+        defer editor.deinit();
+
+        var task_allocator = task.Task.tasklist.mem.allocator();
+        const new_details = try editor.editTemporaryContent(
+            task_allocator,
+            task.Task.task.details,
+        );
+
+        task.Task.task.details = new_details;
+        task.Task.task.modified = utils.now();
+
+        try out_writer.print(
+            "Task details for '{s}' in '{s}' updated\n",
+            .{ task.getName(), task.collectionName() },
+        );
     } else {
-        try out_writer.print("Creating new file '{s}'\n", .{rel_path});
+        return cli.SelectionError.InvalidSelection;
     }
-
-    var editor = try Editor.init(state.allocator);
-    defer editor.deinit();
-
-    try editor.editPath(abs_path);
-    note.Note.note.modified = utils.now();
 }

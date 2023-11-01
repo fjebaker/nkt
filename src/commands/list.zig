@@ -120,11 +120,15 @@ fn listTasks(
     var printer = TaskPrinter.init(alloc, self.pretty.?);
     defer printer.deinit();
 
+    var lookup = try c.Tasklist.invertIndexMap(alloc);
+    defer lookup.deinit();
+
     for (tasks) |task| {
         if (!self.done and task.Task.task.completed != null) {
             continue;
         }
-        try printer.add(task.Task.task.*);
+        const index = lookup.get(task.Task.task.title);
+        try printer.add(task.Task.task.*, index);
     }
 
     try printer.drain(writer);

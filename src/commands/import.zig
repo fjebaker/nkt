@@ -91,7 +91,7 @@ fn importToDirectory(
     }
 
     var dir = state.getDirectory(name) orelse
-        return cli.SelectionError.NoSuchDirectory;
+        return cli.SelectionError.NoSuchCollection;
     // assert the destination name does not already exist in chosen container
     if (dir.get(filename) != null)
         return cli.SelectionError.ChildAlreadyExists;

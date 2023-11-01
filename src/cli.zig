@@ -9,9 +9,8 @@ pub const SelectionError = error{
     ChildAlreadyExists,
     IncompatibleSelection,
     InvalidSelection,
-    NoSuchDirectory,
-    NoSuchEntry,
-    NoSuchJournal,
+    NoSuchCollection,
+    NoSuchItem,
     UnknownCollection,
 };
 

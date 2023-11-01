@@ -136,7 +136,9 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.
                 return null;
             switch (what) {
                 .ByName => |name| return .{ .day = journal.get(name) },
-                .ByIndex => |index| return .{ .day = journal.Journal.getIndex(index) },
+                .ByIndex => |index| return .{
+                    .day = journal.Journal.getIndex(index),
+                },
                 .ByDate => |date| {
                     const name = utils.formatDateBuf(date) catch return null;
                     return .{ .day = journal.get(&name) };
@@ -158,7 +160,9 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.
             try tasklist.readAll();
             switch (what) {
                 .ByName => |name| return .{ .task = tasklist.get(name) },
-                .ByIndex => unreachable,
+                .ByIndex => |i| return .{
+                    .task = tasklist.Tasklist.getIndex(i),
+                },
                 .ByDate => unreachable,
             }
         },

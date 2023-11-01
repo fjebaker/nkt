@@ -18,7 +18,7 @@ pub fn deinit(self: *Editor) void {
     self.* = undefined;
 }
 
-fn tmpFile(allocator: std.mem.Allocator) ![]u8 {
+fn tmpFilePath(allocator: std.mem.Allocator) ![]u8 {
     var prng = std.rand.DefaultPrng.init(0);
     const id_num = prng.random().int(u16);
 
@@ -49,14 +49,33 @@ pub fn editPath(self: *Editor, path: []const u8) !void {
 }
 
 pub fn editTemporary(self: *Editor, alloc: std.mem.Allocator) ![]u8 {
-    var filename = try tmpFile(alloc);
-    defer alloc.free(filename);
+    return self.editTemporaryContent(alloc, "");
+}
 
-    try self.edit(self, filename);
-    defer std.fs.deleteFileAbsolute(filename) catch {};
+fn writeToFile(path: []const u8, content: []const u8) !void {
+    var fs = try std.fs.createFileAbsolute(path, .{});
+    defer fs.close();
+    try fs.writeAll(content);
+}
 
-    var fs = try std.fs.openFileAbsolute(filename, .{ .mode = .read_only });
+fn deleteFile(path: []const u8) !void {
+    try std.fs.deleteFileAbsolute(path);
+}
+
+const MAX_BYTES = @import("FileSystem.zig").MAXIMUM_BYTES_READ;
+pub fn editTemporaryContent(self: *Editor, alloc: std.mem.Allocator, content: []const u8) ![]u8 {
+    var file_path = try tmpFilePath(alloc);
+    defer alloc.free(file_path);
+
+    try writeToFile(file_path, content);
+
+    try self.editPath(file_path);
+    defer std.fs.deleteFileAbsolute(file_path) catch {};
+
+    var fs = try std.fs.openFileAbsolute(file_path, .{ .mode = .read_only });
     defer fs.close();
 
-    return try fs.readToEndAlloc(alloc, 10_000);
+    try deleteFile(file_path);
+
+    return try fs.readToEndAlloc(alloc, MAX_BYTES);
 }

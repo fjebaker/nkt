@@ -141,7 +141,7 @@ pub fn run(
     const name = self.tasklist.?;
 
     var tasklist = state.getTasklist(self.tasklist.?) orelse
-        return cli.SelectionError.NoSuchJournal;
+        return cli.SelectionError.NoSuchCollection;
 
     const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
 

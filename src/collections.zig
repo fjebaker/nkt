@@ -13,7 +13,11 @@ const ArrayList = std.ArrayList;
 pub const Tag = Topology.Tag;
 pub const Type = enum { Directory, Journal, Tasklist };
 pub const ItemType = enum { Note, Day, Task };
-pub const Ordering = enum { Modified, Created, Due, Completed };
+pub const Ordering = enum {
+    Modified,
+    Created,
+    Due,
+};
 
 pub const MaybeCollection = struct {
     journal: ?*Collection = null,
@@ -284,6 +288,7 @@ const Tasklist = struct {
     fs: FileSystem,
     info: *Topology.TasklistInfo,
     tasks: ?[]Task,
+    index: ?IndexContainer,
 
     pub const TaskOptions = struct {
         due: ?u64 = null,
@@ -322,11 +327,83 @@ const Tasklist = struct {
                 self.info.path,
             );
             self.tasks = try Topology.parseTasks(alloc, string);
+            try self.determineIndexes();
             return self.tasks.?;
         };
     }
 
-    pub fn init(alloc: std.mem.Allocator, info: *Topology.TasklistInfo, fs: FileSystem) !Tasklist {
+    fn determineIndexes(self: *Tasklist) !void {
+        var alloc = self.mem.child_allocator;
+
+        const tasks = self.tasks.?;
+        std.sort.insertion(Task, tasks, {}, sortCanonical);
+        // std.mem.reverse(Task, tasks);
+
+        var index = IndexContainer.init(alloc);
+        errdefer index.deinit();
+
+        var counter: usize = 0;
+        for (tasks) |task| {
+            if (task.done) continue;
+            try index.put(counter, task.title);
+            counter += 1;
+        }
+
+        self.index = index;
+    }
+
+    pub fn getIndex(t: *Tasklist, index: usize) ?Item {
+        const title = t.index.?.get(index) orelse
+            return null;
+
+        var task = for (t.tasks.?) |*task| {
+            if (std.mem.eql(u8, title, task.title)) break task;
+        } else unreachable;
+
+        return .{ .Task = .{ .tasklist = t, .task = task } };
+    }
+
+    pub fn invertIndexMap(
+        t: *const Tasklist,
+        alloc: std.mem.Allocator,
+    ) !std.StringHashMap(usize) {
+        var map = std.StringHashMap(usize).init(alloc);
+        errdefer map.deinit();
+
+        var itt = t.index.?.iterator();
+
+        while (itt.next()) |entry| {
+            try map.put(entry.value_ptr.*, entry.key_ptr.*);
+        }
+
+        return map;
+    }
+
+    fn sortDue(_: void, lhs: Task, rhs: Task) bool {
+        const lhs_due = lhs.due;
+        const rhs_due = rhs.due;
+        if (lhs_due == null and rhs_due == null) return true;
+        if (lhs_due == null) return false;
+        if (rhs_due == null) return true;
+        return lhs_due.? < rhs_due.?;
+    }
+
+    fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
+        const due = sortDue({}, lhs, rhs);
+        const both_same =
+            (lhs.due == null and rhs.due == null) or (lhs.due != null and rhs.due != null);
+        if (both_same and lhs.due == rhs.due) {
+            // if they are both due at the same time, we sort lexographically
+            return std.ascii.lessThanIgnoreCase(lhs.title, rhs.title);
+        }
+        return due;
+    }
+
+    pub fn init(
+        alloc: std.mem.Allocator,
+        info: *Topology.TasklistInfo,
+        fs: FileSystem,
+    ) !Tasklist {
         var mem = std.heap.ArenaAllocator.init(alloc);
         errdefer mem.deinit();
 
@@ -335,10 +412,12 @@ const Tasklist = struct {
             .fs = fs,
             .info = info,
             .tasks = null,
+            .index = null,
         };
     }
 
     pub fn deinit(t: *Tasklist) void {
+        if (t.index) |*i| i.deinit();
         t.mem.deinit();
         t.* = undefined;
     }
@@ -522,12 +601,7 @@ pub const Item = union(ItemType) {
     }
 
     fn sortDue(_: void, lhs: Item, rhs: Item) bool {
-        const lhs_due = lhs.getDue();
-        const rhs_due = rhs.getDue();
-        if (lhs_due == null and rhs_due == null) return true;
-        if (lhs_due == null) return false;
-        if (rhs_due == null) return true;
-        return lhs_due.? < rhs_due.?;
+        return Tasklist.sortCanonical({}, lhs.Task.task.*, rhs.Task.task.*);
     }
 
     fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
@@ -660,11 +734,22 @@ pub const Collection = union(Type) {
         }
     }
 
-    pub fn init(alloc: std.mem.Allocator, comptime what: Type, data: anytype, fs: FileSystem) !Collection {
+    pub fn init(
+        alloc: std.mem.Allocator,
+        comptime what: Type,
+        data: anytype,
+        fs: FileSystem,
+    ) !Collection {
         switch (what) {
-            .Directory => return .{ .Directory = try Directory.init(alloc, data, fs) },
-            .Journal => return .{ .Journal = try Journal.init(alloc, data, fs) },
-            .Tasklist => return .{ .Tasklist = try Tasklist.init(alloc, data, fs) },
+            .Directory => return .{
+                .Directory = try Directory.init(alloc, data, fs),
+            },
+            .Journal => return .{
+                .Journal = try Journal.init(alloc, data, fs),
+            },
+            .Tasklist => return .{
+                .Tasklist = try Tasklist.init(alloc, data, fs),
+            },
         }
     }
 
@@ -694,7 +779,6 @@ pub const Collection = union(Type) {
             .Modified => std.sort.insertion(Item, items, {}, Item.sortModified),
             .Created => std.sort.insertion(Item, items, {}, Item.sortCreated),
             .Due => std.sort.insertion(Item, items, {}, Item.sortDue),
-            else => unreachable,
         }
     }
 
