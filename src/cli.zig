@@ -2,19 +2,7 @@ const std = @import("std");
 pub const selections = @import("cli/selections.zig");
 
 pub const Selection = selections.Selection;
-pub const SelectedCollection = selections.SelectedCollection;
-
-pub const SelectionError = error{
-    AmbiguousSelection,
-    ChildAlreadyExists,
-    IncompatibleSelection,
-    InvalidSelection,
-    NoSuchCollection,
-    NoSuchItem,
-    UnknownCollection,
-};
-
-pub const find = selections.find;
+pub const SelectionError = selections.SelectionError;
 
 pub const Options = struct {
     piped: bool, // output is being piped

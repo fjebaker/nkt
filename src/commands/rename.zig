@@ -13,20 +13,22 @@ pub const extended_help =
     \\Move or rename a note, directory, journal, or tasklist.
     \\
     \\  nkt rename
-    \\     <from>                path to the file to import. defaults to
-    \\     <to>                  importing to the default directory. can
-    \\                             specificy multiple paths
+    \\     <from>
+    \\     <to>
+    \\
     \\     --from-journal name   name of the journal to move from (else default)
     \\     --to-journal name     name of the journal to move from (else default)
+    \\
+    \\     --from-tasklist name  name of the tasklist to move from (else default)
+    \\     --to-tasklist name    name of the tasklist to move from (else default)
+    \\
     \\     --from-dir name       name of the dir to move from (else default)
     \\     --to-dir name         name of the dir to move to (else default)
     \\
 ;
 
-from: ?[]const u8 = null,
-to: ?[]const u8 = null,
-from_where: ?cli.SelectedCollection = null,
-to_where: ?cli.SelectedCollection = null,
+from: cli.Selection = .{},
+to: cli.Selection = .{},
 
 pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
@@ -37,43 +39,19 @@ pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Se
     itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (arg.is(null, "--from-journal")) {
-                if (self.from_where != null) return cli.CLIErrors.InvalidFlag;
-                self.from_where = .{
-                    .container = .Journal,
-                    .name = (try itt.getValue()).string,
-                };
-            } else if (arg.is(null, "--from-dir") or arg.is(null, "--from-directory")) {
-                if (self.from_where != null) return cli.CLIErrors.InvalidFlag;
-                self.from_where = .{
-                    .container = .Directory,
-                    .name = (try itt.getValue()).string,
-                };
-            } else if (arg.is(null, "--to-dir") or arg.is(null, "--to-directory")) {
-                if (self.to_where != null) return cli.CLIErrors.InvalidFlag;
-                self.to_where = .{
-                    .container = .Directory,
-                    .name = (try itt.getValue()).string,
-                };
-            } else if (arg.is(null, "--to-journal")) {
-                if (self.to_where != null) return cli.CLIErrors.InvalidFlag;
-                self.to_where = .{
-                    .container = .Journal,
-                    .name = (try itt.getValue()).string,
-                };
-            } else {
-                return cli.CLIErrors.UnknownFlag;
-            }
+            if (try self.from.parseCollectionPrefixed("from-", arg, itt)) continue;
+            if (try self.to.parseCollectionPrefixed("to-", arg, itt)) continue;
+            return cli.CLIErrors.UnknownFlag;
         } else {
-            if (arg.index.? > 2) return cli.CLIErrors.TooManyArguments;
-            if (self.from == null)
-                self.from = arg.string
-            else
-                self.to = arg.string;
+            switch (arg.index.?) {
+                1 => try self.from.parseItem(arg),
+                2 => try self.to.parseItem(arg),
+                else => return cli.CLIErrors.TooManyArguments,
+            }
         }
     }
 
-    if (self.from == null or self.to == null) {
+    if (!self.from.validate(.Item) or !self.to.validate(.Item)) {
         return cli.CLIErrors.TooFewArguments;
     }
 
@@ -85,18 +63,16 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var from: State.MaybeItem = (try cli.find(
-        state,
-        self.from_where,
-        .{ .ByName = self.from.? },
-    )) orelse
+    var from: State.MaybeItem = (try self.from.find(state)) orelse
         return cli.SelectionError.InvalidSelection;
 
     // make sure selection resolves to a single item
     if (from.numActive() > 1)
         return cli.SelectionError.AmbiguousSelection;
 
-    const to_where: cli.selections.SelectedCollection = self.to_where orelse blk: {
+    const to_collection: cli.selections.CollectionSelection = if (self.to.collection) |col|
+        col
+    else blk: {
         const collection_name = try from.collectionName();
         const collection_type = try from.collectionType();
         break :blk .{
@@ -106,26 +82,35 @@ pub fn run(
     };
 
     // ensure the collection types match
-    if (try from.collectionType() != to_where.container)
+    if (try from.collectionType() != to_collection.container)
         return cli.SelectionError.IncompatibleSelection;
 
     // assert the destination name does not already exist in chosen container
-    var dest = state.getSelectedCollection(to_where.container, to_where.name) orelse
+    var destination_collection =
+        state.getSelectedCollection(to_collection.container, to_collection.name) orelse
         return cli.SelectionError.InvalidSelection;
-    if (dest.get(self.to.?)) |_|
+
+    // get the item name, and since we need it later, use the collection's
+    // managed memory
+    const destination_name =
+        try self.to.getItemName(destination_collection.allocator());
+
+    if (destination_collection.get(destination_name)) |_|
         return cli.SelectionError.ChildAlreadyExists;
 
-    // all checks passed, rename
+    // all checks passed, do the rename
+    const old_name = try self.from.getItemName(state.allocator);
+    defer state.allocator.free(old_name);
     var item = try from.getActive();
-    try renameItemCollection(item, self.to.?, to_where);
+    try renameItemCollection(item, destination_name, destination_collection);
 
     try out_writer.print(
         "Renamed '{s}' in '{s} -> '{s}' in '{s}'\n",
         .{
-            self.from.?,
+            old_name,
             try from.collectionName(),
             item.getName(),
-            to_where.name,
+            to_collection.name,
         },
     );
 }
@@ -133,9 +118,9 @@ pub fn run(
 fn renameItemCollection(
     from: State.Item,
     to: []const u8,
-    to_where: cli.selections.SelectedCollection,
+    to_collection: *State.Collection,
 ) !void {
-    if (std.mem.eql(u8, from.collectionName(), to_where.name)) {
+    if (std.mem.eql(u8, from.collectionName(), to_collection.getName())) {
         // only need to rename the item and rename the file
         try from.rename(to);
     } else {

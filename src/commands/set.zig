@@ -35,8 +35,7 @@ fn parseMode(string: []const u8) !Mode {
 }
 
 mode: ?Mode = null,
-where: ?cli.SelectedCollection = null,
-selection: ?cli.Selection = null,
+selection: cli.Selection = .{},
 by: ?utils.Date = null,
 importance: ?Importance = null,
 
@@ -46,10 +45,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     itt.counter = 0;
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (try parseCollection(arg, itt, true)) |col| {
-                if (self.where != null)
-                    return cli.SelectionError.AmbiguousSelection;
-                self.where = col;
+            if (try self.selection.parseCollection(arg, itt)) {
+                continue;
             } else if (arg.is('i', "importance")) {
                 if (self.importance != null)
                     return cli.CLIErrors.DuplicateFlag;
@@ -66,7 +63,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
         } else {
             switch (arg.index.?) {
                 1 => self.mode = try parseMode(arg.string),
-                2 => self.selection = try cli.Selection.parse(arg.string),
+                2 => try self.selection.parseItem(arg),
                 else => return cli.CLIErrors.TooManyArguments,
             }
         }
@@ -74,8 +71,10 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
 
     self.mode = self.mode orelse
         return cli.CLIErrors.TooFewArguments;
-    self.selection = self.selection orelse
+
+    if (!self.selection.validate(.Item)) {
         return cli.CLIErrors.TooFewArguments;
+    }
 
     return self;
 }
@@ -85,8 +84,9 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var selected: State.MaybeItem = (try cli.find(state, self.where, self.selection.?)) orelse
+    var selected: State.MaybeItem = (try self.selection.find(state)) orelse
         return cli.SelectionError.UnknownCollection;
+
     if (selected.task) |task| {
         switch (self.mode.?) {
             .Done => {

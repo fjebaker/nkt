@@ -24,74 +24,55 @@ pub const extended_help =
     \\     --time name           time of the item to remove from the chosen
     \\                            entry. must be specified in `hh:mm:ss`
     \\
-++ cli.selections.COLLECTION_FLAG_HELP ++
+++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -f                    don't prompt for removal
     \\
 ;
 
 const RemoveChild = struct {
-    selection: ?cli.Selection,
-    where: ?cli.SelectedCollection,
-    time: ?[]const u8,
+    selection: cli.Selection = .{},
+    time: ?[]const u8 = null,
 };
 
 selection: union(enum) {
     Child: RemoveChild,
-    Collection: cli.SelectedCollection,
-},
+    Collection: cli.selections.CollectionSelection,
+} = .{ .Child = .{} },
 
 fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{
-        .selection = .{
-            .Child = .{
-                .selection = null,
-                .where = null,
-                .time = null,
-            },
-        },
-    };
+    var self: Self = .{};
+
     var child = &self.selection.Child;
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
+        // parse selection
+        if (try child.selection.parse(arg, itt)) continue;
+
+        // handle other options
         if (arg.flag) {
             if (arg.is(null, "time")) {
                 const value = try itt.getValue();
                 child.time = value.string;
-            } else if (arg.is(null, "journal")) {
-                if (child.where == null) {
-                    const value = try itt.getValue();
-                    child.where = cli.SelectedCollection.from(.Journal, value.string);
-                }
-            } else if (arg.is(null, "dir") or arg.is(null, "directory")) {
-                if (child.where == null) {
-                    const value = try itt.getValue();
-                    child.where = cli.SelectedCollection.from(.Directory, value.string);
-                }
-            } else if (arg.is(null, "tl") or arg.is(null, "tasklist")) {
-                if (child.where == null) {
-                    const value = try itt.getValue();
-                    child.where = cli.SelectedCollection.from(.Tasklist, value.string);
-                }
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-            child.selection = try cli.Selection.parse(arg.string);
+            return cli.CLIErrors.TooManyArguments;
         }
     }
 
-    if (child.selection == null) return cli.CLIErrors.TooFewArguments;
-
+    if (!child.selection.validate(.Item)) {
+        return cli.CLIErrors.TooFewArguments;
+    }
     return self;
 }
 
 pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     const arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;
     if (arg.flag and arg.is(null, "collection")) {
-        const selection = try cli.selections.getSelectedCollectionPositional(itt);
-        return .{ .selection = .{ .Collection = selection } };
+        const selection = try cli.Selection.positionalNamedCollection(itt);
+        return .{ .selection = .{ .Collection = selection.collection.? } };
     } else {
         itt.rewind();
         return try initChild(alloc, itt, opts);
@@ -143,7 +124,7 @@ fn runChild(
     // we need to be interactive, so no buffering:
     var out_writer = std.io.getStdOut().writer();
 
-    var item: State.MaybeItem = (try cli.find(state, self.where, self.selection.?)) orelse
+    var item: State.MaybeItem = (try self.selection.find(state)) orelse
         return NoSuchCollection;
 
     if (item.note != null and item.day == null) {

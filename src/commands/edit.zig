@@ -16,11 +16,10 @@ pub const extended_help =
     \\  nkt edit
     \\     <what>                what to print: name of a journal, or a note
     \\                             entry. if choice is ambiguous, will print both,
-    \\                             else specify with the `--journal` or `--dir`
-    \\                             flags
+    \\                             else specify with the collection flags
     \\     -n/--new              allow the creation of new notes
     \\
-++ cli.selections.COLLECTION_FLAG_HELP ++
+++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\
     \\Examples:
     \\=========
@@ -31,34 +30,32 @@ pub const extended_help =
     \\
 ;
 
-selection: ?cli.Selection,
-where: ?cli.SelectedCollection,
+selection: cli.Selection = .{},
 allow_new: bool = false,
 
-const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
-
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{ .selection = null, .where = null };
+    var self: Self = .{};
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
+        // parse selection
+        if (try self.selection.parse(arg, itt)) continue;
+
+        // handle other options
         if (arg.flag) {
-            if (try parseCollection(arg, itt, true)) |col| {
-                if (self.where != null)
-                    return cli.SelectionError.AmbiguousSelection;
-                self.where = col;
-            } else if (arg.is('n', "new")) {
+            if (arg.is('n', "new")) {
                 self.allow_new = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-            self.selection = try cli.Selection.parse(arg.string);
+            return cli.CLIErrors.TooManyArguments;
         }
     }
 
-    if (self.selection == null) return cli.CLIErrors.TooFewArguments;
+    if (!self.selection.validate(.Item))
+        return cli.CLIErrors.TooFewArguments;
+
     return self;
 }
 
@@ -67,30 +64,27 @@ fn createDefaultInDirectory(
     state: *State,
 ) !State.Item {
     // guard against trying to use journal
-    if (self.where) |w| if (w.container == .Journal)
+    if (self.selection.collection) |w| if (w.container == .Journal)
         return cli.SelectionError.InvalidSelection;
 
-    const selection = self.selection.?;
-
-    const default_dir: []const u8 = switch (selection) {
+    const default_dir: []const u8 = switch (self.selection.item.?) {
         .ByIndex => return cli.SelectionError.InvalidSelection,
         .ByDate => "diary",
         .ByName => "notes",
     };
 
     var dir: *State.Collection = blk: {
-        if (self.where) |w| {
+        if (self.selection.collection) |w| {
             break :blk state.getDirectory(w.name) orelse
                 return cli.SelectionError.UnknownCollection;
         } else break :blk state.getDirectory(default_dir).?;
     };
 
-    switch (selection) {
+    switch (self.selection.item.?) {
         .ByName => |name| return try dir.Directory.newNote(name),
         .ByIndex => unreachable,
-        .ByDate => {
+        .ByDate => |date| {
             // format information about the day
-            const date = selection.ByDate;
             const date_string = try utils.formatDateBuf(date);
 
             const day = try utils.dayOfWeek(state.allocator, date);
@@ -119,13 +113,7 @@ fn findOrCreateDefault(self: *Self, state: *State) !struct {
     new: bool,
     item: State.MaybeItem,
 } {
-    const selection = self.selection.?;
-
-    const item: ?State.MaybeItem = try cli.find(
-        state,
-        self.where,
-        selection,
-    );
+    const item: ?State.MaybeItem = try self.selection.find(state);
 
     if (item != null) return .{ .new = false, .item = item.? };
 

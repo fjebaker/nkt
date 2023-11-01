@@ -24,24 +24,21 @@ pub const extended_help =
     \\
 ;
 
-paths: ?[][]const u8,
-where: ?cli.SelectedCollection,
+paths: ?[][]const u8 = null,
+where: ?cli.selections.CollectionSelection = null,
 move: bool = false,
 
-const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
-
 pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{ .where = null, .paths = null };
+    var self: Self = .{};
+    var sel: cli.Selection = .{};
 
     var paths = std.ArrayList([]const u8).init(alloc);
     errdefer paths.deinit();
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (try parseCollection(arg, itt, true)) |col| {
-                if (self.where != null)
-                    return cli.SelectionError.AmbiguousSelection;
-                self.where = col;
+            if (try sel.parseCollection(arg, itt)) {
+                self.where = sel.collection.?;
             } else if (arg.is(null, "move")) {
                 self.move = true;
             } else {
@@ -63,7 +60,11 @@ pub fn run(
     out_writer: anytype,
 ) !void {
     const where = self.where orelse
-        cli.SelectedCollection{ .container = .Directory, .name = "notes" };
+        cli.selections.CollectionSelection{
+        .container = .Directory,
+        .name = "notes",
+    };
+
     switch (where.container) {
         .Directory => {
             for (self.paths.?) |path| {

@@ -22,7 +22,7 @@ pub const extended_help =
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
     \\
-++ cli.selections.COLLECTION_FLAG_HELP ++
+++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -n/--limit int        maximum number of entries to display (default: 25)
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
     \\     --filename            use the filename as the print prefix
@@ -33,8 +33,7 @@ pub const extended_help =
     \\
 ;
 
-selection: ?cli.Selection,
-where: ?cli.SelectedCollection,
+selection: cli.Selection = .{},
 number: usize = 20,
 all: bool = false,
 full_date: bool = false,
@@ -45,10 +44,7 @@ pretty: ?bool = null,
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
-    var self: Self = .{
-        .selection = null,
-        .where = null,
-    };
+    var self: Self = .{};
 
     itt.rewind();
     const prog_name = (try itt.next()).?.string;
@@ -56,6 +52,10 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
+        // parse selection
+        if (try self.selection.parse(arg, itt)) continue;
+
+        // handle other options
         if (arg.flag) {
             if (arg.is('n', "limit")) {
                 const value = try itt.getValue();
@@ -68,16 +68,11 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.full_date = true;
             } else if (arg.is(null, "filename")) {
                 self.filename = true;
-            } else if (try parseCollection(arg, itt, true)) |col| {
-                if (self.where != null)
-                    return cli.SelectionError.AmbiguousSelection;
-                self.where = col;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
-            self.selection = try cli.Selection.parse(arg.string);
+            return cli.CLIErrors.TooManyArguments;
         }
     }
 
@@ -87,6 +82,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
     // don't pretty if to pager or being piped
     self.pretty = self.pretty orelse
         if (self.pager) false else !opts.piped;
+
     return self;
 }
 
@@ -137,9 +133,11 @@ fn read(
     var printer = Printer.init(state.allocator, N, self.pretty.?);
     defer printer.deinit();
 
-    if (self.selection) |sel| {
-        var selected: State.MaybeItem = (try cli.find(state, self.where, sel)) orelse
+    if (self.selection.item != null) {
+        var selected: State.MaybeItem =
+            (try self.selection.find(state)) orelse
             return NoSuchCollection;
+
         if (selected.note) |note| {
             try self.readNote(note, &printer);
         }
@@ -150,7 +148,7 @@ fn read(
             unreachable;
             // try self.readTask(task, &printer);
         }
-    } else if (self.where) |w| switch (w.container) {
+    } else if (self.selection.collection) |w| switch (w.container) {
         // if no selection, but a collection
         .Journal => {
             const journal = state.getJournal(w.name) orelse

@@ -15,7 +15,7 @@ pub const help = "zsh completion helper";
 const What = enum { journals, directories, notes, zsh };
 
 what: What,
-where: ?cli.SelectedCollection = null,
+where: ?cli.selections.CollectionSelection = null,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     const what_arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;

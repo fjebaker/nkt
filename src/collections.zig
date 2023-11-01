@@ -634,6 +634,12 @@ pub const Collection = union(Type) {
     Journal: Journal,
     Tasklist: Tasklist,
 
+    pub fn allocator(c: *Collection) std.mem.Allocator {
+        switch (c.*) {
+            inline else => |*i| return i.mem.allocator(),
+        }
+    }
+
     inline fn getIndexByProperty(
         c: *Collection,
         comptime C: Type,

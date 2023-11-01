@@ -9,6 +9,252 @@ const Item = State.Item;
 const CollectionType = State.CollectionType;
 const Date = utils.Date;
 
+pub const SelectionError = error{
+    AmbiguousSelection,
+    ChildAlreadyExists,
+    IncompatibleSelection,
+    InvalidSelection,
+    NoSuchCollection,
+    NoSuchItem,
+    UnknownCollection,
+};
+
+pub const SelectionSet = enum {
+    ByIndex,
+    ByDate,
+    ByName,
+};
+
+pub const ItemSelection = union(enum) {
+    ByIndex: usize,
+    ByDate: Date,
+    ByName: []const u8,
+
+    pub fn today() ItemSelection {
+        const date = Date.now();
+        return .{ .ByDate = date };
+    }
+};
+
+pub const CollectionSelection = struct {
+    container: CollectionType,
+    name: []const u8,
+};
+
+pub const Selection = struct {
+    item: ?ItemSelection = null,
+    collection: ?CollectionSelection = null,
+
+    pub fn positionalNamedCollection(itt: *cli.ArgIterator) !Selection {
+        var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+        var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+
+        var collection_type: State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
+            .Journal
+        else if (std.mem.eql(u8, "directory", p1.string))
+            .Directory
+        else if (std.mem.eql(u8, "tasklist", p1.string))
+            .Tasklist
+        else
+            return cli.CLIErrors.BadArgument;
+        var name = p2.string;
+
+        return .{
+            .collection = .{ .container = collection_type, .name = name },
+        };
+    }
+
+    pub fn validate(s: *Selection, what: enum { Item, Collection, Both }) bool {
+        const bad = switch (what) {
+            .Item => (s.item == null),
+            .Collection => (s.collection == null),
+            .Both => (s.item == null or s.collection == null),
+        };
+        return !bad;
+    }
+
+    /// Use selection to attempt to resolve an item in the state. Returns null
+    /// if no item found.
+    pub fn find(s: *Selection, state: *State) !?State.MaybeItem {
+        if (s.item == null) return null;
+
+        const maybe = try findImpl(state, s.collection, s.item.?) orelse
+            return null;
+
+        if (maybe.day == null and maybe.note == null and maybe.task == null)
+            return null;
+
+        return maybe;
+    }
+
+    /// Get today as an item selector. Does not set a collection.
+    pub fn today() Selection {
+        return .{ .item = ItemSelection.today() };
+    }
+
+    fn qualifiedIndex(s: *Selection, string: []const u8) !?usize {
+        if (string.len > 1) {
+            const slice = string[1..];
+            const collection: CollectionSelection = switch (string[0]) {
+                // return defaults for each
+                't' => .{ .container = .Tasklist, .name = "todo" },
+                'j' => .{ .container = .Journal, .name = "diary" },
+                // cannot select note by index
+                else => return null,
+            };
+            if (allNumeric(slice)) {
+                const index = try std.fmt.parseInt(usize, slice, 10);
+                if (s.collection != null) {
+                    if (s.collection.?.container != collection.container) {
+                        return SelectionError.AmbiguousSelection;
+                    }
+                }
+                s.collection = collection;
+                return index;
+            }
+        }
+        return null;
+    }
+
+    /// Parse input string into a Selection. Does not validate that the
+    /// selection exists. Will raise an error if cannot parse positional.
+    pub fn parse(s: *Selection, arg: cli.Arg, itt: *cli.ArgIterator) !bool {
+        if (arg.flag) {
+            return try s.parseCollection(arg, itt);
+        } else {
+            try s.parseItem(arg);
+            return true;
+        }
+    }
+
+    pub fn parseCollection(s: *Selection, arg: cli.Arg, itt: *cli.ArgIterator) !bool {
+        if (try parseCollectionFlags(arg, itt, false)) |collection| {
+            if (s.collection != null) return SelectionError.InvalidSelection;
+            s.collection = collection;
+            return true;
+        }
+        return false;
+    }
+
+    pub fn parseCollectionPrefixed(
+        s: *Selection,
+        comptime prefix: []const u8,
+        arg: cli.Arg,
+        itt: *cli.ArgIterator,
+    ) !bool {
+        if (try parseCollectionCustom(prefix, arg, itt, false)) |collection| {
+            if (s.collection != null) return SelectionError.InvalidSelection;
+            s.collection = collection;
+            return true;
+        }
+        return false;
+    }
+
+    /// Parse an item from a positional argument. Raises error if cannot parse.
+    pub fn parseItem(s: *Selection, arg: cli.Arg) !void {
+        const item = try s.parseItemImpl(arg.string);
+        if (s.item != null) return cli.CLIErrors.TooManyArguments;
+        s.item = item;
+    }
+
+    fn parseItemImpl(s: *Selection, input: []const u8) !ItemSelection {
+        if (std.mem.eql(u8, input, "today") or std.mem.eql(u8, input, "t")) {
+            return ItemSelection.today();
+        } else if (try s.qualifiedIndex(input)) |index| {
+            return .{ .ByIndex = index };
+        } else if (allNumeric(input)) {
+            const day = try std.fmt.parseInt(usize, input, 10);
+            return .{ .ByIndex = day };
+        } else if (isDate(input)) {
+            const date = try utils.toDate(input);
+            return .{ .ByDate = date };
+        } else {
+            return .{ .ByName = input };
+        }
+    }
+
+    pub const COLLECTION_FLAG_HELP =
+        \\     --tl/--tasklist <n>   name of tasklist
+        \\     --journal <n>         name of journal
+        \\     --dir/--directory <n> name of directory
+        \\
+    ;
+
+    fn parseCollectionFlags(
+        arg: cli.Arg,
+        itt: *cli.ArgIterator,
+        comptime allow_short: bool,
+    ) !?CollectionSelection {
+        return parseCollectionCustom("", arg, itt, allow_short);
+    }
+
+    /// Parse ArgIterator into a ItemSelection. Does not validate that the
+    /// selection exists. If no positional argument is available, returns null,
+    /// allowing caller to set defaults.
+    pub fn initOptionalItem(
+        itt: *cli.ArgIterator,
+    ) !?Selection {
+        var s: Selection = .{};
+
+        const arg = (try itt.next()) orelse return null;
+        if (arg.flag) {
+            itt.rewind();
+            return null;
+        }
+
+        return try s.parseItemImpl(arg.string);
+    }
+
+    pub fn getItemName(s: *const Selection, alloc: std.mem.Allocator) ![]const u8 {
+        switch (s.item.?) {
+            .ByDate => |date| {
+                const date_string = try utils.formatDateBuf(date);
+                return try alloc.dupe(u8, &date_string);
+            },
+            .ByName => |name| return try alloc.dupe(u8, name),
+            .ByIndex => unreachable,
+        }
+    }
+};
+
+fn parseCollectionCustom(
+    comptime prefix: []const u8,
+    arg: cli.Arg,
+    itt: *cli.ArgIterator,
+    comptime allow_short: bool,
+) !?CollectionSelection {
+    const j: ?u8 = if (allow_short) 'j' else null;
+    const d: ?u8 = if (allow_short) 'd' else null;
+    const t: ?u8 = if (allow_short) 't' else null;
+
+    if (arg.is(j, prefix ++ "journal")) {
+        const value = try itt.getValue();
+        return .{
+            .container = .Journal,
+            .name = value.string,
+        };
+    } else if (stringIn(
+        arg.string,
+        &.{ prefix ++ "dir", prefix ++ "directory" },
+    ) or arg.is(d, null)) {
+        const value = try itt.getValue();
+        return .{
+            .container = .Directory,
+            .name = value.string,
+        };
+    } else if (stringIn(
+        arg.string,
+        &.{ prefix ++ "tl", prefix ++ "tasklist" },
+    ) or arg.is(t, null)) {
+        const value = try itt.getValue();
+        return .{
+            .container = .Tasklist,
+            .name = value.string,
+        };
+    }
+    return null;
+}
+
 pub fn isNumeric(c: u8) bool {
     return (c >= '0' and c <= '9');
 }
@@ -34,79 +280,6 @@ pub fn isTime(string: []const u8) bool {
     return true;
 }
 
-pub const SelectedCollection = struct {
-    container: CollectionType,
-    name: []const u8,
-
-    pub fn from(container: CollectionType, name: []const u8) SelectedCollection {
-        return .{
-            .container = container,
-            .name = name,
-        };
-    }
-};
-
-pub const SelectionSet = enum {
-    ByIndex,
-    ByDate,
-    ByName,
-};
-
-pub const Selection = union(enum) {
-    ByIndex: usize,
-    ByDate: Date,
-    ByName: []const u8,
-
-    pub fn today() Selection {
-        const date = Date.now();
-        return .{ .ByDate = date };
-    }
-
-    /// Parse input string into a Selection. Does not validate that the
-    /// selection exists.
-    pub fn parse(input: []const u8) !Selection {
-        if (std.mem.eql(u8, input, "today") or std.mem.eql(u8, input, "t")) {
-            return Selection.today();
-        } else if (allNumeric(input)) {
-            const day = try std.fmt.parseInt(usize, input, 10);
-            return .{ .ByIndex = day };
-        } else if (isDate(input)) {
-            const date = try utils.toDate(input);
-            return .{ .ByDate = date };
-        } else {
-            return .{ .ByName = input };
-        }
-    }
-
-    /// Parse ArgIterator into a Selection. Does not validate that the
-    /// selection exists. If no positional argument is available, returns null,
-    /// allowing caller to set defaults.
-    pub fn optionalParse(
-        itt: *cli.ArgIterator,
-    ) !?Selection {
-        const arg = (try itt.next()) orelse return null;
-        if (arg.flag) {
-            itt.rewind();
-            return null;
-        }
-        return try parse(arg.string);
-    }
-};
-
-fn finalize(maybe_note: ?Item, maybe_journal: ?Item) ?Item {
-    if (maybe_note != null and maybe_journal != null) {
-        return .{
-            .DirectoryJournalItems = .{
-                .journal = maybe_journal.?.JournalEntry,
-                .directory = maybe_note.?.Note,
-            },
-        };
-    }
-    return maybe_note orelse
-        maybe_journal orelse
-        null;
-}
-
 /// Search in the user preferred order
 fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
     var p_journal: ?*State.Collection = state.getJournal("diary");
@@ -123,13 +296,8 @@ fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
     return null;
 }
 
-pub fn find(state: *State, where: ?SelectedCollection, what: Selection) !?State.MaybeItem {
-    var maybe = try findImpl(state, where, what) orelse return null;
-    if (maybe.day == null and maybe.note == null and maybe.task == null) return null;
-    return maybe;
-}
-
-fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.MaybeItem {
+fn findImpl(state: *State, where: ?CollectionSelection, what: ItemSelection) !?State.MaybeItem {
+    // if a where is given, we search there
     if (where) |w| switch (w.container) {
         .Journal => {
             var journal = state.getJournal(w.name) orelse
@@ -168,7 +336,7 @@ fn findImpl(state: *State, where: ?SelectedCollection, what: Selection) !?State.
         },
     };
 
-    // don't know if journal or entry, so we try both
+    // don't know collection type, so we try to be clever
     switch (what) {
         .ByName => |name| return try itemFromName(state, name),
         // for index, we only look at journals, but use the name to do a dir lookup
@@ -226,61 +394,6 @@ fn stringIn(s: []const u8, opts: []const []const u8) bool {
             return true;
     }
     return false;
-}
-
-pub const COLLECTION_FLAG_HELP =
-    \\     --tl/--tasklist <n>   name of tasklist
-    \\     --journal <n>         name of journal
-    \\     --dir/--directory <n> name of directory
-    \\
-;
-
-pub fn parseJournalDirectoryItemlistFlag(
-    arg: cli.Arg,
-    itt: *cli.ArgIterator,
-    allow_short: bool,
-) !?SelectedCollection {
-    const j: ?u8 = if (allow_short) 'j' else null;
-    const d: ?u8 = if (allow_short) 'd' else null;
-    const t: ?u8 = if (allow_short) 't' else null;
-
-    if (arg.is(j, "journal")) {
-        const value = try itt.getValue();
-        return cli.SelectedCollection.from(
-            .Journal,
-            value.string,
-        );
-    } else if (stringIn(arg.string, &.{ "dir", "directory" }) or arg.is(d, null)) {
-        const value = try itt.getValue();
-        return cli.SelectedCollection.from(
-            .Directory,
-            value.string,
-        );
-    } else if (stringIn(arg.string, &.{ "tl", "tasklist" }) or arg.is(t, null)) {
-        const value = try itt.getValue();
-        return cli.SelectedCollection.from(
-            .Tasklist,
-            value.string,
-        );
-    }
-    return null;
-}
-
-pub fn getSelectedCollectionPositional(itt: *cli.ArgIterator) !SelectedCollection {
-    var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-    var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-
-    var collection_type: State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
-        .Journal
-    else if (std.mem.eql(u8, "directory", p1.string))
-        .Directory
-    else if (std.mem.eql(u8, "tasklist", p1.string))
-        .Tasklist
-    else
-        return cli.CLIErrors.BadArgument;
-    var name = p2.string;
-
-    return SelectedCollection.from(collection_type, name);
 }
 
 pub fn parseDateTimeLike(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8) !?utils.Date {
