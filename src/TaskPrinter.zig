@@ -119,12 +119,12 @@ fn strLen(s: []const u8) usize {
     return s.len;
 }
 
-pub fn drain(self: *TaskPrinter, writer: anytype) !void {
+pub fn drain(self: *TaskPrinter, writer: anytype, details: bool) !void {
     const col_widths = self.columnWidth();
 
     _ = try writer.writeAll("\n");
     for (self.entries.items) |item| {
-        try printTask(item, col_widths, writer, self.pretty);
+        try printTask(item, col_widths, writer, self.pretty, details);
         _ = try writer.writeAll("\n");
     }
     _ = try writer.writeAll("\n");
@@ -135,6 +135,7 @@ fn printTask(
     padding: Padding,
     writer: anytype,
     pretty: bool,
+    details: bool,
 ) !void {
     comptime var cham = Chameleon.init(.Auto);
     if (entry.index) |index| {
@@ -160,8 +161,10 @@ fn printTask(
     try writer.print("{s}", .{entry.task.title});
     if (pretty) try importancePretty(entry.task.importance, writer, .Close);
 
+    const has_details = entry.task.details.len > 0;
+
     const text_pad: usize = p: {
-        if (entry.task.details.len > 0) {
+        if (!details and has_details) {
             if (pretty) try writeColour(cham.dim(), writer, .Open);
             try printDetailIndicator(writer);
             if (pretty) try writeColour(cham.dim(), writer, .Close);
@@ -169,6 +172,10 @@ fn printTask(
         } else break :p 0;
     };
     _ = text_pad;
+
+    if (details and has_details) {
+        try printDetails(entry.task.details, writer, padding, pretty);
+    }
 }
 
 fn writeColour(comptime c: Chameleon, writer: anytype, which: OpenClose) !void {
@@ -177,6 +184,42 @@ fn writeColour(comptime c: Chameleon, writer: anytype, which: OpenClose) !void {
         .Close => false,
     };
     _ = try writer.writeAll(if (open) c.open else c.close);
+}
+
+fn printDetails(
+    details: []const u8,
+    writer: anytype,
+    padding: Padding,
+    pretty: bool,
+) !void {
+    comptime var cham = Chameleon.init(.Auto);
+    if (pretty) try writeColour(cham.dim(), writer, .Open);
+    const indent = padding.due + 12;
+
+    var lines = std.mem.split(u8, details, "\n");
+
+    var first: bool = true;
+    while (lines.next()) |line| {
+        if (line.len == 0) continue;
+
+        if (first) {
+            first = false;
+        } else {
+            _ = try writer.writeAll("\n");
+            _ = try writer.writeByteNTimes(' ', indent);
+            _ = try writer.writeAll(". ");
+        }
+
+        var itt = std.mem.window(u8, line, 60, 60);
+        while (itt.next()) |chunk| {
+            _ = try writer.writeAll("\n");
+            _ = try writer.writeByteNTimes(' ', indent);
+            _ = try writer.writeAll(". ");
+            _ = try writer.writeAll(chunk);
+        }
+    }
+
+    if (pretty) try writeColour(cham.dim(), writer, .Close);
 }
 
 const OpenClose = enum { Open, Close };

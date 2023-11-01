@@ -28,6 +28,7 @@ pub const extended_help =
     \\     --due                 list in order of when something is due (default)
     \\     --importance          list in order of importance
     \\     --done                list also those tasks marked as done
+    \\     --details             also print details of the tasks
     \\
 ;
 
@@ -37,6 +38,7 @@ number: usize = 25,
 all: bool = false,
 pretty: ?bool = null,
 done: bool = false,
+details: bool = false,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{};
@@ -60,6 +62,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
             } else if (arg.is(null, "pretty")) {
                 if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
                 self.pretty = true;
+            } else if (arg.is(null, "details")) {
+                self.details = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -131,7 +135,7 @@ fn listTasks(
         try printer.add(task.Task.task.*, index);
     }
 
-    try printer.drain(writer);
+    try printer.drain(writer, self.details);
 }
 
 fn is(s: []const u8, other: []const u8) bool {
@@ -161,7 +165,7 @@ pub fn run(
             return State.Error.NoSuchCollection;
 
         if (collection.directory) |c| {
-            try out_writer.print("Notes in directory: '{s}':\n", .{c.getName()});
+            try out_writer.print("Notes in directory '{s}':\n", .{c.getName()});
             try self.listCollection(
                 state.allocator,
                 c,
@@ -170,7 +174,7 @@ pub fn run(
             );
         }
         if (collection.journal) |c| {
-            try out_writer.print("Entries in journal: '{s}':\n", .{c.getName()});
+            try out_writer.print("Entries in journal '{s}':\n", .{c.getName()});
             try self.listCollection(
                 state.allocator,
                 c,
@@ -179,7 +183,7 @@ pub fn run(
             );
         }
         if (collection.tasklist) |c| {
-            try out_writer.print("Tasks in tasklist: '{s}':\n", .{c.getName()});
+            try out_writer.print("Tasks in tasklist '{s}':\n", .{c.getName()});
             try self.listTasks(state.allocator, c, out_writer);
         }
     }
