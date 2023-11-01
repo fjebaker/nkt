@@ -144,9 +144,10 @@ fn read(
         if (selected.day) |day| {
             try self.readDay(day, &printer);
         }
-        if (selected.task) |_| {
-            unreachable;
-            // try self.readTask(task, &printer);
+        if (selected.task) |task| {
+            printer.remaining = null;
+            printer.indent = 2;
+            try self.readTask(task, &printer);
         }
     } else if (self.selection.collection) |w| switch (w.container) {
         // if no selection, but a collection
@@ -263,4 +264,87 @@ fn printEntryItemFilename(
         "{s} {s} - {s}\n",
         .{ fc.filename, time_of_day, entry.item },
     );
+}
+
+fn readTask(
+    _: *Self,
+    task: State.Item,
+    printer: *Printer,
+) !void {
+    comptime var cham = Chameleon.init(.Auto);
+    const t = task.Task.task;
+    const status = t.status(utils.Date.now());
+
+    const due_s = if (t.due) |due|
+        &try utils.formatDateTimeBuf(utils.dateFromMs(due))
+    else
+        "null";
+
+    const completed_s = if (t.completed) |compl|
+        &try utils.formatDateTimeBuf(utils.dateFromMs(compl))
+    else
+        "not completed";
+
+    try printer.addHeading("Task        :   {s}\n\n", .{t.title});
+
+    _ = try printer.addInfoLine(
+        null,
+        "Created",
+        null,
+        "  {s}\n",
+        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
+    );
+
+    _ = try printer.addInfoLine(
+        null,
+        "Modified",
+        null,
+        "  {s}\n",
+        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
+    );
+
+    _ = try printer.addInfoLine(
+        null,
+        "Due",
+        switch (status) {
+            .Done => cham.dim(),
+            .PastDue => cham.bold().redBright(),
+            .NearlyDue => cham.yellow(),
+            else => null,
+        },
+        "  {s}\n",
+        .{due_s},
+    );
+
+    _ = try printer.addInfoLine(
+        null,
+        "Importance",
+        switch (t.importance) {
+            .high => cham.yellow(),
+            .low => cham.dim(),
+            .urgent => cham.bold().redBright(),
+        },
+        "{s}\n",
+        .{switch (t.importance) {
+            .low => "  Low",
+            .high => "* High",
+            .urgent => "! Urgent",
+        }},
+    );
+
+    _ = try printer.addInfoLine(
+        null,
+        "Completed",
+        switch (status) {
+            .Done => cham.greenBright(),
+            else => cham.dim(),
+        },
+        "  {s}\n",
+        .{completed_s},
+    );
+
+    _ = try printer.addLine("\n", .{});
+    _ = try printer.addFormattedLine(cham.underline(), "Details:", .{});
+    _ = try printer.addLine("\n", .{});
+    _ = try printer.addLine("\n{s}", .{t.details});
 }

@@ -73,6 +73,7 @@ pub const Entry = struct {
 pub const Journal = Description;
 
 pub const Task = struct {
+    pub const Status = enum { PastDue, NearlyDue, NoStatus, Done };
     pub const Importance = enum { low, high, urgent };
     title: []const u8,
     details: []const u8,
@@ -83,6 +84,17 @@ pub const Task = struct {
     importance: Importance,
     tags: []Tag,
     done: bool,
+
+    pub fn status(t: Task, now: utils.Date) Status {
+        if (t.done) return .Done;
+        const due = if (t.due) |dm|
+            utils.Date.fromTimestamp(@intCast(dm))
+        else
+            return .NoStatus;
+        if (now.gt(due)) return .PastDue;
+        if (due.sub(now).days < 1) return .NearlyDue;
+        return .NoStatus;
+    }
 };
 
 const TaskScheme = struct { items: []Task };

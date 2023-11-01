@@ -18,18 +18,39 @@ pub const Writer = StringList.Writer;
 pub const WriteError = error{ OutOfMemory, DateError };
 pub const PrinterError = error{HeadingMissing};
 
+const STRIDE = 80;
+
 const Chunk = struct {
     heading: []const u8,
     lines: StringList,
 
-    fn print(self: *Chunk, writer: anytype, pretty: bool) !void {
+    fn print(self: *Chunk, writer: anytype, pretty: bool, indent: usize) !void {
+        _ = try writer.writeByteNTimes(' ', indent);
         if (pretty) {
             comptime var cham = Chameleon.init(.Auto);
             try writer.print(cham.underline().fmt("{s}"), .{self.heading});
         } else {
             try writer.print("{s}", .{self.heading});
         }
-        _ = try writer.writeAll(try self.lines.toOwnedSlice());
+        const content = std.mem.trim(
+            u8,
+            try self.lines.toOwnedSlice(),
+            "\n",
+        );
+        if (indent != 0) {
+            var lines = std.mem.split(u8, content, "\n");
+
+            while (lines.next()) |line| {
+                var itt = std.mem.window(u8, line, STRIDE, STRIDE);
+                while (itt.next()) |chunk| {
+                    _ = try writer.writeAll("\n");
+                    _ = try writer.writeByteNTimes(' ', indent);
+                    _ = try writer.writeAll(chunk);
+                }
+            }
+        } else {
+            _ = try writer.writeAll(content);
+        }
     }
 };
 
@@ -40,6 +61,7 @@ mem: std.heap.ArenaAllocator,
 chunks: ChunkList,
 current: ?*Chunk = null,
 pretty: bool,
+indent: usize = 0,
 
 pub fn init(alloc: std.mem.Allocator, N: ?usize, pretty: bool) Printer {
     var mem = std.heap.ArenaAllocator.init(alloc);
@@ -56,17 +78,20 @@ pub fn init(alloc: std.mem.Allocator, N: ?usize, pretty: bool) Printer {
 }
 
 pub fn drain(self: *const Printer, writer: anytype) !void {
+    if (self.indent > 0) _ = try writer.writeAll("\n");
+
     var chunks = self.chunks.items;
     // print first chunk
     if (chunks.len > 0) {
-        try chunks[0].print(writer, self.pretty);
+        try chunks[0].print(writer, self.pretty, self.indent);
     }
     if (chunks.len > 1) {
         for (chunks[1..]) |*chunk| {
             _ = try writer.writeAll("\n");
-            try chunk.print(writer, self.pretty);
+            try chunk.print(writer, self.pretty, self.indent);
         }
     }
+    if (self.indent > 0) _ = try writer.writeAll("\n");
     _ = try writer.writeAll("\n");
 }
 
@@ -128,11 +153,54 @@ pub fn addItemsCtx(
     return self.subRemainder(_items.len - start);
 }
 
+pub fn addInfoLine(
+    self: *Printer,
+    c1: ?Chameleon,
+    name: []const u8,
+    c2: ?Chameleon,
+    comptime value_fmt: []const u8,
+    args: anytype,
+) !bool {
+    var chunk = self.current orelse return PrinterError.HeadingMissing;
+
+    if (self.allowMore()) {
+        if (self.pretty) {
+            if (c1) |c| _ = try chunk.lines.writer().writeAll(c.open);
+            try chunk.lines.writer().print("{s: <12}: ", .{name});
+            if (c1) |c| _ = try chunk.lines.writer().writeAll(c.close);
+
+            if (c2) |c| _ = try chunk.lines.writer().writeAll(c.open);
+            try chunk.lines.writer().print(value_fmt, args);
+            if (c2) |c| _ = try chunk.lines.writer().writeAll(c.close);
+        } else {
+            try chunk.lines.writer().print("{s: <12}: ", .{name});
+            try chunk.lines.writer().print(value_fmt, args);
+        }
+    }
+    return self.subRemainder(1);
+}
+
 pub fn addLine(self: *Printer, comptime format: []const u8, args: anytype) !bool {
     var chunk = self.current orelse return PrinterError.HeadingMissing;
 
     if (self.allowMore()) {
         try chunk.lines.writer().print(format, args);
+    }
+    return self.subRemainder(1);
+}
+
+pub fn addFormattedLine(
+    self: *Printer,
+    cm: Chameleon,
+    comptime format: []const u8,
+    args: anytype,
+) !bool {
+    var chunk = self.current orelse return PrinterError.HeadingMissing;
+
+    if (self.allowMore()) {
+        if (self.pretty) _ = try chunk.lines.writer().writeAll(cm.open);
+        try chunk.lines.writer().print(format, args);
+        if (self.pretty) _ = try chunk.lines.writer().writeAll(cm.close);
     }
     return self.subRemainder(1);
 }

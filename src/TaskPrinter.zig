@@ -5,7 +5,7 @@ const Chameleon = @import("chameleon").Chameleon;
 const TaskPrinter = @import("TaskPrinter.zig");
 const Task = @import("collections/Topology.zig").Task;
 
-const Status = enum { PastDue, NearlyDue, NoStatus, Done };
+const Status = Task.Status;
 
 const FormattedEntry = struct {
     due: []const u8,
@@ -67,17 +67,6 @@ fn formatDueDate(
     );
 }
 
-fn pastDue(self: *const TaskPrinter, due_milis: ?u64) Status {
-    const due = if (due_milis) |dm|
-        utils.Date.fromTimestamp(@intCast(dm))
-    else
-        return .NoStatus;
-
-    if (self.now.gt(due)) return .PastDue;
-    if (due.sub(self.now).days < 1) return .NearlyDue;
-    return .NoStatus;
-}
-
 pub fn add(self: *TaskPrinter, task: Task, index: ?usize) !void {
     var alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
@@ -92,7 +81,7 @@ pub fn add(self: *TaskPrinter, task: Task, index: ?usize) !void {
     try self.entries.append(
         .{
             .due = due,
-            .status = if (task.done) .Done else self.pastDue(task.due),
+            .status = task.status(self.now),
             .completed = completed,
             .task = task,
             .index = index,
@@ -197,20 +186,9 @@ fn printDetails(
     if (pretty) try writeColour(cham.dim(), writer, .Open);
     const indent = padding.due + 12;
 
-    var lines = std.mem.split(u8, details, "\n");
+    var lines = std.mem.split(u8, std.mem.trim(u8, details, "\n"), "\n");
 
-    var first: bool = true;
     while (lines.next()) |line| {
-        if (line.len == 0) continue;
-
-        if (first) {
-            first = false;
-        } else {
-            _ = try writer.writeAll("\n");
-            _ = try writer.writeByteNTimes(' ', indent);
-            _ = try writer.writeAll(". ");
-        }
-
         var itt = std.mem.window(u8, line, STRIDE, STRIDE);
         while (itt.next()) |chunk| {
             _ = try writer.writeAll("\n");

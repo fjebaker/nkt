@@ -468,6 +468,10 @@ pub const Item = union(ItemType) {
         tasklist: *Tasklist,
         task: *Tasklist.Task,
 
+        pub fn status(self: @This()) Tasklist.Task.Status {
+            return self.task.status();
+        }
+
         pub fn isDone(self: @This()) bool {
             return self.task.done;
         }
