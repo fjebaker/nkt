@@ -10,6 +10,10 @@ pub fn dateFromMs(ms: u64) Date {
     return Date.fromTimestamp(@intCast(ms));
 }
 
+pub fn msFromDate(date: Date) u64 {
+    return @intCast(date.toTimestamp());
+}
+
 pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
         pub fn initSize(alloc: std.mem.Allocator, N: usize) !Self {

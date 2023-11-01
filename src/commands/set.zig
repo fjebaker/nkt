@@ -21,6 +21,11 @@ pub const extended_help =
     \\
 ;
 
+const Importance = @import("../collections/Topology.zig").Task.Importance;
+
+const parseDateTimeLike = cli.selections.parseDateTimeLike;
+const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
+
 const Mode = enum { Done, Todo };
 
 fn parseMode(string: []const u8) !Mode {
@@ -32,8 +37,8 @@ fn parseMode(string: []const u8) !Mode {
 mode: ?Mode = null,
 where: ?cli.SelectedCollection = null,
 selection: ?cli.Selection = null,
-
-const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
+by: ?utils.Date = null,
+importance: ?Importance = null,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
@@ -45,8 +50,18 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
                 if (self.where != null)
                     return cli.SelectionError.AmbiguousSelection;
                 self.where = col;
+            } else if (arg.is('i', "importance")) {
+                if (self.importance != null)
+                    return cli.CLIErrors.DuplicateFlag;
+
+                const val = (try itt.getValue()).string;
+                self.importance = std.meta.stringToEnum(Importance, val) orelse
+                    return cli.CLIErrors.BadArgument;
+            } else if (try parseDateTimeLike(arg, itt, "by")) |date| {
+                if (self.by != null) return cli.CLIErrors.DuplicateFlag;
+                self.by = date;
             } else {
-                return cli.CLIErrors.InvalidFlag;
+                return cli.CLIErrors.UnknownFlag;
             }
         } else {
             switch (arg.index.?) {
@@ -77,14 +92,25 @@ pub fn run(
             .Done => {
                 if (!task.Task.isDone()) {
                     task.Task.setDone();
-                    _ = try out_writer.writeAll("Task marked as completed\n");
+                    try out_writer.print(
+                        "Task '{s}' marked as completed\n",
+                        .{task.getName()},
+                    );
                 } else {
                     _ = try out_writer.writeAll("Task is already marked as done\n");
                 }
             },
             .Todo => {
-                task.Task.setTodo();
-                _ = try out_writer.writeAll("Task marked as todo\n");
+                if (self.by) |by| {
+                    task.Task.task.due = utils.msFromDate(by);
+                }
+                if (self.importance) |imp| {
+                    task.Task.task.importance = imp;
+                }
+                if (task.Task.isDone()) {
+                    task.Task.setTodo();
+                }
+                try out_writer.print("Task '{s}' modified\n", .{task.getName()});
             },
         }
     } else return cli.SelectionError.InvalidSelection;

@@ -282,3 +282,75 @@ pub fn getSelectedCollectionPositional(itt: *cli.ArgIterator) !SelectedCollectio
 
     return SelectedCollection.from(collection_type, name);
 }
+
+pub fn parseDateTimeLike(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8) !?utils.Date {
+    if (arg.is(null, match)) {
+        const string = (try itt.getValue()).string;
+        // common substitutions
+        const date = try parseDateTimeLikeImpl(
+            if (std.mem.eql(u8, string, "tonight"))
+                "today evening"
+            else
+                string,
+        );
+        return date;
+    }
+    return null;
+}
+
+fn parseDateTimeLikeImpl(string: []const u8) !utils.Date {
+    var itt = std.mem.tokenize(u8, string, " ");
+    const date_like = itt.next() orelse return cli.CLIErrors.BadArgument;
+    const time_like = itt.next() orelse "23:59:59";
+    if (itt.next()) |_| return cli.CLIErrors.TooManyArguments;
+
+    var day = blk: {
+        if (cli.selections.isDate(date_like)) {
+            break :blk try utils.toDate(date_like);
+        } else if (std.mem.eql(u8, date_like, "today")) {
+            break :blk utils.Date.now();
+        } else if (std.mem.eql(u8, date_like, "tomorrow")) {
+            var today = utils.Date.now();
+            break :blk today.shiftDays(1);
+        } else return cli.CLIErrors.BadArgument;
+    };
+
+    const time = blk: {
+        if (cli.selections.isTime(date_like)) {
+            break :blk try utils.toTime(time_like);
+        } else if (std.mem.eql(u8, time_like, "morning")) {
+            break :blk comptime try utils.toTime("08:00:00");
+        } else if (std.mem.eql(u8, time_like, "lunch")) {
+            break :blk comptime try utils.toTime("13:00:00");
+        } else if (std.mem.eql(u8, time_like, "end-of-day")) {
+            break :blk comptime try utils.toTime("17:00:00");
+        } else if (std.mem.eql(u8, time_like, "evening")) {
+            break :blk comptime try utils.toTime("19:00:00");
+        } else if (std.mem.eql(u8, time_like, "night")) {
+            break :blk comptime try utils.toTime("23:00:00");
+        } else break :blk utils.Time{ .hour = 13, .minute = 0, .second = 0 };
+    };
+
+    day.time.hour = time.hour;
+    day.time.minute = time.minute;
+    day.time.second = time.second;
+
+    return day;
+}
+
+fn testTimeParsing(s: []const u8, date: utils.Date) !void {
+    const eq = std.testing.expectEqual;
+    const parsed = try parseDateTimeLike(s);
+
+    try eq(parsed.date.day, date.date.day);
+    try eq(parsed.time.hour, date.time.hour);
+}
+
+test "time parsing" {
+    var nowish = utils.Date.now();
+    nowish.time.hour = 13;
+    nowish.time.minute = 0;
+    nowish.time.second = 0;
+
+    try testTimeParsing("tomorrow", nowish.shiftDays(1));
+}
