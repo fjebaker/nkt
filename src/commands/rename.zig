@@ -16,10 +16,10 @@ pub const extended_help =
     \\     <from>                path to the file to import. defaults to
     \\     <to>                  importing to the default directory. can
     \\                             specificy multiple paths
-    \\     [--from-journal name] name of the journal to move from (else default)
-    \\     [--to-journal name]   name of the journal to move from (else default)
-    \\     [--from-dir name]     name of the dir to move from (else default)
-    \\     [--to-dir name]       name of the dir to move to (else default)
+    \\     --from-journal name   name of the journal to move from (else default)
+    \\     --to-journal name     name of the journal to move from (else default)
+    \\     --from-dir name       name of the dir to move from (else default)
+    \\     --to-dir name         name of the dir to move to (else default)
     \\
 ;
 

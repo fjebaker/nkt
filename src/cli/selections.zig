@@ -220,7 +220,21 @@ fn itemFromName(state: *State, name: []const u8) !?State.MaybeItem {
     return .{ .day = maybe_day, .note = maybe_note, .task = maybe_task };
 }
 
-///
+fn stringIn(s: []const u8, opts: []const []const u8) bool {
+    for (opts) |o| {
+        if (std.mem.eql(u8, o, s))
+            return true;
+    }
+    return false;
+}
+
+pub const COLLECTION_FLAG_HELP =
+    \\     --tl/--tasklist <n>   name of tasklist
+    \\     --journal <n>         name of journal
+    \\     --dir/--directory <n> name of directory
+    \\
+;
+
 pub fn parseJournalDirectoryItemlistFlag(
     arg: cli.Arg,
     itt: *cli.ArgIterator,
@@ -236,13 +250,13 @@ pub fn parseJournalDirectoryItemlistFlag(
             .Journal,
             value.string,
         );
-    } else if (arg.is(d, "dir") or arg.is(null, "directory")) {
+    } else if (stringIn(arg.string, &.{ "dir", "directory" }) or arg.is(d, null)) {
         const value = try itt.getValue();
         return cli.SelectedCollection.from(
             .Directory,
             value.string,
         );
-    } else if (arg.is(t, "tasklist")) {
+    } else if (stringIn(arg.string, &.{ "tl", "tasklist" }) or arg.is(t, null)) {
         const value = try itt.getValue();
         return cli.SelectedCollection.from(
             .Tasklist,

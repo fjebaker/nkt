@@ -21,8 +21,8 @@ pub const extended_help =
     \\                             entry. if choice is ambiguous, will print both,
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
-    \\     -j/--journal name     name of journal to read from
-    \\     -d/--director name    name of directory to read from
+    \\
+++ cli.selections.COLLECTION_FLAG_HELP ++
     \\     -n/--limit int        maximum number of entries to display (default: 25)
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
     \\     --filename            use the filename as the print prefix

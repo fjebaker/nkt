@@ -23,8 +23,8 @@ pub const extended_help =
     \\                             specify the time stamp with `--time`
     \\     --time name           time of the item to remove from the chosen
     \\                            entry. must be specified in `hh:mm:ss`
-    \\     --journal name        name of journal to delete from
-    \\     --dir name            name of directory to delete from
+    \\
+++ cli.selections.COLLECTION_FLAG_HELP ++
     \\     -f                    don't prompt for removal
     \\
 ;

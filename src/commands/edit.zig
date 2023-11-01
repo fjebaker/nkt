@@ -19,8 +19,8 @@ pub const extended_help =
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
     \\     -n/--new              allow the creation of new notes
-    \\     --journal name        name of journal to read from
-    \\     --dir name            name of directory to read from
+    \\
+++ cli.selections.COLLECTION_FLAG_HELP ++
     \\
     \\Examples:
     \\=========
