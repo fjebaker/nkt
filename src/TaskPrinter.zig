@@ -186,6 +186,7 @@ fn writeColour(comptime c: Chameleon, writer: anytype, which: OpenClose) !void {
     _ = try writer.writeAll(if (open) c.open else c.close);
 }
 
+const STRIDE = 70;
 fn printDetails(
     details: []const u8,
     writer: anytype,
@@ -210,7 +211,7 @@ fn printDetails(
             _ = try writer.writeAll(". ");
         }
 
-        var itt = std.mem.window(u8, line, 60, 60);
+        var itt = std.mem.window(u8, line, STRIDE, STRIDE);
         while (itt.next()) |chunk| {
             _ = try writer.writeAll("\n");
             _ = try writer.writeByteNTimes(' ', indent);
@@ -240,7 +241,7 @@ fn duePretty(status: Status, writer: anytype, which: OpenClose) !void {
             _ = try writer.writeAll(if (open) c.open else c.close);
         },
         .Done => {
-            const c = cham.green();
+            const c = cham.greenBright();
             _ = try writer.writeAll(if (open) c.open else c.close);
         },
         else => {},
