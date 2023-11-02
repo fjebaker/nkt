@@ -75,6 +75,8 @@ pub fn run(
             unreachable; // todo
         },
     }
+
+    try state.writeChanges();
 }
 
 fn importToDirectory(

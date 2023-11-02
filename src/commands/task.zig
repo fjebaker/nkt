@@ -94,6 +94,7 @@ pub fn run(
         },
     );
 
+    try state.writeChanges();
     try out_writer.print(
         "Written task to '{s}' in tasklist '{s}'\n",
         .{ self.text.?, name },

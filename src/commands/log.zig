@@ -54,6 +54,7 @@ pub fn run(
 
     try entry.Day.add(self.text.?);
 
+    try state.writeChanges();
     try out_writer.print(
         "Written text to '{s}' in journal '{s}'\n",
         .{ entry.getName(), journal_name },

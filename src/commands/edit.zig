@@ -158,15 +158,18 @@ pub fn run(
             try out_writer.print("Opening file '{s}'\n", .{rel_path});
         }
 
+        note.Note.note.modified = utils.now();
+        // write changes before popping editor
+        try state.writeChanges();
+
         var editor = try Editor.init(state.allocator);
         defer editor.deinit();
-
         try editor.editPath(abs_path);
-        note.Note.note.modified = utils.now();
     } else if (item.task) |task| {
         var editor = try Editor.init(state.allocator);
         defer editor.deinit();
 
+        // todo: might lead to topology getting out of sync
         var task_allocator = task.Task.tasklist.mem.allocator();
         const new_details = try editor.editTemporaryContent(
             task_allocator,
@@ -176,6 +179,7 @@ pub fn run(
         task.Task.task.details = new_details;
         task.Task.task.modified = utils.now();
 
+        try state.writeChanges();
         try out_writer.print(
             "Task details for '{s}' in '{s}' updated\n",
             .{ task.getName(), task.collectionName() },

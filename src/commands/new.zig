@@ -29,6 +29,7 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
     const c = try state.newCollection(self.collection.container, self.collection.name);
     try state.fs.makeDirIfNotExists(c.getPath());
 
+    try state.writeChanges();
     try out_writer.print(
         "{s} '{s}' created\n",
         .{

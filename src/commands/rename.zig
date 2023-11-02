@@ -104,6 +104,7 @@ pub fn run(
     var item = try from.getActive();
     try renameItemCollection(item, destination_name, destination_collection);
 
+    try state.writeChanges();
     try out_writer.print(
         "Renamed '{s}' in '{s} -> '{s}' in '{s}'\n",
         .{

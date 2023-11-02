@@ -92,6 +92,7 @@ pub fn run(
             .Done => {
                 if (!task.Task.isDone()) {
                     task.Task.setDone();
+                    try state.writeChanges();
                     try out_writer.print(
                         "Task '{s}' marked as completed\n",
                         .{task.getName()},
@@ -110,6 +111,7 @@ pub fn run(
                 if (task.Task.isDone()) {
                     task.Task.setTodo();
                 }
+                try state.writeChanges();
                 try out_writer.print("Task '{s}' modified\n", .{task.getName()});
             },
         }

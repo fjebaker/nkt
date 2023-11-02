@@ -102,6 +102,7 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
             );
             if (try confirmPrompt(state, stdout)) {
                 try state.removeCollection(ctype, index);
+                try state.writeChanges();
                 try out_writer.print(
                     "{s} {s} deleted\n",
                     .{
@@ -136,6 +137,7 @@ fn runChild(
         );
         if (try confirmPrompt(state, out_writer)) {
             try note.remove();
+            try state.writeChanges();
             _ = try out_writer.writeAll("Note deleted\n");
         }
     } else if (item.day) |day| {
@@ -149,6 +151,7 @@ fn runChild(
             );
             if (try confirmPrompt(state, out_writer)) {
                 try day.remove();
+                try state.writeChanges();
                 _ = try out_writer.writeAll("Entry deleted\n");
             }
         }
@@ -160,6 +163,7 @@ fn runChild(
         );
         if (try confirmPrompt(state, out_writer)) {
             try task_item.remove();
+            try state.writeChanges();
             _ = try out_writer.writeAll("Task deleted\n");
         }
     } else unreachable;
@@ -194,6 +198,8 @@ fn removeItemInEntry(state: *State, day: State.Item, time: []const u8, out_write
 
     if (try confirmPrompt(state, out_writer)) {
         try day.Day.removeEntryByIndex(index);
+        try state.writeChanges();
+        _ = try out_writer.writeAll("Entry deleted\n");
     }
 }
 
