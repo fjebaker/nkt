@@ -88,6 +88,7 @@ pub fn drain(self: *const Printer, writer: anytype) !void {
     if (chunks.len > 1) {
         for (chunks[1..]) |*chunk| {
             _ = try writer.writeAll("\n");
+            _ = try writer.writeAll("\n");
             try chunk.print(writer, self.pretty, self.indent);
         }
     }

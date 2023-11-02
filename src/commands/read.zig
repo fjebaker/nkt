@@ -278,7 +278,7 @@ fn readTask(
     const due_s = if (t.due) |due|
         &try utils.formatDateTimeBuf(utils.dateFromMs(due))
     else
-        "null";
+        "no date set";
 
     const completed_s = if (t.completed) |compl|
         &try utils.formatDateTimeBuf(utils.dateFromMs(compl))
@@ -307,10 +307,9 @@ fn readTask(
         null,
         "Due",
         switch (status) {
-            .Done => cham.dim(),
             .PastDue => cham.bold().redBright(),
             .NearlyDue => cham.yellow(),
-            else => null,
+            else => cham.dim(),
         },
         "  {s}\n",
         .{due_s},

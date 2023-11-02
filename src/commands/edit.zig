@@ -115,7 +115,13 @@ fn findOrCreateDefault(self: *Self, state: *State) !struct {
 } {
     const item: ?State.MaybeItem = try self.selection.find(state);
 
-    if (item != null) return .{ .new = false, .item = item.? };
+    if (item) |i| {
+        if (i.numActive() == 1 and (i.getActive() catch unreachable) == .Day) {
+            // need at least a note or a task
+        } else {
+            return .{ .new = false, .item = item.? };
+        }
+    }
 
     if (self.allow_new) {
         return .{

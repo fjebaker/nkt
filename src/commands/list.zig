@@ -90,9 +90,9 @@ pub fn listNames(
 ) !void {
     if (!opts.oneline) {
         switch (what) {
-            .Directory => try writer.print("Directories list:\n", .{}),
-            .Journal => try writer.print("Journals list:\n", .{}),
-            .Tasklist => try writer.print("Tasklist list:\n", .{}),
+            .Directory => try writer.print("Directories:\n", .{}),
+            .Journal => try writer.print("Journals:\n", .{}),
+            .Tasklist => try writer.print("Tasklists:\n", .{}),
         }
     }
 
@@ -104,6 +104,8 @@ pub fn listNames(
             try writer.print(" - {s}\n", .{name.name});
         }
     }
+
+    _ = try writer.writeAll("\n");
 }
 
 const Task = @import("../collections/Topology.zig").Task;
