@@ -12,6 +12,7 @@ const Date = utils.Date;
 pub const SelectionError = error{
     AmbiguousSelection,
     ChildAlreadyExists,
+    DuplicateSelection,
     IncompatibleSelection,
     InvalidSelection,
     NoSuchCollection,
@@ -129,7 +130,11 @@ pub const Selection = struct {
 
     pub fn parseCollection(s: *Selection, arg: cli.Arg, itt: *cli.ArgIterator) !bool {
         if (try parseCollectionFlags(arg, itt, false)) |collection| {
-            if (s.collection != null) return SelectionError.InvalidSelection;
+            if (s.collection != null) {
+                if (s.collection.?.container != collection.container) {
+                    return SelectionError.AmbiguousSelection;
+                }
+            }
             s.collection = collection;
             return true;
         }
@@ -143,7 +148,11 @@ pub const Selection = struct {
         itt: *cli.ArgIterator,
     ) !bool {
         if (try parseCollectionCustom(prefix, arg, itt, false)) |collection| {
-            if (s.collection != null) return SelectionError.InvalidSelection;
+            if (s.collection != null) {
+                if (s.collection.?.container != collection.container) {
+                    return SelectionError.AmbiguousSelection;
+                }
+            }
             s.collection = collection;
             return true;
         }
