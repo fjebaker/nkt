@@ -6,7 +6,10 @@ const State = @import("../State.zig");
 const Self = @This();
 const Printer = @import("../Printer.zig");
 
-pub const alias = [_][]const u8{"f"};
+const read_cmd = @import("read.zig");
+const Editor = @import("../Editor.zig");
+
+pub const alias = [_][]const u8{ "f", "fp", "fe", "fr" };
 
 pub const help = "Find in notes.";
 
@@ -27,30 +30,30 @@ const FindState = struct {
         };
     }
 
-    pub fn deinit(self: *FindState) void {
-        self.mem.deinit();
-        self.* = undefined;
+    pub fn deinit(state: *FindState) void {
+        state.mem.deinit();
+        state.* = undefined;
     }
 
-    fn concatPaths(self: *FindState, root: []const u8) ![]const u8 {
-        var alloc = self.mem.child_allocator;
+    fn concatPaths(state: *FindState, root: []const u8) ![]const u8 {
+        var alloc = state.mem.child_allocator;
 
         var paths = std.ArrayList([]const u8).fromOwnedSlice(
             alloc,
-            try alloc.dupe([]const u8, self.paths),
+            try alloc.dupe([]const u8, state.paths),
         );
         defer paths.deinit();
 
         try paths.insert(0, root);
 
         return try std.mem.join(
-            self.mem.allocator(),
+            state.mem.allocator(),
             " ",
             paths.items,
         );
     }
 
-    fn subprocFzfRga(self: *FindState) ![]const u8 {
+    fn subprocFzfRga(state: *FindState) ![]const u8 {
         var proc = std.ChildProcess.init(
             &.{
                 "fzf",
@@ -70,57 +73,146 @@ const FindState = struct {
                 "40%",
 
                 "--bind",
-                try self.concatPaths("change:reload:rga --files-with-matches {q}"),
+                try state.concatPaths("change:reload:rga --files-with-matches {q}"),
 
                 // make fzf emit the search term and the result
                 "--bind",
                 "enter:become(echo {q} {})",
             },
-            self.mem.child_allocator,
+            state.mem.child_allocator,
         );
 
-        var alloc = self.mem.allocator();
+        var alloc = state.mem.allocator();
 
         var env_map = try std.process.getEnvMap(alloc);
 
         try env_map.put(
             "FZF_DEFAULT_COMMAND",
-            try self.concatPaths("rga --files-with-matches ''"),
+            try state.concatPaths("rga --files-with-matches ''"),
         );
 
         proc.stdin_behavior = std.ChildProcess.StdIo.Inherit;
         proc.stdout_behavior = std.ChildProcess.StdIo.Pipe;
         proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
         proc.env_map = &env_map;
-        proc.cwd = self.cwd;
+        proc.cwd = state.cwd;
 
         try proc.spawn();
 
-        var selected = try proc.stdout.?.readToEndAlloc(
-            self.mem.child_allocator,
+        const res = try proc.stdout.?.readToEndAlloc(
+            alloc,
             1024,
         );
 
         var term = try proc.wait();
         if (term != .Exited) return FindError.SubProcError;
 
-        return selected;
+        return std.mem.trim(u8, res, " \t\n\r");
+    }
+
+    fn subprocRga(
+        state: *FindState,
+        search_term: []const u8,
+        path: []const u8,
+    ) ![]const u8 {
+        var proc = std.ChildProcess.init(
+            &.{
+                "rga",
+                "--line-number",
+                search_term,
+                path,
+            },
+            state.mem.child_allocator,
+        );
+
+        var alloc = state.mem.allocator();
+
+        var env_map = try std.process.getEnvMap(alloc);
+
+        proc.stdin_behavior = std.ChildProcess.StdIo.Pipe;
+        proc.stdout_behavior = std.ChildProcess.StdIo.Pipe;
+        proc.stderr_behavior = std.ChildProcess.StdIo.Pipe;
+        proc.env_map = &env_map;
+        proc.cwd = state.cwd;
+
+        try proc.spawn();
+
+        const res = try proc.stdout.?.readToEndAlloc(alloc, 1024);
+
+        var term = try proc.wait();
+        if (term != .Exited) return FindError.SubProcError;
+
+        return std.mem.trim(u8, res, " \t\n\r");
+    }
+
+    const Result = struct {
+        path: []const u8,
+        search_term: []const u8,
+        line_number: usize,
+    };
+
+    pub fn find(state: *FindState) !?Result {
+        const selected = try state.subprocFzfRga();
+
+        const sep = std.mem.indexOfScalar(u8, selected, ' ') orelse
+            return null;
+        const search_term = selected[0..sep];
+        const path = selected[sep + 1 ..];
+
+        // todo: this could instead use the json output of rg
+        const grep_result = try state.subprocRga(search_term, path);
+
+        const line_num_sep = std.mem.indexOfScalar(u8, grep_result, ':') orelse
+            return null;
+
+        return .{
+            .path = path,
+            .search_term = search_term,
+            .line_number = try std.fmt.parseInt(
+                usize,
+                grep_result[0..line_num_sep],
+                10,
+            ),
+        };
     }
 };
 
 const FindError = error{SubProcError};
 
 prefix: ?[]const u8 = null,
+mode: ?enum { Read, Page, Edit } = null,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
 
+    itt.rewind();
+    const prog_name = (try itt.next()).?.string;
+    if (prog_name.len == 2) switch (prog_name[1]) {
+        'r' => self.mode = .Read,
+        'p' => self.mode = .Page,
+        'e' => self.mode = .Edit,
+        else => return cli.CLIErrors.BadArgument,
+    };
+
     itt.counter = 0;
     while (try itt.next()) |arg| {
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
+        if (arg.flag) {
+            if (arg.is('r', "read")) {
+                if (self.mode != null) return cli.CLIErrors.DuplicateFlag;
+                self.mode = .Read;
+            } else if (arg.is('e', "edit")) {
+                if (self.mode != null) return cli.CLIErrors.DuplicateFlag;
+                self.mode = .Edit;
+            } else if (arg.is('p', "page")) {
+                if (self.mode != null) return cli.CLIErrors.DuplicateFlag;
+                self.mode = .Page;
+            } else return cli.CLIErrors.UnknownFlag;
+        }
         if (arg.index.? > 1) return cli.CLIErrors.TooManyArguments;
         self.prefix = arg.string;
     }
+
+    self.mode = self.mode orelse .Read;
 
     return self;
 }
@@ -197,32 +289,54 @@ pub fn run(
     var fs = FindState.init(state.allocator, state.fs.root_path, paths);
     defer fs.deinit();
 
-    var selected = try fs.subprocFzfRga();
-    defer state.allocator.free(selected);
+    const selected = try fs.find() orelse return;
 
-    const out = std.mem.trim(u8, selected, " \t\n\r");
-
-    const sep = std.mem.indexOfScalar(u8, out, ' ') orelse return;
-    const search_term = out[0..sep];
-    _ = search_term;
-    const path = out[sep + 1 ..];
-
-    try readFile(state, path, out_writer);
+    switch (self.mode.?) {
+        .Read => try readFile(state, selected.path, false, out_writer),
+        .Page => try readFile(state, selected.path, true, out_writer),
+        .Edit => try editFileAt(state, selected.path, selected.line_number),
+    }
 }
 
-fn readFile(state: *State, path: []const u8, out_writer: anytype) !void {
-    var printer = Printer.init(state.allocator, null, false);
-    defer printer.deinit();
+fn editFileAt(state: *State, path: []const u8, line: usize) !void {
+    if (path.len == 0) return;
+    const c_name = utils.inferCollectionName(path).?;
+    var collection = state.getCollectionByName(c_name).?;
 
+    var note = collection.directory.?.getByPath(path).?;
+    note.Note.note.modified = utils.now();
+    try state.writeChanges();
+
+    const abs_path = try state.fs.absPathify(state.allocator, path);
+    defer state.allocator.free(abs_path);
+
+    const line_selector = try std.fmt.allocPrint(state.allocator, "+{d}", .{line});
+    defer state.allocator.free(line_selector);
+
+    var editor = try Editor.init(state.allocator);
+    defer editor.deinit();
+
+    try editor.editPathArgs(abs_path, &.{line_selector});
+}
+
+fn readFile(state: *State, path: []const u8, page: bool, out_writer: anytype) !void {
     if (path.len == 0) return;
     const c_name = utils.inferCollectionName(path).?;
     var collection = state.getCollectionByName(c_name).?;
 
     var note = collection.directory.?.getByPath(path).?;
 
-    const content = try note.Note.read();
-    try printer.addHeading("", .{});
-    _ = try printer.addLine("{s}", .{content});
+    var printer = Printer.init(state.allocator, null, false);
+    defer printer.deinit();
 
-    try printer.drain(out_writer);
+    try read_cmd.readNote(note, &printer);
+
+    if (page) {
+        var buf = std.ArrayList(u8).init(state.allocator);
+        defer buf.deinit();
+        try printer.drain(buf.writer());
+        try read_cmd.pipeToPager(state.allocator, state.topology.pager, buf.items);
+    } else {
+        try printer.drain(out_writer);
+    }
 }

@@ -88,7 +88,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
 
 const NoSuchCollection = State.Error.NoSuchCollection;
 
-fn pipeToPager(
+pub fn pipeToPager(
     allocator: std.mem.Allocator,
     pager: []const []const u8,
     s: []const u8,
@@ -139,7 +139,7 @@ fn read(
             return NoSuchCollection;
 
         if (selected.note) |note| {
-            try self.readNote(note, &printer);
+            try readNote(note, &printer);
         }
         if (selected.day) |day| {
             try self.readDay(day, &printer);
@@ -166,8 +166,7 @@ fn read(
     try printer.drain(out_writer);
 }
 
-fn readNote(
-    _: *Self,
+pub fn readNote(
     note: State.Item,
     printer: *Printer,
 ) !void {
@@ -176,7 +175,7 @@ fn readNote(
     _ = try printer.addLine("{s}", .{content});
 }
 
-fn readDay(
+pub fn readDay(
     self: *Self,
     day: State.Item,
     printer: *Printer,
@@ -202,7 +201,7 @@ fn readDay(
     }
 }
 
-fn readJournal(
+pub fn readJournal(
     self: *Self,
     journal: *State.Collection,
     printer: *Printer,

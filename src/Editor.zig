@@ -30,8 +30,28 @@ fn tmpFilePath(allocator: std.mem.Allocator) ![]u8 {
 }
 
 fn edit(self: *Editor, filename: []const u8) !void {
+    try self.editWithArgs(filename, &.{});
+}
+
+fn assemble_args(alloc: std.mem.Allocator, editor: []const u8, filename: []const u8, args: []const []const u8) ![]const []const u8 {
+    var list = std.ArrayList([]const u8).init(alloc);
+    errdefer list.deinit();
+    try list.append(editor);
+    for (args) |arg| try list.append(arg);
+    try list.append(filename);
+    return list.toOwnedSlice();
+}
+
+fn editWithArgs(
+    self: *Editor,
+    filename: []const u8,
+    args: []const []const u8,
+) !void {
+    const all_args = try assemble_args(self.allocator, self.editor, filename, args);
+    defer self.allocator.free(all_args);
+
     var proc = std.ChildProcess.init(
-        &.{ self.editor, filename },
+        all_args,
         self.allocator,
     );
 
@@ -46,6 +66,10 @@ fn edit(self: *Editor, filename: []const u8) !void {
 
 pub fn editPath(self: *Editor, path: []const u8) !void {
     try self.edit(path);
+}
+
+pub fn editPathArgs(self: *Editor, path: []const u8, args: []const []const u8) !void {
+    try self.editWithArgs(path, args);
 }
 
 pub fn editTemporary(self: *Editor, alloc: std.mem.Allocator) ![]u8 {
