@@ -238,11 +238,15 @@ pub fn getCollectionNames(
     return CollectionNameList.initOwned(alloc, cnames);
 }
 
-fn syncPtrs(descriptions: []Topology.Description, collections_list: anytype) void {
-    for (descriptions, collections_list) |*descr, *col| {
-        switch (col.*) {
-            .Tasklist => unreachable,
-            inline else => |*c| c.description = descr,
+// todo: clean this up along with the `new` code
+fn syncPtrs(
+    comptime field: []const u8,
+    infos: anytype,
+    collections_list: []Collection,
+) void {
+    for (infos, collections_list) |*info, *c| {
+        switch (c.*) {
+            inline else => |*t| @field(t, field) = info,
         }
     }
 }
@@ -259,7 +263,12 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 &self.topology.directories,
                 new_dir,
             );
-            var dir = try Collection.init(self.allocator, .Directory, s_ptr, self.fs);
+            var dir = try Collection.init(
+                self.allocator,
+                .Directory,
+                s_ptr,
+                self.fs,
+            );
             errdefer dir.deinit();
             var dir_ptr = try utils.push(
                 Collection,
@@ -268,7 +277,10 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 dir,
             );
 
-            syncPtrs(self.topology.directories, self.directories);
+            for (self.topology.directories, self.directories) |*topo, *d| {
+                d.Directory.description = topo;
+            }
+
             return dir_ptr;
         },
         .Journal => {
@@ -279,7 +291,12 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 &self.topology.journals,
                 new,
             );
-            var journal = try Collection.init(self.allocator, .Journal, s_ptr, self.fs);
+            var journal = try Collection.init(
+                self.allocator,
+                .Journal,
+                s_ptr,
+                self.fs,
+            );
             errdefer journal.deinit();
             var journal_ptr = try utils.push(
                 Collection,
@@ -288,10 +305,68 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 journal,
             );
 
-            syncPtrs(self.topology.journals, self.journals);
+            for (self.topology.journals, self.journals) |*topo, *j| {
+                j.Journal.description = topo;
+            }
             return journal_ptr;
         },
-        else => unreachable, // todo
+        .Tasklist => {
+            const filename = try std.mem.concat(
+                topo_alloc,
+                u8,
+                &.{ "tl.", name, ".json" },
+            );
+            errdefer topo_alloc.free(filename);
+
+            const path = try std.fs.path.join(
+                topo_alloc,
+                &.{ collections.TASKLIST_ROOT_DIRECTORY, filename },
+            );
+            errdefer topo_alloc.free(path);
+
+            const tags = try utils.emptyTagList(topo_alloc);
+            errdefer topo_alloc.free(tags);
+
+            const now = utils.now();
+
+            const new: Topology.TasklistInfo = .{
+                .created = now,
+                .modified = now,
+                .name = name,
+                .path = path,
+                .tags = tags,
+            };
+
+            // create the file
+            try self.fs.overwrite(new.path, "{\"items\":[]}");
+
+            const ptr = try utils.push(
+                Topology.TasklistInfo,
+                topo_alloc,
+                &self.topology.tasklists,
+                new,
+            );
+
+            var tasklist = try Collection.init(
+                self.allocator,
+                .Tasklist,
+                ptr,
+                self.fs,
+            );
+            errdefer tasklist.deinit();
+
+            var tasklist_ptr = try utils.push(
+                Collection,
+                self.allocator,
+                &self.tasklists,
+                tasklist,
+            );
+
+            for (self.topology.tasklists, self.tasklists) |*topo, *t| {
+                t.Tasklist.info = topo;
+            }
+            return tasklist_ptr;
+        },
     }
 }
 
@@ -309,7 +384,11 @@ inline fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, in
     utils.moveToEnd(Collection, items, index);
     var marked = items[items.len - 1];
 
-    try self.fs.dir.deleteDir(marked.getPath());
+    if (T != Topology.TasklistInfo) {
+        try self.fs.dir.deleteDir(marked.getPath());
+    } else {
+        try self.fs.dir.deleteFile(marked.getPath());
+    }
 
     marked.deinit();
     @field(self, field_name) = try self.allocator.realloc(items, items.len - 1);
@@ -317,7 +396,19 @@ inline fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, in
     utils.moveToEnd(T, @field(self.topology, field_name), index);
     @field(self.topology, field_name).len -= 1;
 
-    syncPtrs(@field(self.topology, field_name), @field(self, field_name));
+    if (T == Topology.TasklistInfo) {
+        for (@field(self.topology, field_name), @field(self, field_name)) |*topo, *col| {
+            col.Tasklist.info = topo;
+        }
+    } else if (T == Topology.Directory) {
+        for (@field(self.topology, field_name), @field(self, field_name)) |*topo, *col| {
+            col.Directory.description = topo;
+        }
+    } else if (T == Topology.Journal) {
+        for (@field(self.topology, field_name), @field(self, field_name)) |*topo, *col| {
+            col.Journal.description = topo;
+        }
+    } else @compileError("Unknown collection");
 }
 
 pub fn removeCollection(self: *Self, ctype: CollectionType, index: usize) !void {
@@ -328,6 +419,8 @@ pub fn removeCollection(self: *Self, ctype: CollectionType, index: usize) !void 
         .Journal => {
             try removeCollectionNamed(self, "journals", index);
         },
-        .Tasklist => unreachable,
+        .Tasklist => {
+            try removeCollectionNamed(self, "tasklists", index);
+        },
     }
 }

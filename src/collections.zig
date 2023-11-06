@@ -280,6 +280,7 @@ const Journal = struct {
     }
 };
 
+pub const TASKLIST_ROOT_DIRECTORY = "tasklists";
 const Tasklist = struct {
     pub const DEFAULT_FILE_EXTENSION = ".json";
     pub const Task = Topology.Task;
