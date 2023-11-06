@@ -16,7 +16,7 @@ pub const extended_help =
     \\  nkt task
     \\     <text>                short task description / name
     \\     -d/--details str      richer textual details of the task
-    \\     -t/--tasklist name    name of tasklist to write to (default: todo)
+    \\     --tl/--tasklist name    name of tasklist to write to (default: todo)
     \\     --by date-time        date by which this task must be completed. can
     \\                             be specified in `day-like [hh:mm:ss]` format,
     \\                             where `day-like` is either `YYYY-MM-DD` or
@@ -39,7 +39,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
-            if (arg.is('t', "tasklist")) {
+            if (arg.is(null, "tasklist") or arg.is(null, "tl")) {
                 if (self.tasklist != null)
                     return cli.CLIErrors.DuplicateFlag;
 
