@@ -65,10 +65,12 @@ fn formatDueDate(
     const minutes: u32 = @intCast(@divFloor(@rem(delta.seconds, SECONDS_IN_HOUR), 60));
     const days: u32 = @abs(delta.days);
 
+    const indicator = if (overdue) "-" else " ";
+
     return try std.fmt.allocPrint(
         alloc,
-        " {d: >3}d {d:0>2}h {d:0>2}m",
-        .{ days, hours, minutes },
+        "{s} {d: >3}d {d:0>2}h {d:0>2}m",
+        .{ indicator, days, hours, minutes },
     );
 }
 
