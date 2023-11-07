@@ -64,7 +64,8 @@ fn getFormat(fp: *FormatPrinter, marked: MarkedText) ?FormatSpecifier {
     if (marked.mark) |mark| switch (mark) {
         .Tag => {
             const tag_infos = fp.tag_infos orelse return null;
-            const cham = tags.getTagColor(tag_infos, marked.text[1..]);
+            const cham = tags.getTagColor(tag_infos, marked.text[1..]) orelse
+                return null;
             return .{ .open = cham.open, .close = cham.close };
         },
     };

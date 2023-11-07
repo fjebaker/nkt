@@ -276,14 +276,13 @@ fn getTagColorContext(
     index: usize,
 ) TagColor {
     const name = ctx.getName(index);
-    const cham = getTagColor(infos, name);
+    const cham = getTagColor(infos, name).?;
     return .{ .start = cham.open, .end = cham.close };
 }
 
-pub fn getTagColor(infos: []const TagInfo, name: []const u8) Chameleon {
+pub fn getTagColor(infos: []const TagInfo, name: []const u8) ?Chameleon {
     const tag = getTag(infos, name) orelse
-        // todo: this should raise an error if the tag has no info
-        return tagColor("yellow");
+        return null;
     return tagColor(tag.color);
 }
 
