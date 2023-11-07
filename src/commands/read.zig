@@ -183,7 +183,7 @@ pub fn readDay(
     const entries = try day.Day.journal.readEntries(day.Day.day);
 
     if (!self.filename) {
-        try printer.addHeading("Journal entry: {s}\n\n", .{day.getName()});
+        try printer.addHeading("## Journal entry: {s}\n\n", .{day.getName()});
         if (self.full_date) {
             _ = try printer.addItems(entries, printEntryFullTime);
         } else {
