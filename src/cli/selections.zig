@@ -45,24 +45,32 @@ pub const CollectionSelection = struct {
 pub const Selection = struct {
     item: ?ItemSelection = null,
     collection: ?CollectionSelection = null,
+    tag: ?[]const u8 = null,
 
     pub fn positionalNamedCollection(itt: *cli.ArgIterator) !Selection {
         var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
         var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
 
-        var collection_type: State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
+        var collection_type: ?State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
             .Journal
         else if (std.mem.eql(u8, "directory", p1.string))
             .Directory
         else if (std.mem.eql(u8, "tasklist", p1.string))
             .Tasklist
         else
-            return cli.CLIErrors.BadArgument;
+            null;
+
         var name = p2.string;
 
-        return .{
-            .collection = .{ .container = collection_type, .name = name },
-        };
+        if (collection_type) |t| {
+            return .{
+                .collection = .{ .container = t, .name = name },
+            };
+        } else if (std.mem.eql(u8, "tag", p1.string)) {
+            return .{ .tag = p2.string };
+        }
+
+        return cli.CLIErrors.BadArgument;
     }
 
     pub fn validate(s: *Selection, what: enum { Item, Collection, Both }) bool {
@@ -462,7 +470,7 @@ fn parseDateTimeLikeImpl(string: []const u8) !utils.Date {
 
 fn testTimeParsing(s: []const u8, date: utils.Date) !void {
     const eq = std.testing.expectEqual;
-    const parsed = try parseDateTimeLike(s);
+    const parsed = try parseDateTimeLikeImpl(s);
 
     try eq(parsed.date.day, date.date.day);
     try eq(parsed.time.hour, date.time.hour);

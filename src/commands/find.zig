@@ -4,7 +4,7 @@ const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
 const Self = @This();
-const Printer = @import("../Printer.zig");
+const BlockPrinter = @import("../BlockPrinter.zig");
 
 const read_cmd = @import("read.zig");
 const Editor = @import("../Editor.zig");
@@ -326,7 +326,7 @@ fn readFile(state: *State, path: []const u8, page: bool, out_writer: anytype) !v
 
     var note = collection.directory.?.getByPath(path).?;
 
-    var printer = Printer.init(state.allocator, null, false);
+    var printer = BlockPrinter.init(state.allocator, .{ .pretty = false });
     defer printer.deinit();
 
     try read_cmd.readNote(note, &printer);

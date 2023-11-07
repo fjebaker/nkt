@@ -1,6 +1,9 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 
+const tags = @import("tags.zig");
+const TagInfo = tags.TagInfo;
+
 const collections = @import("collections.zig");
 
 pub const CollectionType = collections.Type;
@@ -238,6 +241,19 @@ pub fn getCollectionNames(
     return CollectionNameList.initOwned(alloc, cnames);
 }
 
+pub fn getTagInfo(self: *Self) []TagInfo {
+    return self.topology.tags;
+}
+
+pub fn addTagInfo(self: *Self, taginfo: TagInfo) !void {
+    _ = try utils.push(
+        TagInfo,
+        self.topology.mem.allocator(),
+        &self.topology.tags,
+        taginfo,
+    );
+}
+
 // todo: clean this up along with the `new` code
 fn syncPtrs(
     comptime field: []const u8,
@@ -324,8 +340,8 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
             );
             errdefer topo_alloc.free(path);
 
-            const tags = try utils.emptyTagList(topo_alloc);
-            errdefer topo_alloc.free(tags);
+            const taglist = try utils.emptyTagList(topo_alloc);
+            errdefer topo_alloc.free(taglist);
 
             const now = utils.now();
 
@@ -334,7 +350,7 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 .modified = now,
                 .name = name,
                 .path = path,
-                .tags = tags,
+                .tags = taglist,
             };
 
             // create the file

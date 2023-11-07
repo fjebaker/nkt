@@ -2,6 +2,7 @@ const std = @import("std");
 
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 
@@ -11,32 +12,48 @@ pub const help = "Create a new collection.";
 pub const extended_help =
     \\Create a new collection.
     \\  nkt new
-    \\     <collection type>     Choice of directory, journal, tasklist
+    \\     <collection type>     Choice of directory, journal, tasklist or tag
     \\     <name>                name of the collection
     \\
 ;
 
-collection: cli.selections.CollectionSelection,
+selection: cli.Selection,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     const selected = try cli.Selection.positionalNamedCollection(itt);
-    return .{
-        .collection = selected.collection.?,
-    };
+    return .{ .selection = selected };
 }
 
 pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
-    const c = try state.newCollection(self.collection.container, self.collection.name);
-    try state.fs.makeDirIfNotExists(c.getPath());
+    if (self.selection.collection) |collection| {
+        const c = try state.newCollection(collection.container, collection.name);
+        try state.fs.makeDirIfNotExists(c.getPath());
 
-    try state.writeChanges();
-    try out_writer.print(
-        "{s} '{s}' created\n",
-        .{
-            switch (self.collection.container) {
-                inline else => |i| @tagName(i),
+        try state.writeChanges();
+        try out_writer.print(
+            "{s} '{s}' created\n",
+            .{
+                switch (collection.container) {
+                    inline else => |i| @tagName(i),
+                },
+                collection.name,
             },
-            self.collection.name,
-        },
-    );
+        );
+    } else if (self.selection.tag) |tagname| {
+        const info: tags.TagInfo = .{
+            .name = tagname,
+            .color = "yellow",
+            .created = utils.now(),
+        };
+
+        try state.addTagInfo(info);
+        try state.writeChanges();
+
+        try out_writer.print(
+            "New tag '{s}' created\n",
+            .{
+                tagname,
+            },
+        );
+    }
 }

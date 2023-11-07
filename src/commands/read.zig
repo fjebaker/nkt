@@ -6,7 +6,7 @@ const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
-const Printer = @import("../Printer.zig");
+const BlockPrinter = @import("../BlockPrinter.zig");
 const Entry = @import("../collections/Topology.zig").Entry;
 
 const Self = @This();
@@ -25,7 +25,6 @@ pub const extended_help =
 ++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -n/--limit int        maximum number of entries to display (default: 25)
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
-    \\     --filename            use the filename as the print prefix
     \\     --all                 display all items (overwrites `--limit`)
     \\     -p/--page             read via pager
     \\
@@ -37,7 +36,6 @@ selection: cli.Selection = .{},
 number: usize = 20,
 all: bool = false,
 full_date: bool = false,
-filename: bool = false,
 pager: bool = false,
 pretty: ?bool = null,
 
@@ -66,8 +64,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.pager = true;
             } else if (arg.is(null, "date")) {
                 self.full_date = true;
-            } else if (arg.is(null, "filename")) {
-                self.filename = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
             }
@@ -75,9 +71,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
             return cli.CLIErrors.TooManyArguments;
         }
     }
-
-    if (self.full_date and self.filename)
-        return cli.SelectionError.IncompatibleSelection;
 
     // don't pretty if to pager or being piped
     self.pretty = self.pretty orelse
@@ -130,7 +123,10 @@ fn read(
     out_writer: anytype,
 ) !void {
     const N = if (self.all) null else self.number;
-    var printer = Printer.init(state.allocator, N, self.pretty.?);
+    var printer = BlockPrinter.init(
+        state.allocator,
+        .{ .max_lines = N, .pretty = self.pretty.? },
+    );
     defer printer.deinit();
 
     if (self.selection.item != null) {
@@ -142,11 +138,12 @@ fn read(
             try readNote(note, &printer);
         }
         if (selected.day) |day| {
+            printer.addTagInfo(state.getTagInfo());
             try self.readDay(day, &printer);
         }
         if (selected.task) |task| {
-            printer.remaining = null;
-            printer.indent = 2;
+            printer.format_printer.opts.max_lines = null;
+            printer.addTagInfo(state.getTagInfo());
             try self.readTask(task, &printer);
         }
     } else if (self.selection.collection) |w| switch (w.container) {
@@ -160,6 +157,7 @@ fn read(
     } else {
         // default behaviour
         const journal = state.getJournal("diary").?;
+        printer.addTagInfo(state.getTagInfo());
         try self.readJournal(journal, &printer);
     }
 
@@ -168,49 +166,37 @@ fn read(
 
 pub fn readNote(
     note: State.Item,
-    printer: *Printer,
+    printer: *BlockPrinter,
 ) !void {
     const content = try note.Note.read();
-    try printer.addHeading("", .{});
-    _ = try printer.addLine("{s}", .{content});
+    try printer.addBlock("", .{});
+    _ = try printer.addToCurrent(content, .{});
 }
 
 pub fn readDay(
     self: *Self,
     day: State.Item,
-    printer: *Printer,
+    printer: *BlockPrinter,
 ) !void {
     const entries = try day.Day.journal.readEntries(day.Day.day);
-
-    if (!self.filename) {
-        try printer.addHeading("## Journal entry: {s}\n\n", .{day.getName()});
-        if (self.full_date) {
-            _ = try printer.addItems(entries, printEntryFullTime);
-        } else {
-            _ = try printer.addItems(entries, printEntryItem);
-        }
+    try printer.addFormatted(.Heading, "## Journal entry: {s}", .{day.getName()}, .{});
+    if (self.full_date) {
+        try addItems(entries, .FullTime, printer);
     } else {
-        try printer.addHeading("", .{});
-        var capture: FilenameClosure = .{ .filename = day.getPath() };
-        _ = try printer.addItemsCtx(
-            FilenameClosure,
-            entries,
-            printEntryItemFilename,
-            capture,
-        );
+        try addItems(entries, .ClockTime, printer);
     }
 }
 
 pub fn readJournal(
     self: *Self,
     journal: *State.Collection,
-    printer: *Printer,
+    printer: *BlockPrinter,
 ) !void {
-    var alloc = printer.mem.allocator();
+    var alloc = printer.format_printer.mem.allocator();
     var day_list = try journal.getAll(alloc);
 
     if (day_list.len == 0) {
-        try printer.addHeading("-- Empty --\n", .{});
+        try printer.addBlock("-- Empty --\n", .{});
         return;
     }
 
@@ -234,41 +220,41 @@ pub fn readJournal(
     printer.reverse();
 }
 
-fn printEntryItem(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
-    const date = utils.dateFromMs(entry.created);
-    const time_of_day = utils.formatTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-
-    try writer.print("{s} | {s}\n", .{ time_of_day, entry.item });
-}
-
-fn printEntryFullTime(writer: Printer.Writer, entry: Entry) Printer.WriteError!void {
-    const date = utils.dateFromMs(entry.created);
-    const time = utils.formatDateTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-
-    try writer.print("{s} | {s}\n", .{ time, entry.item });
-}
-
-const FilenameClosure = struct { filename: []const u8 };
-fn printEntryItemFilename(
-    fc: FilenameClosure,
-    writer: Printer.Writer,
-    entry: Entry,
-) Printer.WriteError!void {
-    const date = utils.dateFromMs(entry.created);
-    const time_of_day = utils.formatTimeBuf(date) catch
-        return Printer.WriteError.DateError;
-    try writer.print(
-        "{s} {s} - {s}\n",
-        .{ fc.filename, time_of_day, entry.item },
-    );
+fn addItems(
+    entries: []Entry,
+    comptime format: enum { FullTime, ClockTime },
+    printer: *BlockPrinter,
+) !void {
+    const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
+    for (entries[offset..]) |entry| {
+        const date = utils.dateFromMs(entry.created);
+        switch (format) {
+            .ClockTime => {
+                const time_of_day = try utils.formatTimeBuf(date);
+                try printer.addFormatted(
+                    .Item,
+                    "{s} | {s}\n",
+                    .{ time_of_day, entry.item },
+                    .{},
+                );
+            },
+            .FullTime => {
+                const full_time = try utils.formatDateTimeBuf(date);
+                try printer.addFormatted(
+                    .Item,
+                    "{s} | {s}\n",
+                    .{ full_time, entry.item },
+                    .{},
+                );
+            },
+        }
+    }
 }
 
 fn readTask(
     _: *Self,
     task: State.Item,
-    printer: *Printer,
+    printer: *BlockPrinter,
 ) !void {
     comptime var cham = Chameleon.init(.Auto);
     const t = task.Task.task;
@@ -284,65 +270,85 @@ fn readTask(
     else
         "not completed";
 
-    try printer.addHeading("Task        :   {s}\n\n", .{t.title});
+    try printer.addBlock("", .{});
 
-    _ = try printer.addInfoLine(
-        null,
+    try printer.addFormatted(
+        .Item,
+        "Task" ++ " " ** 11 ++ ":   {s}\n\n",
+        .{t.title},
+        .{ .cham = cham.underline().bold() },
+    );
+
+    try addInfoLine(
+        printer,
         "Created",
-        null,
+        "|",
         "  {s}\n",
         .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
+        null,
     );
-
-    _ = try printer.addInfoLine(
-        null,
+    try addInfoLine(
+        printer,
         "Modified",
-        null,
+        "|",
         "  {s}\n",
         .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
-    );
-
-    _ = try printer.addInfoLine(
         null,
+    );
+    try addInfoLine(
+        printer,
         "Due",
-        switch (status) {
-            .PastDue => cham.bold().redBright(),
-            .NearlyDue => cham.yellow(),
-            else => cham.dim(),
-        },
+        "|",
         "  {s}\n",
         .{due_s},
-    );
-
-    _ = try printer.addInfoLine(
-        null,
-        "Importance",
-        switch (t.importance) {
-            .high => cham.yellow(),
-            .low => cham.dim(),
-            .urgent => cham.bold().redBright(),
+        switch (status) {
+            .PastDue => cham.bold().redBright(),
+            .NearlyDue => cham.yellowBright(),
+            else => cham.dim(),
         },
+    );
+    try addInfoLine(
+        printer,
+        "Importance",
+        "|",
         "{s}\n",
         .{switch (t.importance) {
             .low => "  Low",
             .high => "* High",
             .urgent => "! Urgent",
         }},
+        switch (t.importance) {
+            .high => cham.yellowBright(),
+            .low => cham.dim(),
+            .urgent => cham.bold().redBright(),
+        },
     );
-
-    _ = try printer.addInfoLine(
-        null,
+    try addInfoLine(
+        printer,
         "Completed",
+        "|",
+        "  {s}\n",
+        .{completed_s},
         switch (status) {
             .Done => cham.greenBright(),
             else => cham.dim(),
         },
-        "  {s}\n",
-        .{completed_s},
     );
+    try printer.addToCurrent("\nDetails:\n\n", .{ .cham = cham.underline() });
+    try printer.addToCurrent(t.details, .{});
+    try printer.addToCurrent("\n", .{});
+}
 
-    _ = try printer.addLine("\n", .{});
-    _ = try printer.addFormattedLine(cham.underline(), "Details:", .{});
-    _ = try printer.addLine("\n", .{});
-    _ = try printer.addLine("\n{s}", .{t.details});
+fn addInfoLine(
+    printer: *BlockPrinter,
+    comptime key: []const u8,
+    comptime delim: []const u8,
+    comptime value_fmt: []const u8,
+    args: anytype,
+    cham: ?Chameleon,
+) !void {
+    const padd = 15 - key.len;
+    try printer.addToCurrent(key, .{});
+    try printer.addToCurrent(" " ** padd ++ delim ++ " ", .{});
+    try printer.addFormatted(.Item, value_fmt, args, .{ .cham = cham });
 }

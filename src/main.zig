@@ -113,7 +113,7 @@ pub fn main() !void {
 test "root" {
     _ = cli;
     _ = utils;
-    // _ = @import("./commands/task.zig");
+    _ = @import("tags.zig");
 
     var dir = std.testing.tmpDir(.{});
     defer dir.cleanup();

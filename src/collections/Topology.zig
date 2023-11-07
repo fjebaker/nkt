@@ -11,6 +11,12 @@ pub const Tag = struct {
     added: []const u8,
 };
 
+pub const TagInfo = struct {
+    name: []const u8,
+    created: u64,
+    color: []const u8,
+};
+
 pub const InfoScheme = struct {
     created: u64,
     modified: u64,
@@ -121,11 +127,13 @@ const TopologySchema = struct {
     _schema_version: []const u8,
     editor: [][]const u8,
     pager: [][]const u8,
+    tags: []TagInfo,
     tasklists: []TasklistInfo,
     directories: []Directory,
     journals: []Journal,
 };
 
+tags: []TagInfo,
 directories: []Directory,
 journals: []Journal,
 tasklists: []TasklistInfo,
@@ -142,10 +150,12 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
     var directories = try temp_alloc.alloc(Directory, 0);
     var journals = try temp_alloc.alloc(Journal, 0);
     var tasklists = try temp_alloc.alloc(TasklistInfo, 0);
+    var tags = try temp_alloc.alloc(TagInfo, 0);
     var editor = try temp_alloc.dupe([]const u8, &.{"vim"});
     var pager = try temp_alloc.dupe([]const u8, &.{"less"});
 
     return .{
+        .tags = tags,
         .directories = directories,
         .journals = journals,
         .tasklists = tasklists,
@@ -168,6 +178,7 @@ pub fn init(alloc: std.mem.Allocator, data: []const u8) !Self {
     );
 
     return .{
+        .tags = schema.tags,
         .directories = schema.directories,
         .journals = schema.journals,
         .tasklists = schema.tasklists,
@@ -188,6 +199,7 @@ pub fn toString(self: *Self, alloc: std.mem.Allocator) ![]const u8 {
         ._schema_version = TOPOLOGY_SCHEMA_VERSION,
         .directories = self.directories,
         .journals = self.journals,
+        .tags = self.tags,
         .tasklists = self.tasklists,
         .editor = self.editor,
         .pager = self.pager,

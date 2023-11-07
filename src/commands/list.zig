@@ -112,6 +112,7 @@ const Task = @import("../collections/Topology.zig").Task;
 fn listTasks(
     self: *Self,
     alloc: std.mem.Allocator,
+    state: *State,
     c: *State.Collection,
     writer: anytype,
 ) !void {
@@ -126,6 +127,8 @@ fn listTasks(
     var printer = TaskPrinter.init(alloc, self.pretty.?);
     defer printer.deinit();
 
+    printer.taginfo = state.getTagInfo();
+
     var lookup = try c.Tasklist.invertIndexMap(alloc);
     defer lookup.deinit();
 
@@ -137,7 +140,7 @@ fn listTasks(
         try printer.add(task.Task.task.*, index);
     }
 
-    try printer.drain(writer, self.details);
+    try printer.drain(writer, state.getTagInfo(), self.details);
 }
 
 fn is(s: []const u8, other: []const u8) bool {
@@ -186,7 +189,7 @@ pub fn run(
         }
         if (collection.tasklist) |c| {
             try out_writer.print("Tasks in tasklist '{s}':\n", .{c.getName()});
-            try self.listTasks(state.allocator, c, out_writer);
+            try self.listTasks(state.allocator, state, c, out_writer);
         }
     }
 }
