@@ -178,8 +178,20 @@ pub fn readDay(
     day: State.Item,
     printer: *BlockPrinter,
 ) !void {
+    var alloc = day.Day.journal.mem.allocator();
+
     const entries = try day.Day.journal.readEntries(day.Day.day);
-    try printer.addFormatted(.Heading, "## Journal entry: {s}", .{day.getName()}, .{});
+
+    const date = utils.dateFromMs(day.Day.day.created);
+    const day_of_week = try utils.dayOfWeek(alloc, date);
+    const month = try utils.monthOfYear(alloc, date);
+
+    try printer.addFormatted(
+        .Heading,
+        "## Journal: {s} {s} of {s}",
+        .{ day.getName(), day_of_week, month },
+        .{},
+    );
     if (self.full_date) {
         try addItems(entries, .FullTime, printer);
     } else {
