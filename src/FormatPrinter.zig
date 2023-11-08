@@ -8,6 +8,16 @@ const FormatPrinter = @import("FormatPrinter.zig");
 const FormatSpecifier = struct {
     open: []const u8,
     close: []const u8,
+
+    pub fn underline(
+        spec: *FormatSpecifier,
+        leaky_alloc: std.mem.Allocator,
+    ) !void {
+        comptime var cham = Chameleon.init(.Auto);
+        const mod = cham.underline();
+        spec.open = try std.mem.concat(leaky_alloc, u8, &.{ spec.open, mod.open });
+        spec.close = try std.mem.concat(leaky_alloc, u8, &.{ spec.close, mod.close });
+    }
 };
 
 const NO_FORMAT = FormatSpecifier{ .open = "", .close = "" };
@@ -60,18 +70,6 @@ const MarkedText = struct {
     text: []const u8,
 };
 
-fn getFormat(fp: *FormatPrinter, marked: MarkedText) ?FormatSpecifier {
-    if (marked.mark) |mark| switch (mark) {
-        .Tag => {
-            const tag_infos = fp.tag_infos orelse return null;
-            const cham = tags.getTagColor(tag_infos, marked.text[1..]) orelse
-                return null;
-            return .{ .open = cham.open, .close = cham.close };
-        },
-    };
-    return null;
-}
-
 fn identifySubBlock(text: []const u8, start: usize) ?MarkedText {
     switch (text[start]) {
         // detect possible nests
@@ -90,6 +88,18 @@ const HelperFormat = struct {
     end: usize,
     fmt: FormatSpecifier,
 };
+
+fn getFormat(fp: *FormatPrinter, marked: MarkedText) ?FormatSpecifier {
+    if (marked.mark) |mark| switch (mark) {
+        .Tag => {
+            const tag_infos = fp.tag_infos orelse return null;
+            const cham = tags.getTagColor(tag_infos, marked.text[1..]) orelse
+                return null;
+            return .{ .open = cham.open, .close = cham.close };
+        },
+    };
+    return null;
+}
 
 fn addTextImpl(fp: *FormatPrinter, text: []const u8, fmt: FormatSpecifier, count: bool) !void {
     var stack = std.ArrayList(HelperFormat).init(fp.mem.child_allocator);
@@ -111,8 +121,14 @@ fn addTextImpl(fp: *FormatPrinter, text: []const u8, fmt: FormatSpecifier, count
         if (identifySubBlock(text, i)) |b| {
             const end = i + b.text.len;
             var maybe_new_fmt = fp.getFormat(b);
-            const new_fmt = maybe_new_fmt orelse
+            var new_fmt = maybe_new_fmt orelse
                 continue;
+
+            if (std.mem.containsAtLeast(u8, current.fmt.open, 1, new_fmt.open)) {
+                // we're already formatting this way, so modify the new
+                // format so it's still distinct
+                try new_fmt.underline(fp.mem.allocator());
+            }
 
             // write what we currently have
             try fp.add(.{ .text = text[current.start..i], .fmt = current.fmt });
