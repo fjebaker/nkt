@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 
@@ -52,7 +53,17 @@ pub fn run(
     var entry = journal.get(&today_string) orelse
         try journal.Journal.newDay(&today_string);
 
-    try entry.Day.add(self.text.?);
+    var contexts = try tags.parseContexts(state.allocator, self.text.?);
+    defer contexts.deinit();
+
+    const ts = try contexts.getTags(state.getTagInfo());
+
+    var ptr_to_entry = try entry.Day.add(self.text.?);
+    try tags.addTags(
+        journal.Journal.content.allocator(),
+        &ptr_to_entry.tags,
+        ts,
+    );
 
     try state.writeChanges();
     try out_writer.print(

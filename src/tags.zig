@@ -1,6 +1,8 @@
 const std = @import("std");
 const Topology = @import("collections/Topology.zig");
 
+const utils = @import("utils.zig");
+
 const Chameleon = @import("chameleon").Chameleon;
 
 pub const TagInfo = Topology.TagInfo;
@@ -27,9 +29,11 @@ pub const ContextParse = struct {
     alloc: std.mem.Allocator,
     positions: []Position,
     string: []const u8,
+    mem: ?std.heap.ArenaAllocator = null,
 
     pub fn deinit(c: *ContextParse) void {
         c.alloc.free(c.positions);
+        if (c.mem) |*m| m.deinit();
         c.* = undefined;
     }
 
@@ -42,13 +46,38 @@ pub const ContextParse = struct {
         return c.string[pos.start + 1 .. pos.end];
     }
 
-    fn tagNameValid(name: []const u8, allowed_tags: []const TagInfo) !void {
+    fn arenaAlloc(c: *ContextParse) std.mem.Allocator {
+        if (c.mem) |*m| return m.allocator();
+        c.mem = std.heap.ArenaAllocator.init(c.alloc);
+        return c.mem.?.allocator();
+    }
+
+    fn tagNameValid(name: []const u8, allowed_tags: []const TagInfo) bool {
         for (allowed_tags) |tag| {
             if (std.mem.eql(u8, tag.name, name)) {
-                return;
+                return true;
             }
         }
-        return TagError.InvalidTag;
+        return false;
+    }
+
+    pub fn getTags(c: *ContextParse, allowed_tags: []const TagInfo) ![]Tag {
+        var alloc = c.arenaAlloc();
+        var tags = try alloc.alloc(Tag, c.positions.len);
+
+        const now = utils.now();
+
+        var i: usize = 0;
+        var names = c.nameIterator();
+        while (names.next()) |name| {
+            if (!tagNameValid(name, allowed_tags)) {
+                return TagError.InvalidTag;
+            }
+            tags[i] = .{ .name = name, .added = now };
+            i += 1;
+        }
+
+        return tags;
     }
 
     pub fn validateAgainst(
@@ -57,14 +86,18 @@ pub const ContextParse = struct {
     ) !void {
         var names = c.nameIterator();
         while (names.next()) |name| {
-            try tagNameValid(name, allowed_tags);
+            if (!tagNameValid(name, allowed_tags)) {
+                return TagError.InvalidTag;
+            }
         }
     }
 };
 
 fn testContextValidation(names: []const []const u8, allowed: []const TagInfo) !void {
     for (names) |name| {
-        try ContextParse.tagNameValid(name, allowed);
+        if (!ContextParse.tagNameValid(name, allowed)) {
+            return TagError.InvalidTag;
+        }
     }
 }
 
@@ -115,7 +148,7 @@ fn readUntilEndOfTag(itt: *Iterator) !void {
     }
 }
 
-pub fn parseTagString(string: []const u8) ![]const u8 {
+pub fn parseContextString(string: []const u8) ![]const u8 {
     std.debug.assert(string[0] == '@');
     var itt = Iterator{ .string = string[1..] };
     try readUntilEndOfTag(&itt);
@@ -125,7 +158,7 @@ pub fn parseTagString(string: []const u8) ![]const u8 {
 }
 
 fn testParseTagString(string: []const u8, comptime expected: ?[]const u8) !void {
-    const s = parseTagString(string) catch null;
+    const s = parseContextString(string) catch null;
     if (s) |s_| {
         try std.testing.expectEqualStrings(expected.?, s_);
     } else {
@@ -315,6 +348,20 @@ pub const TagWriter = struct {
         tw.* = undefined;
     }
 };
+
+pub fn addTags(alloc: std.mem.Allocator, existing: *[]Tag, new: []const Tag) !void {
+    var maximal = std.StringArrayHashMap(Tag).init(alloc);
+    defer maximal.deinit();
+
+    for (existing.*) |t| {
+        try maximal.put(t.name, t);
+    }
+    for (new) |t| {
+        try maximal.put(t.name, t);
+    }
+
+    existing.* = try alloc.dupe(Tag, maximal.values());
+}
 
 const ColorName = enum {
     yellow,

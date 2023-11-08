@@ -74,7 +74,7 @@ fn identifySubBlock(text: []const u8, start: usize) ?MarkedText {
     switch (text[start]) {
         // detect possible nests
         '@' => {
-            if (tags.parseTagString(text[start..]) catch null) |tag| {
+            if (tags.parseContextString(text[start..]) catch null) |tag| {
                 return .{ .mark = .Tag, .text = tag };
             }
         },

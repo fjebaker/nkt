@@ -8,7 +8,7 @@ const TOPOLOGY_SCHEMA_VERSION = "0.1.0";
 
 pub const Tag = struct {
     name: []const u8,
-    added: []const u8,
+    added: u64,
 };
 
 pub const TagInfo = struct {

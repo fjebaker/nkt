@@ -198,10 +198,11 @@ const Journal = struct {
         };
     }
 
-    pub fn addEntryToDay(j: *Journal, day: *Topology.InfoScheme, entry: Entry) !void {
+    pub fn addEntryToDay(j: *Journal, day: *Topology.InfoScheme, entry: Entry) !*Entry {
         var entries = j.content.get(day.name) orelse try j.readEntries(day);
-        _ = try utils.push(Entry, j.content.allocator(), &entries, entry);
+        const ptr = try utils.push(Entry, j.content.allocator(), &entries, entry);
         try j.content.putMove(day.name, entries);
+        return ptr;
     }
 
     inline fn addDay(
@@ -442,7 +443,7 @@ pub const Item = union(ItemType) {
             return try self.journal.readEntries(self.day);
         }
 
-        pub fn add(self: @This(), entry_text: []const u8) !void {
+        pub fn add(self: @This(), entry_text: []const u8) !*Journal.Entry {
             var alloc = self.journal.content.allocator();
             const now = utils.now();
             const owned_text = try alloc.dupe(u8, entry_text);
@@ -454,7 +455,7 @@ pub const Item = union(ItemType) {
                 .tags = try utils.emptyTagList(alloc),
             };
 
-            try self.journal.addEntryToDay(self.day, entry);
+            return try self.journal.addEntryToDay(self.day, entry);
         }
 
         pub fn removeEntryByIndex(self: @This(), index: usize) !void {
