@@ -82,7 +82,7 @@ pub fn addFormatted(
     switch (what) {
         .Heading => {
             var new_opts = opts;
-            new_opts.cham = new_opts.cham orelse cham.bold().underline();
+            new_opts.cham = new_opts.cham orelse cham.cyanBright().bold().underline();
             try bp.addBlock(string, new_opts);
 
             new_opts.cham = null;

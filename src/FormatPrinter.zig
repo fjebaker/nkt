@@ -1,5 +1,6 @@
 const std = @import("std");
 const tags = @import("tags.zig");
+const utils = @import("utils.zig");
 
 const Chameleon = @import("chameleon").Chameleon;
 
@@ -65,17 +66,62 @@ pub fn add(fp: *FormatPrinter, rich: RichText) !void {
     try fp.texts.append(rich);
 }
 
-const MarkedText = struct {
-    mark: ?enum { Tag } = null,
-    text: []const u8,
+const PRE_FMT: FormatSpecifier = blk: {
+    comptime var cham = Chameleon.init(.Auto);
+    const c = cham.bgRgb(48, 48, 48).rgb(236, 106, 101);
+    break :blk .{ .open = c.open, .close = c.close };
 };
 
-fn identifySubBlock(text: []const u8, start: usize) ?MarkedText {
+const URI_FMT: FormatSpecifier = blk: {
+    comptime var cham = Chameleon.init(.Auto);
+    const c = cham.rgb(58, 133, 134).underline();
+    break :blk .{ .open = c.open, .close = c.close };
+};
+
+fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) ?Block {
+    const text = parser.text;
+    const start = parser.i - 1;
     switch (text[start]) {
-        // detect possible nests
         '@' => {
             if (tags.parseContextString(text[start..]) catch null) |tag| {
-                return .{ .mark = .Tag, .text = tag };
+                const tag_infos = fp.tag_infos orelse
+                    return null;
+                const cham = tags.getTagColor(tag_infos, tag[1..]) orelse
+                    return null;
+                const fmt = .{ .open = cham.open, .close = cham.close };
+                const end = tag.len + start;
+                parser.skipN(end - start);
+                return .{ .mark = .Tag, .start = start, .end = end, .fmt = fmt };
+            }
+        },
+        '`' => {
+            const lookahead = parser.peekSlice(2);
+            if (lookahead) |la| {
+                if (la[0] == '`' and la[1] == '`') {
+                    parser.skipN(2);
+                    return null;
+                }
+            }
+            const index = std.mem.indexOfScalarPos(u8, text, start + 1, '`');
+            if (index) |end| {
+                parser.skipN(end + 1 - start);
+                return .{
+                    .mark = .Pre,
+                    .start = start,
+                    .end = end + 1,
+                    .fmt = PRE_FMT,
+                };
+            }
+        },
+        ':' => {
+            if (utils.findUriFromColon(text, start)) |uri| {
+                parser.skipN(uri.end - start);
+                return .{
+                    .mark = .Uri,
+                    .start = uri.start,
+                    .end = uri.end,
+                    .fmt = URI_FMT,
+                };
             }
         },
         else => {},
@@ -83,67 +129,126 @@ fn identifySubBlock(text: []const u8, start: usize) ?MarkedText {
     return null;
 }
 
-const HelperFormat = struct {
+const Block = struct {
     start: usize,
     end: usize,
     fmt: FormatSpecifier,
+    mark: ?enum { Tag, Pre, Uri } = null,
 };
 
-fn getFormat(fp: *FormatPrinter, marked: MarkedText) ?FormatSpecifier {
-    if (marked.mark) |mark| switch (mark) {
-        .Tag => {
-            const tag_infos = fp.tag_infos orelse return null;
-            const cham = tags.getTagColor(tag_infos, marked.text[1..]) orelse
-                return null;
-            return .{ .open = cham.open, .close = cham.close };
-        },
-    };
-    return null;
-}
+const Parser = struct {
+    i: usize = 0,
+    text: []const u8,
+    stack: std.ArrayList(Block),
 
-fn addTextImpl(fp: *FormatPrinter, text: []const u8, fmt: FormatSpecifier, count: bool) !void {
-    var stack = std.ArrayList(HelperFormat).init(fp.mem.child_allocator);
-    defer stack.deinit();
+    pub fn init(
+        alloc: std.mem.Allocator,
+        text: []const u8,
+    ) Parser {
+        return .{
+            .text = text,
+            .stack = std.ArrayList(Block).init(alloc),
+        };
+    }
 
-    var current: HelperFormat = .{ .start = 0, .end = text.len, .fmt = fmt };
+    pub fn deinit(p: *Parser) void {
+        p.stack.deinit();
+        p.* = undefined;
+    }
 
-    for (0..text.len - 1) |i| {
+    pub fn current(p: *const Parser) usize {
+        return p.i -| 1;
+    }
+
+    pub fn push(p: *Parser, block: Block) !void {
+        try p.stack.append(block);
+    }
+
+    pub fn pop(p: *Parser) Block {
+        return p.stack.pop();
+    }
+
+    pub fn popOrNull(p: *Parser) ?Block {
+        return p.stack.popOrNull();
+    }
+
+    pub fn next(p: *Parser) ?u8 {
+        const i = p.nextIndex() orelse
+            return null;
+        return p.text[i];
+    }
+
+    pub fn nextIndex(p: *Parser) ?usize {
+        if (p.i >= p.text.len)
+            return null;
+        const i = p.i;
+        p.i += 1;
+        return i;
+    }
+
+    pub fn peek(p: *const Parser) ?u8 {
+        if (p.i >= p.text.len)
+            return null;
+        return p.text[p.i];
+    }
+
+    pub fn peekSlice(p: *const Parser, n: usize) ?[]const u8 {
+        if (p.i + n >= p.text.len)
+            return null;
+        return p.text[p.i .. p.i + n];
+    }
+
+    pub fn skipN(p: *Parser, n: usize) void {
+        p.i += n;
+    }
+};
+
+fn addTextImpl(
+    fp: *FormatPrinter,
+    text: []const u8,
+    fmt: FormatSpecifier,
+    count: bool,
+) !void {
+    var parser = Parser.init(fp.mem.child_allocator, text);
+    defer parser.deinit();
+
+    var current: Block = .{ .start = 0, .end = text.len, .fmt = fmt };
+    while (parser.nextIndex()) |i| {
         if (i > current.end) {
             // write the formatted block
             try fp.add(
                 .{ .text = text[current.start..current.end], .fmt = current.fmt },
             );
-            current = stack.pop();
+            current = parser.pop();
             if (i > text.len) break;
             continue;
         }
 
-        if (identifySubBlock(text, i)) |b| {
-            const end = i + b.text.len;
-            var maybe_new_fmt = fp.getFormat(b);
-            var new_fmt = maybe_new_fmt orelse
-                continue;
-
-            if (std.mem.containsAtLeast(u8, current.fmt.open, 1, new_fmt.open)) {
-                // we're already formatting this way, so modify the new
-                // format so it's still distinct
-                try new_fmt.underline(fp.mem.allocator());
-            }
-
+        if (fp.identifySubBlock(&parser)) |sub_block| {
             // write what we currently have
-            try fp.add(.{ .text = text[current.start..i], .fmt = current.fmt });
+            try fp.add(.{
+                .text = text[current.start..sub_block.start],
+                .fmt = current.fmt,
+            });
+
             // shift the start of the remaining
-            current.start = end;
+            current.start = parser.current();
 
             // save current to get it back later
-            try stack.append(current);
-            current = .{ .start = i, .end = end, .fmt = new_fmt };
+            try parser.push(current);
+            current = sub_block;
         }
     }
 
     try fp.add(
         .{ .text = text[current.start..current.end], .fmt = current.fmt },
     );
+
+    while (parser.popOrNull()) |b| {
+        try fp.add(
+            .{ .text = text[b.start..b.end], .fmt = b.fmt },
+        );
+    }
 
     if (count) {
         if (fp.opts.max_lines) |*counter| {

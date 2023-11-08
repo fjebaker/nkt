@@ -365,6 +365,7 @@ pub fn addTags(alloc: std.mem.Allocator, existing: *[]Tag, new: []const Tag) !vo
 
 const ColorName = enum {
     yellow,
+    brown,
     orange,
     green,
     red,
@@ -379,6 +380,7 @@ fn tagColor(name: []const u8) Chameleon {
     return switch (std.meta.stringToEnum(ColorName, name) orelse return cham) {
         .yellow => cham.yellowBright(),
         .orange => cham.rgb(238, 137, 62),
+        .brown => cham.rgb(194, 101, 100),
         .green => cham.greenBright(),
         .red => cham.redBright(),
         .magenta => cham.magentaBright(),

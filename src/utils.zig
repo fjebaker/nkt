@@ -241,3 +241,43 @@ pub fn inferCollectionName(s: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, s[0..3], "dir")) return s[4..end];
     unreachable; // todo
 }
+
+pub const UriSlice = struct {
+    start: usize,
+    end: usize,
+    uri: std.Uri,
+};
+
+pub fn findUriFromColon(text: []const u8, index_of_colon: usize) ?UriSlice {
+    const start = index_of_colon;
+    // too few characters remaining
+    if (!(text.len >= start + 2))
+        return null;
+
+    const lookahead = text[start + 1 .. start + 3];
+
+    if (!std.mem.eql(u8, lookahead, "//"))
+        return null;
+    // get the word boundaries
+    const begin = b: {
+        var i: usize = start - 1;
+        while (i >= 0) {
+            const c = text[i];
+            if (c == ' ' or c == '(') break :b i + 1;
+            if (i == 0) break :b 0;
+            i -= 1;
+        }
+        unreachable;
+    };
+    const end = std.mem.indexOfAnyPos(u8, text, start + 2, " )\n\t") orelse
+        text.len;
+    const slice = text[begin..end];
+    const uri = std.Uri.parse(slice) catch {
+        return null;
+    };
+    return .{
+        .start = begin,
+        .end = end,
+        .uri = uri,
+    };
+}
