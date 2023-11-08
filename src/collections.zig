@@ -298,7 +298,7 @@ const Tasklist = struct {
         details: []const u8 = "",
     };
 
-    pub fn addTask(self: *Tasklist, title: []const u8, options: TaskOptions) !void {
+    pub fn addTask(self: *Tasklist, title: []const u8, options: TaskOptions) !*Task {
         _ = try self.readTasks();
 
         var alloc = self.mem.allocator();
@@ -318,7 +318,7 @@ const Tasklist = struct {
             .done = false,
         };
 
-        _ = try utils.push(Task, alloc, &(self.tasks.?), new_task);
+        return try utils.push(Task, alloc, &(self.tasks.?), new_task);
     }
 
     pub fn readTasks(self: *Tasklist) ![]Task {

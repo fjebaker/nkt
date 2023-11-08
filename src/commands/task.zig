@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 
@@ -85,13 +86,22 @@ pub fn run(
 
     const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
 
-    try tasklist.Tasklist.addTask(
+    var contexts = try tags.parseContexts(state.allocator, self.text.?);
+    defer contexts.deinit();
+    const ts = try contexts.getTags(state.getTagInfo());
+
+    var ptr_to_task = try tasklist.Tasklist.addTask(
         self.text.?,
         .{
             .due = by,
             .importance = self.importance.?,
             .details = self.details orelse "",
         },
+    );
+    try tags.addTags(
+        tasklist.Tasklist.mem.allocator(),
+        &ptr_to_task.tags,
+        ts,
     );
 
     try state.writeChanges();
