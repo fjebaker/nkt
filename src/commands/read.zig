@@ -26,6 +26,7 @@ pub const extended_help =
     \\     -n/--limit int        maximum number of entries to display (default: 25)
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
     \\     --all                 display all items (overwrites `--limit`)
+    \\     --pretty/--nopretty   force pretty or no pretty printing
     \\     -p/--page             read via pager
     \\
     \\The alias `rp` is a short hand for `read --page`.
@@ -61,7 +62,11 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
             } else if (arg.is(null, "all")) {
                 self.all = true;
             } else if (arg.is(null, "no-pretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
                 self.pretty = false;
+            } else if (arg.is(null, "pretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
+                self.pretty = true;
             } else if (arg.is('p', "pager")) {
                 self.pager = true;
             } else if (arg.is(null, "date")) {
