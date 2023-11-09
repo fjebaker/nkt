@@ -21,6 +21,7 @@ pub const extended_help =
     \\     --all                 list all entries (ignores `--limit`)
     \\     --modified            sort by last modified (default)
     \\     --created             sort by date created
+    \\     --alphabetical        sort by date created
     \\     --pretty/--nopretty   pretty format the output, or don't (default
     \\                           is to pretty format)
     \\
@@ -52,6 +53,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.all = true;
             } else if (arg.is(null, "modified")) {
                 self.ordering = .Modified;
+            } else if (arg.is(null, "alphabetical")) {
+                self.ordering = .Alphabetical;
             } else if (arg.is(null, "done")) {
                 self.done = true;
             } else if (arg.is(null, "created")) {
@@ -174,7 +177,7 @@ pub fn run(
             try self.listCollection(
                 state.allocator,
                 c,
-                self.ordering orelse .Modified,
+                self.ordering orelse .Alphabetical,
                 out_writer,
             );
         }

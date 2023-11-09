@@ -17,6 +17,7 @@ pub const Ordering = enum {
     Modified,
     Created,
     Due,
+    Alphabetical,
 };
 
 pub const MaybeCollection = struct {
@@ -610,6 +611,12 @@ pub const Item = union(ItemType) {
         return Tasklist.sortCanonical({}, lhs.Task.task.*, rhs.Task.task.*);
     }
 
+    fn sortAlphabetical(_: void, lhs: Item, rhs: Item) bool {
+        const ln = lhs.getName();
+        const rn = rhs.getName();
+        return std.ascii.lessThanIgnoreCase(ln, rn);
+    }
+
     fn sortCreated(_: void, lhs: Item, rhs: Item) bool {
         const lhs_created = lhs.getCreated();
         const rhs_created = rhs.getCreated();
@@ -791,6 +798,7 @@ pub const Collection = union(Type) {
             .Modified => std.sort.insertion(Item, items, {}, Item.sortModified),
             .Created => std.sort.insertion(Item, items, {}, Item.sortCreated),
             .Due => std.sort.insertion(Item, items, {}, Item.sortDue),
+            .Alphabetical => std.sort.insertion(Item, items, {}, Item.sortAlphabetical),
         }
     }
 
