@@ -11,6 +11,8 @@ pub const help = "Modify attributes of entries, notes, or tasks.";
 pub const extended_help =
     \\Modify attributes of entries, notes, or tasks.
     \\
+    \\See `help task` for the date selection format specifiers.
+    \\
     \\Examples:
     \\=========
     \\

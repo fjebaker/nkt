@@ -430,57 +430,203 @@ pub fn parseDateTimeLike(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8)
 
 fn parseDateTimeLikeImpl(string: []const u8) !utils.Date {
     var itt = std.mem.tokenize(u8, string, " ");
-    const date_like = itt.next() orelse return cli.CLIErrors.BadArgument;
-    const time_like = itt.next() orelse "23:59:59";
-    if (itt.next()) |_| return cli.CLIErrors.TooManyArguments;
+    var col = Colloquial{ .tkn = itt, .now = utils.dateFromMs(utils.now()) };
 
-    var day = blk: {
-        if (cli.selections.isDate(date_like)) {
-            break :blk try utils.toDate(date_like);
-        } else if (std.mem.eql(u8, date_like, "today")) {
-            break :blk utils.Date.now();
-        } else if (std.mem.eql(u8, date_like, "tomorrow")) {
-            var today = utils.Date.now();
-            break :blk today.shiftDays(1);
-        } else return cli.CLIErrors.BadArgument;
-    };
-
-    const time = blk: {
-        if (cli.selections.isTime(date_like)) {
-            break :blk try utils.toTime(time_like);
-        } else if (std.mem.eql(u8, time_like, "morning")) {
-            break :blk comptime try utils.toTime("08:00:00");
-        } else if (std.mem.eql(u8, time_like, "lunch")) {
-            break :blk comptime try utils.toTime("13:00:00");
-        } else if (std.mem.eql(u8, time_like, "end-of-day")) {
-            break :blk comptime try utils.toTime("17:00:00");
-        } else if (std.mem.eql(u8, time_like, "evening")) {
-            break :blk comptime try utils.toTime("19:00:00");
-        } else if (std.mem.eql(u8, time_like, "night")) {
-            break :blk comptime try utils.toTime("23:00:00");
-        } else break :blk utils.Time{ .hour = 13, .minute = 0, .second = 0 };
-    };
-
-    day.time.hour = time.hour;
-    day.time.minute = time.minute;
-    day.time.second = time.second;
-
-    return day;
+    const date = try col.parse();
+    if (col.nextOrNull()) |_|
+        return cli.CLIErrors.TooManyArguments;
+    return date;
 }
 
-fn testTimeParsing(s: []const u8, date: utils.Date) !void {
+pub const DATE_TIME_SELECTOR_HELP =
+    \\Date time selection format:
+    \\
+    \\  'tuesday evening'
+    \\  'tomorrow'
+    \\  '2023-11-29 14:00:00'
+    \\  'next week'
+    \\  'soon'                # random time between 2 and 5 days
+    \\  'next month'          # picks the start of the month
+    \\  'end of week'         # friday end of day
+    \\  'thursday'
+    \\  '2 weeks'
+    \\  '30 days'
+    \\
+    \\Weekdays specified are always in advance (specifying monday on a monday will mean
+    \\next monday).
+    \\
+;
+
+const Colloquial = struct {
+    const Tokenizer = std.mem.TokenIterator(u8, .any);
+    const DefaultTime = utils.toTime("13:00:00");
+
+    tkn: Tokenizer,
+    now: utils.Date,
+
+    fn _eq(s1: []const u8, s2: []const u8) bool {
+        return std.mem.eql(u8, s1, s2);
+    }
+
+    fn setTime(_: *const Colloquial, date: utils.Date, time: utils.Time) utils.Date {
+        var day = date;
+        day.time.hour = time.hour;
+        day.time.minute = time.minute;
+        day.time.second = time.second;
+        return day;
+    }
+
+    fn nextOrNull(c: *Colloquial) ?[]const u8 {
+        return c.tkn.next();
+    }
+
+    fn next(c: *Colloquial) ![]const u8 {
+        return c.tkn.next() orelse
+            cli.CLIErrors.BadArgument;
+    }
+
+    fn optionalTime(c: *Colloquial) !utils.Time {
+        const time_like = c.nextOrNull() orelse
+            return DefaultTime;
+        return try timeOfDay(time_like);
+    }
+
+    pub fn parse(c: *Colloquial) !utils.Date {
+        const arg = try c.next();
+
+        if (_eq(arg, "today")) {
+            return c.setTime(c.now, try c.optionalTime());
+        } else if (_eq(arg, "tomorrow")) {
+            return c.setTime(c.now.shiftDays(1), try c.optionalTime());
+        } else if (c.parseWeekday(arg)) |date| {
+            return c.setTime(date, try c.optionalTime());
+        } else if (cli.selections.isDate(arg)) {
+            const date = try utils.toDate(arg);
+            return c.setTime(date, try c.optionalTime());
+        }
+
+        return cli.CLIErrors.BadArgument;
+    }
+
+    fn parseNextTime(c: *Colloquial) !utils.Date {
+        if (c.parseWeekday(try c.next())) |date| {
+            _ = date;
+        }
+    }
+
+    fn parseDate(c: *Colloquial) !utils.Date {
+        const arg = c.next();
+        if (cli.selections.isDate(arg)) {
+            return try utils.toDate(arg);
+        } else if (std.mem.eql(u8, arg, "today")) {
+            return utils.Date.now();
+        } else if (std.mem.eql(u8, arg, "tomorrow")) {
+            return c.now().shiftDays(1);
+        } else return cli.CLIErrors.BadArgument;
+    }
+
+    const Weekday = utils.time.datetime.Weekday;
+
+    fn asWeekday(arg: []const u8) ?Weekday {
+        inline for (1..8) |i| {
+            const weekday: Weekday = @enumFromInt(i);
+            var name = @tagName(weekday);
+            if (_eq(name[1..], arg[1..])) {
+                if (name[0] == std.ascii.toUpper(arg[0])) {
+                    return weekday;
+                }
+            }
+        }
+        return null;
+    }
+
+    fn parseWeekday(c: *const Colloquial, arg: []const u8) ?utils.Date {
+        const today = c.now.date.dayOfWeek();
+        const shift = daysDifferent(today, arg) orelse return null;
+        return c.now.shiftDays(shift);
+    }
+
+    fn daysDifferent(today_wd: Weekday, arg: []const u8) ?i32 {
+        const choice = asWeekday(arg) orelse return null;
+        const today: i32 = @intCast(@intFromEnum(today_wd));
+        var selected: i32 = @intCast(@intFromEnum(choice));
+
+        if (selected <= today) {
+            selected += 7;
+        }
+        return (selected - today);
+    }
+
+    fn _compTime(comptime s: []const u8) utils.Time {
+        return utils.toTime(s) catch @compileError("Could not parse time: " ++ s);
+    }
+
+    const TIME_OF_DAY = std.ComptimeStringMap(utils.Time, .{
+        .{ "morning", _compTime("08:00:00") },
+        .{ "lunch", _compTime("13:00:00") },
+        .{ "eod", _compTime("17:00:00") },
+        .{ "end-of-day", _compTime("17:00:00") },
+        .{ "evening", _compTime("19:00:00") },
+        .{ "night", _compTime("23:00:00") },
+    });
+
+    fn timeOfDay(s: []const u8) !utils.Time {
+        if (cli.selections.isTime(s)) {
+            return try utils.toTime(s);
+        }
+
+        if (TIME_OF_DAY.get(s)) |time| return time;
+        return utils.Time{ .hour = 13, .minute = 0, .second = 0 };
+    }
+};
+
+fn testWeekday(now: Colloquial.Weekday, arg: []const u8, diff: i32) !void {
+    const delta = Colloquial.daysDifferent(now, arg);
+    try std.testing.expectEqual(delta, diff);
+}
+
+test "time selection parsing" {
+    try testWeekday(.Monday, "tuesday", 1);
+    try testWeekday(.Thursday, "tuesday", 5);
+    try testWeekday(.Sunday, "sunday", 7);
+    try testWeekday(.Wednesday, "thursday", 1);
+}
+
+fn testTimeParsing(now: utils.Date, s: []const u8, date: utils.Date) !void {
     const eq = std.testing.expectEqual;
-    const parsed = try parseDateTimeLikeImpl(s);
+
+    var itt = std.mem.tokenize(u8, s, " ");
+    var col = Colloquial{ .tkn = itt, .now = now };
+    const parsed = try col.parse();
 
     try eq(parsed.date.day, date.date.day);
+    try eq(parsed.date.month, date.date.month);
     try eq(parsed.time.hour, date.time.hour);
 }
 
 test "time parsing" {
-    var nowish = utils.Date.now();
+    var nowish = try utils.Date.fromDate(2023, 11, 8); // wednesday of nov
     nowish.time.hour = 13;
     nowish.time.minute = 0;
     nowish.time.second = 0;
 
-    try testTimeParsing("tomorrow", nowish.shiftDays(1));
+    try testTimeParsing(nowish, "tomorrow", nowish.shiftDays(1));
+    try testTimeParsing(nowish, "today", nowish);
+    try testTimeParsing(nowish, "thursday", nowish.shiftDays(1));
+    try testTimeParsing(nowish, "tuesday", nowish.shiftDays(6));
+    try testTimeParsing(
+        nowish,
+        "monday evening",
+        nowish.shiftDays(5).shiftHours(6),
+    );
+    try testTimeParsing(
+        nowish,
+        "monday 18:00:00",
+        nowish.shiftDays(5).shiftHours(5),
+    );
+    try testTimeParsing(
+        nowish,
+        "2023-11-09 15:30:00",
+        nowish.shiftDays(1).shiftHours(2).shiftMinutes(30),
+    );
 }

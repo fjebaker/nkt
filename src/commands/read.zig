@@ -60,6 +60,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.number = try value.as(usize);
             } else if (arg.is(null, "all")) {
                 self.all = true;
+            } else if (arg.is(null, "no-pretty")) {
+                self.pretty = false;
             } else if (arg.is('p', "pager")) {
                 self.pager = true;
             } else if (arg.is(null, "date")) {

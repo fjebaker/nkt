@@ -1,6 +1,5 @@
 const std = @import("std");
-const time = @import("time");
-
+pub const time = @import("time");
 pub const DateError = error{DateStringTooShort};
 
 pub const Time = time.datetime.Time;

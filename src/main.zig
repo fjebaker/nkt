@@ -108,6 +108,8 @@ pub fn main() !void {
     // setup complete: execute the program
     try cmd.run(&state, stdout);
     try bw.flush();
+
+    return std.process.cleanExit();
 }
 
 test "root" {

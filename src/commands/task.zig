@@ -18,11 +18,12 @@ pub const extended_help =
     \\     <text>                short task description / name
     \\     -d/--details str      richer textual details of the task
     \\     --tl/--tasklist name    name of tasklist to write to (default: todo)
-    \\     --by date-time        date by which this task must be completed. can
-    \\                             be specified in `day-like [hh:mm:ss]` format,
-    \\                             where `day-like` is either `YYYY-MM-DD` or
-    \\                             a choice of `today`, `tomorrow`, or `WEEKDAY`
+    \\     --by <date-like>      date by which this task must be completed. see
+    \\                             below for a description of the date format
     \\     -i/--importance       choice of `low`, `medium`, `high` (default: low)
+    \\
+    \\
+++ cli.selections.DATE_TIME_SELECTOR_HELP ++
     \\
 ;
 const Importance = @import("../collections/Topology.zig").Task.Importance;
