@@ -164,7 +164,7 @@ pub fn run(
 
         var editor = try Editor.init(state.allocator);
         defer editor.deinit();
-        try editor.becomeEditPath(abs_path);
+        try editor.becomeWithArgs(abs_path, &.{});
     } else if (item.task) |task| {
         var editor = try Editor.init(state.allocator);
         defer editor.deinit();

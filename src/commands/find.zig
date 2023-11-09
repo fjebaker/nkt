@@ -212,7 +212,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
         self.prefix = arg.string;
     }
 
-    self.mode = self.mode orelse .Read;
+    self.mode = self.mode orelse .Edit;
 
     return self;
 }
@@ -310,13 +310,14 @@ fn editFileAt(state: *State, path: []const u8, line: usize) !void {
     const abs_path = try state.fs.absPathify(state.allocator, path);
     defer state.allocator.free(abs_path);
 
+    // this only works for vim
     const line_selector = try std.fmt.allocPrint(state.allocator, "+{d}", .{line});
     defer state.allocator.free(line_selector);
 
     var editor = try Editor.init(state.allocator);
     defer editor.deinit();
 
-    try editor.editPathArgs(abs_path, &.{line_selector});
+    try editor.becomeWithArgs(abs_path, &.{line_selector});
 }
 
 fn readFile(state: *State, path: []const u8, page: bool, out_writer: anytype) !void {
