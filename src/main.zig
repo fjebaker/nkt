@@ -84,9 +84,17 @@ pub fn main() !void {
                 try @import("./commands/help.zig").printHelp(stdout_file);
                 std.os.exit(0);
             },
-            else => return e,
+            else => {},
         };
-        return err;
+        if (@import("builtin").mode == .Debug) {
+            return err;
+        } else {
+            try std.io.getStdErr().writer().print(
+                "Error: {s}\n",
+                .{@errorName(err)},
+            );
+            std.os.exit(1);
+        }
     };
     defer cmd.deinit();
 

@@ -9,7 +9,7 @@ const Self = @This();
 
 pub const alias = [_][]const u8{"rm"};
 
-pub const help = "Remove a note from a directory, an entry from a journal, or an item from an entry.";
+pub const help = "Remove items from collections.";
 pub const extended_help =
     \\Remove a note from a directory, an entry from a journal, or an item 
     \\from an entry.
