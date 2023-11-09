@@ -68,6 +68,16 @@ pub fn editPath(self: *Editor, path: []const u8) !void {
     try self.edit(path);
 }
 
+pub fn becomeEditPath(self: *Editor, path: []const u8) !void {
+    const all_args = try assemble_args(self.allocator, self.editor, path, &.{});
+    defer self.allocator.free(all_args);
+
+    var env_map = try std.process.getEnvMap(self.allocator);
+    defer env_map.deinit();
+
+    return std.process.execve(self.allocator, all_args, &env_map);
+}
+
 pub fn editPathArgs(self: *Editor, path: []const u8, args: []const []const u8) !void {
     try self.editWithArgs(path, args);
 }
