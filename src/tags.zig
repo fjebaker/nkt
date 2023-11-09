@@ -372,6 +372,8 @@ const ColorName = enum {
     magenta,
     cyan,
     blue,
+    pink,
+    salmon,
 };
 
 fn tagColor(name: []const u8) Chameleon {
@@ -386,5 +388,7 @@ fn tagColor(name: []const u8) Chameleon {
         .magenta => cham.magentaBright(),
         .cyan => cham.cyanBright(),
         .blue => cham.blueBright(),
+        .pink => cham.rgb(255, 126, 126),
+        .salmon => cham.rgb(235, 136, 186),
     };
 }

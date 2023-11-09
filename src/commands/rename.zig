@@ -99,9 +99,9 @@ pub fn run(
         return cli.SelectionError.ChildAlreadyExists;
 
     // all checks passed, do the rename
-    const old_name = try self.from.getItemName(state.allocator);
-    defer state.allocator.free(old_name);
     var item = try from.getActive();
+    const old_name = try state.allocator.dupe(u8, item.getName());
+    defer state.allocator.free(old_name);
     try renameItemCollection(item, destination_name, destination_collection);
 
     try state.writeChanges();
