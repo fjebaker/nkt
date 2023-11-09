@@ -262,13 +262,13 @@ pub fn findUriFromColon(text: []const u8, index_of_colon: usize) ?UriSlice {
         var i: usize = start - 1;
         while (i >= 0) {
             const c = text[i];
-            if (c == ' ' or c == '(') break :b i + 1;
+            if (std.ascii.isWhitespace(c) or c == '(') break :b i + 1;
             if (i == 0) break :b 0;
             i -= 1;
         }
         unreachable;
     };
-    const end = std.mem.indexOfAnyPos(u8, text, start + 2, " )\n\t") orelse
+    const end = std.mem.indexOfAnyPos(u8, text, start + 2, " )\n\t\r") orelse
         text.len;
     const slice = text[begin..end];
     const uri = std.Uri.parse(slice) catch {
