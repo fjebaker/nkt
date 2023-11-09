@@ -210,6 +210,14 @@ fn listCollection(
     c.sort(items, order);
 
     for (items) |item| {
-        try writer.print(" - {s}\n", .{item.getName()});
+        if (c.* == .Directory) {
+            const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
+                std.debug.print("ERR: {s}\n", .{item.getPath()});
+                return err;
+            };
+            try writer.print(" - {d: >7}  {s}\n", .{ size.size, item.getName() });
+        } else {
+            try writer.print(" - {s}\n", .{item.getName()});
+        }
     }
 }
