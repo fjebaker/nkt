@@ -119,6 +119,12 @@ pub fn writeChanges(self: *Self) !void {
     for (self.tasklists) |*tls| {
         try tls.writeChanges(self.allocator);
     }
+    if (self.chains) |chains| {
+        const string = try Topology.stringifyChains(self.allocator, chains);
+        defer self.allocator.free(string);
+
+        try self.fs.overwrite(self.topology.chainpath, string);
+    }
 
     const data = try self.topology.toString(self.allocator);
     defer self.allocator.free(data);
@@ -259,6 +265,13 @@ pub fn getChains(self: *Self) ![]Chain {
         try self.readChains();
         return self.chains.?;
     };
+}
+
+pub fn addChain(self: *Self, chain: Chain) !void {
+    var chains = try self.getChains();
+    var alloc = self.topology.mem.allocator();
+    _ = try utils.push(Chain, alloc, &chains, chain);
+    self.chains = chains;
 }
 
 pub fn addTagInfo(self: *Self, taginfo: TagInfo) !void {

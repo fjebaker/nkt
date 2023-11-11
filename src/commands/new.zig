@@ -12,7 +12,7 @@ pub const help = "Create a new collection.";
 pub const extended_help =
     \\Create a new collection.
     \\  nkt new
-    \\     <collection type>     Choice of directory, journal, tasklist or tag
+    \\     <collection type>     Choice of directory, journal, tasklist, chain, or tag
     \\     <name>                name of the collection
     \\
 ;
@@ -51,9 +51,21 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
 
         try out_writer.print(
             "New tag '{s}' created\n",
-            .{
-                tagname,
-            },
+            .{tagname},
+        );
+    } else if (self.selection.chain) |chainname| {
+        var alloc = state.topology.mem.allocator();
+        const new_chain: State.Chain = .{
+            .name = chainname,
+            .created = utils.now(),
+            .tags = try utils.emptyTagList(alloc),
+            .completed = try alloc.alloc(u64, 0),
+        };
+        try state.addChain(new_chain);
+        try state.writeChanges();
+        try out_writer.print(
+            "New chain '{s}' created\n",
+            .{chainname},
         );
     }
 }
