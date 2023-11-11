@@ -19,6 +19,8 @@ pub const Error = error{NoSuchCollection};
 const Topology = @import("collections/Topology.zig");
 const FileSystem = @import("FileSystem.zig");
 
+pub const Chain = Topology.Chain;
+
 const Self = @This();
 
 pub const Config = struct {
@@ -29,6 +31,7 @@ topology: Topology,
 directories: []Collection,
 journals: []Collection,
 tasklists: []Collection,
+chains: ?[]Chain = null, // must be read from file
 fs: FileSystem,
 allocator: std.mem.Allocator,
 
@@ -243,6 +246,19 @@ pub fn getCollectionNames(
 
 pub fn getTagInfo(self: *Self) []TagInfo {
     return self.topology.tags;
+}
+
+fn readChains(self: *Self) !void {
+    var alloc = self.topology.mem.allocator();
+    const string = try self.fs.readFileAlloc(alloc, self.topology.chainpath);
+    self.chains = try Topology.parseChains(alloc, string);
+}
+
+pub fn getChains(self: *Self) ![]Chain {
+    return self.chains orelse {
+        try self.readChains();
+        return self.chains.?;
+    };
 }
 
 pub fn addTagInfo(self: *Self, taginfo: TagInfo) !void {
