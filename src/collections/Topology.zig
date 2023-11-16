@@ -123,11 +123,41 @@ pub fn stringifyTasks(alloc: std.mem.Allocator, items: []Task) ![]const u8 {
 
 pub const TasklistInfo = InfoScheme;
 
+pub const DEFAULT_CHAIN_FILENAME = "chains.json";
+pub const Chain = struct {
+    name: []const u8,
+    alias: ?[]const u8 = null,
+    details: ?[]const u8 = null,
+    created: u64,
+    tags: []Tag,
+    completed: []u64,
+};
+
+const ChainScheme = struct { chains: []Chain };
+pub fn parseChains(alloc: std.mem.Allocator, string: []const u8) ![]Chain {
+    var content = try std.json.parseFromSliceLeaky(
+        ChainScheme,
+        alloc,
+        string,
+        .{ .allocate = .alloc_always },
+    );
+    return content.chains;
+}
+pub fn stringifyChains(alloc: std.mem.Allocator, chains: []Chain) ![]const u8 {
+    return try std.json.stringifyAlloc(
+        alloc,
+        ChainScheme{ .chains = chains },
+        .{ .whitespace = .indent_4 },
+    );
+}
+
 const TopologySchema = struct {
     _schema_version: []const u8,
     editor: [][]const u8,
     pager: [][]const u8,
     tags: []TagInfo,
+    // path to where we store the chains file
+    chainpath: []const u8,
     tasklists: []TasklistInfo,
     directories: []Directory,
     journals: []Journal,
@@ -137,6 +167,7 @@ tags: []TagInfo,
 directories: []Directory,
 journals: []Journal,
 tasklists: []TasklistInfo,
+chainpath: []const u8,
 editor: [][]const u8,
 pager: [][]const u8,
 mem: std.heap.ArenaAllocator,
@@ -159,6 +190,7 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
         .directories = directories,
         .journals = journals,
         .tasklists = tasklists,
+        .chainpath = DEFAULT_CHAIN_FILENAME,
         .editor = editor,
         .pager = pager,
         .mem = mem,
@@ -182,6 +214,7 @@ pub fn init(alloc: std.mem.Allocator, data: []const u8) !Self {
         .directories = schema.directories,
         .journals = schema.journals,
         .tasklists = schema.tasklists,
+        .chainpath = schema.chainpath,
         .editor = schema.editor,
         .pager = schema.pager,
         .mem = mem,
@@ -199,6 +232,7 @@ pub fn toString(self: *Self, alloc: std.mem.Allocator) ![]const u8 {
         ._schema_version = TOPOLOGY_SCHEMA_VERSION,
         .directories = self.directories,
         .journals = self.journals,
+        .chainpath = self.chainpath,
         .tags = self.tags,
         .tasklists = self.tasklists,
         .editor = self.editor,

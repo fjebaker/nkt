@@ -46,6 +46,7 @@ pub const Selection = struct {
     item: ?ItemSelection = null,
     collection: ?CollectionSelection = null,
     tag: ?[]const u8 = null,
+    chain: ?[]const u8 = null,
 
     pub fn positionalNamedCollection(itt: *cli.ArgIterator) !Selection {
         var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
@@ -68,6 +69,8 @@ pub const Selection = struct {
             };
         } else if (std.mem.eql(u8, "tag", p1.string)) {
             return .{ .tag = p2.string };
+        } else if (std.mem.eql(u8, "chain", p1.string)) {
+            return .{ .chain = p2.string };
         }
 
         return cli.CLIErrors.BadArgument;

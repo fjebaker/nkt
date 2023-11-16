@@ -162,12 +162,15 @@ pub fn run(
         try listNames(cnames, .Directory, out_writer, .{});
         try listNames(cnames, .Journal, out_writer, .{});
         try listNames(cnames, .Tasklist, out_writer, .{});
+        try listChains(try state.getChains(), out_writer);
     } else if (is(self.selection, "dir") or is(self.selection, "directories")) {
         try listNames(cnames, .Directory, out_writer, .{});
     } else if (is(self.selection, "journals")) {
         try listNames(cnames, .Journal, out_writer, .{});
     } else if (is(self.selection, "tasklists")) {
         try listNames(cnames, .Tasklist, out_writer, .{});
+    } else if (is(self.selection, "chains")) {
+        try listChains(try state.getChains(), out_writer);
     } else {
         var collection: State.MaybeCollection = state.getCollectionByName(self.selection) orelse
             return State.Error.NoSuchCollection;
@@ -195,6 +198,15 @@ pub fn run(
             try self.listTasks(state.allocator, state, c, out_writer);
         }
     }
+}
+
+fn listChains(chains: []State.Chain, writer: anytype) !void {
+    try writer.writeAll("Chains:\n");
+    for (chains) |chain| {
+        try writer.print(" - {s}\n", .{chain.name});
+    }
+
+    try writer.writeAll("\n");
 }
 
 fn listCollection(
