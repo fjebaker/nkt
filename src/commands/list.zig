@@ -224,14 +224,27 @@ fn listCollection(
     defer alloc.free(items);
 
     c.sort(items, order);
+    const padding = p: {
+        var longest: usize = 0;
+        for (items) |item| {
+            longest = @max(longest, item.getName().len);
+        }
+        break :p longest;
+    };
 
     for (items) |item| {
+        const name = item.getName();
         if (c.* == .Directory) {
             const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
                 std.debug.print("ERR: {s}\n", .{item.getPath()});
                 return err;
             };
-            try writer.print(" - {d: >7}  {s}\n", .{ size.size, item.getName() });
+            const date = utils.dateFromMs(item.Note.note.modified);
+            const fmt_date = try utils.formatDateTimeBuf(date);
+
+            try writer.print(" - {d: >7}  {s}", .{ size.size, name });
+            try writer.writeByteNTimes(' ', padding - name.len + 2);
+            try writer.print("{s}\n", .{fmt_date});
         } else {
             try writer.print(" - {s}\n", .{item.getName()});
         }
