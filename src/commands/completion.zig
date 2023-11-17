@@ -34,6 +34,9 @@ pub fn run(
     switch (self.what) {
         .notes => {
             for (state.directories) |*dir| {
+                if (std.mem.eql(u8, dir.getName(), "diary")) {
+                    continue;
+                }
                 try listDirContents(state.allocator, out_writer, dir);
             }
         },
