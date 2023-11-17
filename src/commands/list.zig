@@ -1,9 +1,11 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 const TaskPrinter = @import("../TaskPrinter.zig");
+const FormatPrinter = @import("../FormatPrinter.zig");
 
 const Self = @This();
 
@@ -169,6 +171,8 @@ pub fn run(
         try listNames(cnames, .Journal, out_writer, .{});
     } else if (is(self.selection, "tasklists")) {
         try listNames(cnames, .Tasklist, out_writer, .{});
+    } else if (is(self.selection, "tags")) {
+        try self.listTags(state.allocator, state.getTagInfo(), out_writer);
     } else if (is(self.selection, "chains")) {
         try listChains(try state.getChains(), out_writer);
     } else {
@@ -232,4 +236,24 @@ fn listCollection(
             try writer.print(" - {s}\n", .{item.getName()});
         }
     }
+}
+
+fn listTags(
+    self: *const Self,
+    alloc: std.mem.Allocator,
+    infos: []const tags.TagInfo,
+    out_writer: anytype,
+) !void {
+    var printer = FormatPrinter.init(alloc, .{ .pretty = self.pretty.? });
+    defer printer.deinit();
+
+    printer.tag_infos = infos;
+
+    try printer.addText("Tags:\n", .{});
+    for (infos) |info| {
+        try printer.addFmtText(" - @{s}\n", .{info.name}, .{});
+    }
+    try printer.addText("\n", .{});
+
+    try printer.drain(out_writer);
 }

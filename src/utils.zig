@@ -250,7 +250,7 @@ pub const UriSlice = struct {
 pub fn findUriFromColon(text: []const u8, index_of_colon: usize) ?UriSlice {
     const start = index_of_colon;
     // too few characters remaining
-    if (!(text.len >= start + 2))
+    if (!(text.len >= start + 3))
         return null;
 
     const lookahead = text[start + 1 .. start + 3];
