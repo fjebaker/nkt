@@ -102,7 +102,7 @@ pub fn main() !void {
     var home_dir_path = std.os.getenv("HOME").?;
     var root_path = try std.fs.path.join(
         allocator,
-        &[_][]const u8{ home_dir_path, ".nkt" },
+        &.{ home_dir_path, ".nkt" },
     );
     defer allocator.free(root_path);
 

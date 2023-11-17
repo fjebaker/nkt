@@ -447,11 +447,11 @@ pub const DATE_TIME_SELECTOR_HELP =
     \\  'tuesday evening'
     \\  'tomorrow'
     \\  '2023-11-29 14:00:00'
-    \\  'next week'
+    \\  'next week'           # picks the next monday
     \\  'soon'                # random time between 2 and 5 days
-    \\  'next month'          # picks the start of the month
     \\  'end of week'         # friday end of day
     \\  'thursday'
+    \\  'next thursday'       # same as above
     \\  '2 weeks'
     \\  '30 days'
     \\
@@ -462,7 +462,8 @@ pub const DATE_TIME_SELECTOR_HELP =
 
 const Colloquial = struct {
     const Tokenizer = std.mem.TokenIterator(u8, .any);
-    const DefaultTime = utils.toTime("13:00:00");
+    const DefaultTime = utils.toTime("13:00:00") catch
+        @compileError("Could not default parse date");
 
     tkn: Tokenizer,
     now: utils.Date,
@@ -495,16 +496,46 @@ const Colloquial = struct {
     }
 
     pub fn parse(c: *Colloquial) !utils.Date {
-        const arg = try c.next();
+        var arg = try c.next();
 
-        if (_eq(arg, "today")) {
-            return c.setTime(c.now, try c.optionalTime());
-        } else if (_eq(arg, "tomorrow")) {
-            return c.setTime(c.now.shiftDays(1), try c.optionalTime());
-        } else if (c.parseWeekday(arg)) |date| {
-            return c.setTime(date, try c.optionalTime());
-        } else if (cli.selections.isDate(arg)) {
-            const date = try utils.toDate(arg);
+        if (_eq(arg, "soon")) {
+            var prng = std.rand.DefaultPrng.init(utils.now());
+            const days_different = prng.random().intRangeAtMost(
+                i32,
+                3,
+                5,
+            );
+            return c.setTime(
+                c.now.shiftDays(days_different),
+                DefaultTime,
+            );
+        } else if (_eq(arg, "next")) {
+            // only those that semantically follow 'next'
+            arg = try c.next();
+            if (_eq(arg, "week")) {
+                const monday = c.parseWeekday("monday").?;
+                return c.setTime(
+                    monday,
+                    try c.optionalTime(),
+                );
+            }
+        } else {
+            // predicated
+            if (_eq(arg, "today")) {
+                return c.setTime(c.now, try c.optionalTime());
+            } else if (_eq(arg, "tomorrow")) {
+                return c.setTime(
+                    c.now.shiftDays(1),
+                    try c.optionalTime(),
+                );
+            } else if (cli.selections.isDate(arg)) {
+                const date = try utils.toDate(arg);
+                return c.setTime(date, try c.optionalTime());
+            }
+        }
+
+        // mutual
+        if (c.parseWeekday(arg)) |date| {
             return c.setTime(date, try c.optionalTime());
         }
 
@@ -613,6 +644,7 @@ test "time parsing" {
     nowish.time.minute = 0;
     nowish.time.second = 0;
 
+    try testTimeParsing(nowish, "next week", nowish.shiftDays(5));
     try testTimeParsing(nowish, "tomorrow", nowish.shiftDays(1));
     try testTimeParsing(nowish, "today", nowish);
     try testTimeParsing(nowish, "thursday", nowish.shiftDays(1));
