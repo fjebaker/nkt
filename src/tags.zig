@@ -364,31 +364,31 @@ pub fn addTags(alloc: std.mem.Allocator, existing: *[]Tag, new: []const Tag) !vo
 }
 
 const ColorName = enum {
-    yellow,
-    brown,
-    orange,
-    green,
-    red,
-    magenta,
-    cyan,
     blue,
+    brown,
+    cyan,
+    green,
+    magenta,
+    orange,
     pink,
+    red,
     salmon,
+    yellow,
 };
 
 fn tagColor(name: []const u8) Chameleon {
     comptime var cham = Chameleon.init(.Auto).bold();
 
     return switch (std.meta.stringToEnum(ColorName, name) orelse return cham) {
-        .yellow => cham.yellowBright(),
-        .orange => cham.rgb(238, 137, 62),
-        .brown => cham.rgb(194, 101, 100),
-        .green => cham.greenBright(),
-        .red => cham.redBright(),
-        .magenta => cham.magentaBright(),
-        .cyan => cham.cyanBright(),
         .blue => cham.blueBright(),
+        .brown => cham.rgb(194, 101, 100),
+        .cyan => cham.cyanBright(),
+        .green => cham.greenBright(),
+        .magenta => cham.magentaBright(),
+        .orange => cham.rgb(238, 137, 62),
         .pink => cham.rgb(255, 126, 126),
+        .red => cham.redBright(),
         .salmon => cham.rgb(235, 136, 186),
+        .yellow => cham.yellowBright(),
     };
 }
