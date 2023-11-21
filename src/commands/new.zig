@@ -58,6 +58,7 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
         const new_chain: State.Chain = .{
             .name = chainname,
             .created = utils.now(),
+            .active = true,
             .tags = try utils.emptyTagList(alloc),
             .completed = try alloc.alloc(u64, 0),
         };

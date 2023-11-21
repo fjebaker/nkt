@@ -128,6 +128,7 @@ pub const Chain = struct {
     name: []const u8,
     alias: ?[]const u8 = null,
     details: ?[]const u8 = null,
+    active: bool,
     created: u64,
     tags: []Tag,
     completed: []u64,
