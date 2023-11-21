@@ -97,6 +97,10 @@ pub const ArgIterator = struct {
     index: usize = 0,
     counter: usize = 0,
 
+    pub fn copy(self: *const ArgIterator) ArgIterator {
+        return ArgIterator.init(self.args.data);
+    }
+
     pub fn rewind(self: *ArgIterator) void {
         switch (self.current_type) {
             .Positional, .LongFlag, .Seperator => self.args.index -= 1,
