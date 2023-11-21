@@ -8,6 +8,7 @@ const State = @import("State.zig");
 pub const CommandError = error{ NoCommandGiven, UnknownCommand };
 
 pub const Commands = union(enum) {
+    chains: @import("commands/chains.zig"),
     edit: @import("commands/edit.zig"),
     find: @import("commands/find.zig"),
     help: @import("commands/help.zig"),

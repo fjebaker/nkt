@@ -280,3 +280,36 @@ pub fn findUriFromColon(text: []const u8, index_of_colon: usize) ?UriSlice {
         .uri = uri,
     };
 }
+
+pub fn Iterator(comptime T: type) type {
+    return struct {
+        items: []const T,
+        index: usize = 0,
+        pub fn init(items: []const T) @This() {
+            return .{ .items = items };
+        }
+        pub fn next(self: *@This()) ?T {
+            if (self.index >= self.items.len) return null;
+            const item = self.items[self.index];
+            self.index += 1;
+            return item;
+        }
+    };
+}
+
+pub fn ReverseIterator(comptime T: type) type {
+    return struct {
+        items: []const T,
+        index: usize = 0,
+        pub fn init(items: []const T) @This() {
+            return .{ .items = items };
+        }
+        pub fn next(self: *@This()) ?T {
+            if (self.index >= self.items.len) return null;
+            const i = self.items.len - self.index - 1;
+            const item = self.items[i];
+            self.index += 1;
+            return item;
+        }
+    };
+}

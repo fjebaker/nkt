@@ -260,6 +260,21 @@ fn readChains(self: *Self) !void {
     self.chains = try Topology.parseChains(alloc, string);
 }
 
+pub fn getChainByName(self: *Self, name: []const u8) !?*Chain {
+    var chains = try self.getChains();
+    for (chains) |*chain| {
+        const alias_equal = if (chain.alias) |alias|
+            std.mem.eql(u8, alias, name)
+        else
+            false;
+
+        if (std.mem.eql(u8, chain.name, name) or alias_equal) {
+            return chain;
+        }
+    }
+    return null;
+}
+
 pub fn getChains(self: *Self) ![]Chain {
     return self.chains orelse {
         try self.readChains();
