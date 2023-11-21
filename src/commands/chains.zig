@@ -70,9 +70,9 @@ fn prepareChain(
     const oldest = today.shiftDays(-@as(i32, @intCast(days_hence)));
 
     // +1 to include today
-    var days = try allocator.alloc(Day, days_hence + 1);
+    var days = try allocator.alloc(Day, days_hence);
     for (days, 0..) |*day, i| {
-        day.* = Day.init(oldest.shiftDays(@intCast(i)));
+        day.* = Day.init(oldest.shiftDays(@as(i32, @intCast(i)) + 1));
     }
 
     var itt = utils.ReverseIterator(u64).init(chain.completed);
