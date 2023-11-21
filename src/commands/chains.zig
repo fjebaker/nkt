@@ -22,10 +22,24 @@ chain_name: ?[]const u8 = null,
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{};
 
-    const arg = (try itt.nextPositional()) orelse
-        return cli.CLIErrors.TooFewArguments;
-
-    self.chain_name = arg.string;
+    while (try itt.next()) |arg| {
+        if (arg.flag) {
+            if (arg.is('n', "num")) {
+                self.num_days = try arg.as(usize);
+            } else if (arg.is(null, "no-pretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
+                self.pretty = false;
+            } else if (arg.is(null, "pretty")) {
+                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
+                self.pretty = true;
+            } else {
+                return cli.CLIErrors.UnknownFlag;
+            }
+        } else {
+            if (self.chain_name != null) return cli.CLIErrors.TooManyArguments;
+            self.chain_name = arg.string;
+        }
+    }
 
     self.pretty = self.pretty orelse !opts.piped;
     return self;
@@ -73,11 +87,11 @@ fn prepareChain(
     return days;
 }
 
-pub fn printHeadings(writer: anytype, days: []const Day, pretty: bool) !void {
+pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty: bool) !void {
     comptime var cham = Chameleon.init(.Auto);
-    const weekend_color = cham.dim();
+    const weekend_color = cham.yellow();
 
-    try writer.writeByteNTimes(' ', 15);
+    try writer.writeByteNTimes(' ', padding + 4);
     for (days) |day| {
         const repr: u8 = switch (day.weekday) {
             .Monday => 'M',
@@ -99,11 +113,23 @@ pub fn printHeadings(writer: anytype, days: []const Day, pretty: bool) !void {
     try writer.writeAll("\n");
 }
 
-pub fn printChain(writer: anytype, name: []const u8, days: []const Day, pretty: bool) !void {
+pub fn printChain(
+    writer: anytype,
+    padding: usize,
+    name: []const u8,
+    days: []const Day,
+    pretty: bool,
+) !void {
     comptime var cham = Chameleon.init(.Auto);
     const completed_color = cham.greenBright();
 
-    try writer.print("{s: <12} : ", .{name});
+    const pad = padding - name.len;
+
+    try writer.writeAll(" ");
+    try writer.writeAll(name);
+    try writer.writeByteNTimes(' ', pad);
+    try writer.writeAll(" : ");
+
     for (days, 0..) |day, i| {
         if (day.completed) {
             if (pretty) try writer.writeAll(completed_color.open);
@@ -129,14 +155,44 @@ pub fn run(
 ) !void {
     const today = utils.dateFromMs(utils.now());
 
-    const chain = try state.getChainByName(self.chain_name.?) orelse
-        return cli.SelectionError.NoSuchCollection;
+    if (self.chain_name) |name| {
+        const chain = try state.getChainByName(name) orelse
+            return cli.SelectionError.NoSuchCollection;
 
-    var items = try prepareChain(state.allocator, today, self.num_days, chain.*);
-    defer state.allocator.free(items);
+        var items = try prepareChain(state.allocator, today, self.num_days, chain.*);
+        defer state.allocator.free(items);
 
-    try out_writer.writeAll("\n");
-    try printHeadings(out_writer, items, self.pretty.?);
-    try printChain(out_writer, self.chain_name.?, items, self.pretty.?);
-    try out_writer.writeAll("\n");
+        const padding = calculatePadding(&[_]State.Chain{chain.*});
+
+        try out_writer.writeAll("\n");
+        try printHeadings(out_writer, padding, items, self.pretty.?);
+        try printChain(out_writer, padding, chain.name, items, self.pretty.?);
+        try out_writer.writeAll("\n");
+    } else {
+        var chains = try state.getChains();
+
+        const padding = calculatePadding(chains);
+
+        var arena = std.heap.ArenaAllocator.init(state.allocator);
+        defer arena.deinit();
+        var alloc = arena.allocator();
+
+        const first_items = try prepareChain(alloc, today, self.num_days, chains[0]);
+
+        try out_writer.writeAll("\n");
+        try printHeadings(out_writer, padding, first_items, self.pretty.?);
+        for (chains) |chain| {
+            const items = try prepareChain(alloc, today, self.num_days, chain);
+            try printChain(out_writer, padding, chain.name, items, self.pretty.?);
+        }
+        try out_writer.writeAll("\n");
+    }
+}
+
+fn calculatePadding(chains: []const State.Chain) usize {
+    var padding: usize = 0;
+    for (chains) |chain| {
+        padding = @max(padding, chain.name.len);
+    }
+    return padding;
 }
