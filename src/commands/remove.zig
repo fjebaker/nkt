@@ -125,7 +125,7 @@ fn runChild(
     // we need to be interactive, so no buffering:
     var out_writer = std.io.getStdOut().writer();
 
-    var item: State.MaybeItem = (try self.selection.find(state)) orelse
+    const item: State.MaybeItem = (try self.selection.find(state)) orelse
         return NoSuchCollection;
 
     if (item.note != null and item.day == null) {
@@ -170,7 +170,7 @@ fn runChild(
 }
 
 fn removeItemInEntry(state: *State, day: State.Item, time: []const u8, out_writer: anytype) !void {
-    var entries = try day.Day.read();
+    const entries = try day.Day.read();
 
     // find the selected index
     const index = for (0..entries.len) |i| {
@@ -183,7 +183,7 @@ fn removeItemInEntry(state: *State, day: State.Item, time: []const u8, out_write
         }
     } else return cli.SelectionError.InvalidSelection;
 
-    var entry = entries[index];
+    const entry = entries[index];
 
     // print the item
     try out_writer.print(

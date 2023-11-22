@@ -170,7 +170,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
 
 pub fn runAsTask(self: *Self, state: *State, out_writer: anytype) !void {
     var task_self = self.mode.Task;
-    var selected: State.MaybeItem = (try task_self.selection.find(state)) orelse
+    const selected: State.MaybeItem = (try task_self.selection.find(state)) orelse
         return cli.SelectionError.UnknownCollection;
 
     if (selected.task) |task| {
@@ -205,7 +205,7 @@ pub fn runAsTask(self: *Self, state: *State, out_writer: anytype) !void {
 }
 
 pub fn runAsChain(self: *Self, state: *State, out_writer: anytype) !void {
-    var chain_self = self.mode.Chain;
+    const chain_self = self.mode.Chain;
 
     var chain = (try state.getChainByName(chain_self.name)) orelse
         return cli.SelectionError.NoSuchCollection;

@@ -8,7 +8,7 @@ const Self = @This();
 pub const help = "Sync root directory to remote git repository";
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{};
+    const self: Self = .{};
 
     if (try itt.next()) |_| {
         return cli.CLIErrors.TooManyArguments;
@@ -26,8 +26,8 @@ const Git = struct {
         var mem = std.heap.ArenaAllocator.init(alloc);
         errdefer mem.deinit();
 
-        var temp_alloc = mem.allocator();
-        var env_map = try std.process.getEnvMap(temp_alloc);
+        const temp_alloc = mem.allocator();
+        const env_map = try std.process.getEnvMap(temp_alloc);
 
         return .{
             .mem = mem,

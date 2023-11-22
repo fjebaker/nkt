@@ -48,7 +48,7 @@ pub const Commands = union(enum) {
             const is_field = std.mem.eql(u8, command.string, field.name);
             const is_alias = utils.isAlias(field, command.string);
             if (is_field or is_alias) {
-                var instance = try @field(field.type, "init")(alloc, args, options);
+                const instance = try @field(field.type, "init")(alloc, args, options);
                 return @unionInit(Commands, field.name, instance);
             }
         }
@@ -66,7 +66,7 @@ pub fn main() !void {
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
-    var raw_args = try std.process.argsAlloc(allocator);
+    const raw_args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, raw_args);
 
     var arg_iterator = cli.ArgIterator.init(raw_args);
@@ -75,7 +75,7 @@ pub fn main() !void {
 
     var mem = std.heap.ArenaAllocator.init(allocator);
     defer mem.deinit();
-    var arg_parse_alloc = mem.allocator();
+    const arg_parse_alloc = mem.allocator();
 
     const opts: cli.Options = .{ .piped = !stdout_fd.isTty() };
 
@@ -100,8 +100,8 @@ pub fn main() !void {
     defer cmd.deinit();
 
     // resolve the home path
-    var home_dir_path = std.os.getenv("HOME").?;
-    var root_path = try std.fs.path.join(
+    const home_dir_path = std.os.getenv("HOME").?;
+    const root_path = try std.fs.path.join(
         allocator,
         &.{ home_dir_path, ".nkt" },
     );

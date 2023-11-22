@@ -291,7 +291,7 @@ pub fn addFmtText(
 pub fn addNTimes(fp: *FormatPrinter, char: u8, n: usize, opts: TextOptions) !void {
     var alloc = fp.mem.child_allocator;
 
-    var string = try alloc.alloc(u8, n);
+    const string = try alloc.alloc(u8, n);
     defer alloc.free(string);
     for (string) |*c| c.* = char;
     try fp.addText(string, opts);

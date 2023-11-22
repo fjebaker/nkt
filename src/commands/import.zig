@@ -87,7 +87,7 @@ fn importToDirectory(
     out_writer: anytype,
 ) !void {
     const ext = std.fs.path.extension(path);
-    var filename = std.fs.path.stem(path);
+    const filename = std.fs.path.stem(path);
 
     if (!std.mem.eql(u8, ext, ".md")) {
         if (ext.len != 0) return cli.CLIErrors.BadArgument;
@@ -150,7 +150,7 @@ fn processDendron(state: *State, note: *State.Item) !?ProcessorPipeline {
     const title = map.get("title") orelse return null;
 
     const stop = itt.index;
-    var new_content = try std.mem.concat(state.allocator, u8, &.{
+    const new_content = try std.mem.concat(state.allocator, u8, &.{
         "# ",
         title,
         "\n",

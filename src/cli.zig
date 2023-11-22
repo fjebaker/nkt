@@ -130,7 +130,7 @@ pub const ArgIterator = struct {
     }
 
     pub fn nextPositional(self: *ArgIterator) CLIErrors!?Arg {
-        var arg = (try self.next()) orelse return null;
+        const arg = (try self.next()) orelse return null;
         if (arg.flag) return CLIErrors.UnknownFlag;
         return arg;
     }
@@ -211,7 +211,7 @@ test "submodules" {
 }
 
 test "argument iteration" {
-    var args = try fromString(
+    const args = try fromString(
         std.testing.allocator,
         "-tf -k hello --thing=that 1 2 3 4 5.0 -q",
     );

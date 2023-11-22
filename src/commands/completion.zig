@@ -19,7 +19,7 @@ where: ?cli.selections.CollectionSelection = null,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     const what_arg = (try itt.next()) orelse return cli.CLIErrors.TooFewArguments;
-    var self: Self = .{
+    const self: Self = .{
         .what = std.meta.stringToEnum(What, what_arg.string) orelse
             return cli.CLIErrors.BadArgument,
     };
@@ -57,7 +57,7 @@ pub fn run(
 }
 
 fn listDirContents(alloc: std.mem.Allocator, writer: anytype, directory: *State.Collection) !void {
-    var notelist = try directory.getAll(alloc);
+    const notelist = try directory.getAll(alloc);
     defer alloc.free(notelist);
 
     for (notelist) |note| {
@@ -85,7 +85,7 @@ fn listCommandHelp(
 fn printZshCompletionFile(alloc: std.mem.Allocator, writer: anytype) !void {
     var mem = std.heap.ArenaAllocator.init(alloc);
     defer mem.deinit();
-    var allocator = mem.allocator();
+    const allocator = mem.allocator();
     _ = try writer.writeAll(
         \\#compdef _nkt nkt
         \\

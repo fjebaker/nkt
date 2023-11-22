@@ -60,7 +60,7 @@ fn editWithArgs(
     proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
 
     try proc.spawn();
-    var term = try proc.wait();
+    const term = try proc.wait();
     if (term != .Exited) return EditorErrors.BadExit;
 }
 
@@ -98,7 +98,7 @@ fn deleteFile(path: []const u8) !void {
 
 const MAX_BYTES = @import("FileSystem.zig").MAXIMUM_BYTES_READ;
 pub fn editTemporaryContent(self: *Editor, alloc: std.mem.Allocator, content: []const u8) ![]u8 {
-    var file_path = try tmpFilePath(alloc);
+    const file_path = try tmpFilePath(alloc);
     defer alloc.free(file_path);
 
     try writeToFile(file_path, content);

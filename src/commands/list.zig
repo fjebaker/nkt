@@ -123,7 +123,7 @@ fn listTasks(
 ) !void {
     // need to read tasklist from file
     try c.readAll();
-    var tasks = try c.getAll(alloc);
+    const tasks = try c.getAll(alloc);
     defer alloc.free(tasks);
 
     c.sort(tasks, self.ordering orelse .Due);
@@ -176,7 +176,7 @@ pub fn run(
     } else if (is(self.selection, "chains")) {
         try listChains(try state.getChains(), out_writer);
     } else {
-        var collection: State.MaybeCollection = state.getCollectionByName(self.selection) orelse
+        const collection: State.MaybeCollection = state.getCollectionByName(self.selection) orelse
             return State.Error.NoSuchCollection;
 
         if (collection.directory) |c| {
@@ -220,7 +220,7 @@ fn listCollection(
     order: State.Ordering,
     writer: anytype,
 ) !void {
-    var items = try c.getAll(alloc);
+    const items = try c.getAll(alloc);
     defer alloc.free(items);
 
     c.sort(items, order);

@@ -140,8 +140,8 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var iteminfo = try self.findOrCreateDefault(state);
-    var item = iteminfo.item;
+    const iteminfo = try self.findOrCreateDefault(state);
+    const item = iteminfo.item;
 
     if (item.note) |note| {
         const rel_path = note.getPath();
@@ -170,7 +170,7 @@ pub fn run(
         defer editor.deinit();
 
         // todo: might lead to topology getting out of sync
-        var task_allocator = task.Task.tasklist.mem.allocator();
+        const task_allocator = task.Task.tasklist.mem.allocator();
         const new_details = try editor.editTemporaryContent(
             task_allocator,
             task.Task.task.details,

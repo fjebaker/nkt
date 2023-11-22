@@ -37,7 +37,7 @@ allocator: std.mem.Allocator,
 
 fn loadTopologyElseCreate(alloc: std.mem.Allocator, fs: FileSystem) !Topology {
     if (try fs.fileExists(Topology.DATA_STORE_FILENAME)) {
-        var data = try fs.readFileAlloc(alloc, Topology.DATA_STORE_FILENAME);
+        const data = try fs.readFileAlloc(alloc, Topology.DATA_STORE_FILENAME);
         defer alloc.free(data);
         return try Topology.init(alloc, data);
     } else {
@@ -57,7 +57,7 @@ fn makeCollection(
     errdefer for (list.items) |*i| i.deinit();
 
     for (items) |*item| {
-        var c = try Collection.init(alloc, T, item, fs);
+        const c = try Collection.init(alloc, T, item, fs);
         try list.append(c);
     }
 
@@ -71,7 +71,7 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
     var topology = try loadTopologyElseCreate(alloc, fs);
     errdefer topology.deinit();
 
-    var dirs = try makeCollection(
+    const dirs = try makeCollection(
         alloc,
         CollectionType.Directory,
         Topology.Description,
@@ -81,7 +81,7 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
     errdefer alloc.free(dirs);
     errdefer for (dirs) |*d| d.deinit();
 
-    var journals = try makeCollection(
+    const journals = try makeCollection(
         alloc,
         CollectionType.Journal,
         Topology.Journal,
@@ -91,7 +91,7 @@ pub fn init(alloc: std.mem.Allocator, config: Config) !Self {
     errdefer alloc.free(dirs);
     errdefer for (dirs) |*d| d.deinit();
 
-    var tasklists = try makeCollection(
+    const tasklists = try makeCollection(
         alloc,
         CollectionType.Tasklist,
         Topology.TasklistInfo,
@@ -255,13 +255,13 @@ pub fn getTagInfo(self: *Self) []TagInfo {
 }
 
 fn readChains(self: *Self) !void {
-    var alloc = self.topology.mem.allocator();
+    const alloc = self.topology.mem.allocator();
     const string = try self.fs.readFileAlloc(alloc, self.topology.chainpath);
     self.chains = try Topology.parseChains(alloc, string);
 }
 
 pub fn getChainByName(self: *Self, name: []const u8) !?*Chain {
-    var chains = try self.getChains();
+    const chains = try self.getChains();
     for (chains) |*chain| {
         const alias_equal = if (chain.alias) |alias|
             std.mem.eql(u8, alias, name)
@@ -284,7 +284,7 @@ pub fn getChains(self: *Self) ![]Chain {
 
 pub fn addChain(self: *Self, chain: Chain) !void {
     var chains = try self.getChains();
-    var alloc = self.topology.mem.allocator();
+    const alloc = self.topology.mem.allocator();
     _ = try utils.push(Chain, alloc, &chains, chain);
     self.chains = chains;
 }
@@ -330,7 +330,7 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 self.fs,
             );
             errdefer dir.deinit();
-            var dir_ptr = try utils.push(
+            const dir_ptr = try utils.push(
                 Collection,
                 self.allocator,
                 &self.directories,
@@ -358,7 +358,7 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
                 self.fs,
             );
             errdefer journal.deinit();
-            var journal_ptr = try utils.push(
+            const journal_ptr = try utils.push(
                 Collection,
                 self.allocator,
                 &self.journals,
@@ -415,7 +415,7 @@ pub fn newCollection(self: *Self, ctype: CollectionType, name: []const u8) !*Col
             );
             errdefer tasklist.deinit();
 
-            var tasklist_ptr = try utils.push(
+            const tasklist_ptr = try utils.push(
                 Collection,
                 self.allocator,
                 &self.tasklists,
@@ -440,7 +440,7 @@ inline fn removeCollectionNamed(self: *Self, comptime field_name: []const u8, in
     else
         @compileError("unknown field");
 
-    var items = @field(self, field_name);
+    const items = @field(self, field_name);
     utils.moveToEnd(Collection, items, index);
     var marked = items[items.len - 1];
 

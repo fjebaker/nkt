@@ -54,7 +54,7 @@ pub const Directory = Description;
 // journal
 const EntryScheme = struct { items: []Entry };
 pub fn parseEntries(alloc: std.mem.Allocator, string: []const u8) ![]Entry {
-    var content = try std.json.parseFromSliceLeaky(
+    const content = try std.json.parseFromSliceLeaky(
         EntryScheme,
         alloc,
         string,
@@ -105,7 +105,7 @@ pub const Task = struct {
 
 const TaskScheme = struct { items: []Task };
 pub fn parseTasks(alloc: std.mem.Allocator, string: []const u8) ![]Task {
-    var content = try std.json.parseFromSliceLeaky(
+    const content = try std.json.parseFromSliceLeaky(
         TaskScheme,
         alloc,
         string,
@@ -136,7 +136,7 @@ pub const Chain = struct {
 
 const ChainScheme = struct { chains: []Chain };
 pub fn parseChains(alloc: std.mem.Allocator, string: []const u8) ![]Chain {
-    var content = try std.json.parseFromSliceLeaky(
+    const content = try std.json.parseFromSliceLeaky(
         ChainScheme,
         alloc,
         string,
@@ -179,12 +179,12 @@ pub fn initNew(alloc: std.mem.Allocator) !Self {
 
     var temp_alloc = mem.allocator();
 
-    var directories = try temp_alloc.alloc(Directory, 0);
-    var journals = try temp_alloc.alloc(Journal, 0);
-    var tasklists = try temp_alloc.alloc(TasklistInfo, 0);
-    var tags = try temp_alloc.alloc(TagInfo, 0);
-    var editor = try temp_alloc.dupe([]const u8, &.{"vim"});
-    var pager = try temp_alloc.dupe([]const u8, &.{"less"});
+    const directories = try temp_alloc.alloc(Directory, 0);
+    const journals = try temp_alloc.alloc(Journal, 0);
+    const tasklists = try temp_alloc.alloc(TasklistInfo, 0);
+    const tags = try temp_alloc.alloc(TagInfo, 0);
+    const editor = try temp_alloc.dupe([]const u8, &.{"vim"});
+    const pager = try temp_alloc.dupe([]const u8, &.{"less"});
 
     return .{
         .tags = tags,
@@ -202,8 +202,8 @@ pub fn init(alloc: std.mem.Allocator, data: []const u8) !Self {
     var mem = std.heap.ArenaAllocator.init(alloc);
     errdefer mem.deinit();
 
-    var temp_alloc = mem.allocator();
-    var schema = try std.json.parseFromSliceLeaky(
+    const temp_alloc = mem.allocator();
+    const schema = try std.json.parseFromSliceLeaky(
         TopologySchema,
         temp_alloc,
         data,

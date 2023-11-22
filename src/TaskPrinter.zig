@@ -26,8 +26,8 @@ pretty: bool,
 taginfo: ?[]const tags.TagInfo = null,
 
 pub fn init(alloc: std.mem.Allocator, pretty: bool) TaskPrinter {
-    var mem = std.heap.ArenaAllocator.init(alloc);
-    var list = std.ArrayList(FormattedEntry).init(alloc);
+    const mem = std.heap.ArenaAllocator.init(alloc);
+    const list = std.ArrayList(FormattedEntry).init(alloc);
     return .{
         .entries = list,
         .mem = mem,
@@ -211,7 +211,7 @@ fn printDetails(
     pretty: bool,
 ) !void {
     _ = pretty;
-    comptime var cham = Chameleon.init(.Auto);
+    const cham = Chameleon.init(.Auto);
     _ = cham;
     // if (pretty) try writeColour(cham.dim(), writer, .Open);
     const indent = padding.due + 12;

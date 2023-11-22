@@ -49,10 +49,10 @@ pub const Selection = struct {
     chain: ?[]const u8 = null,
 
     pub fn positionalNamedCollection(itt: *cli.ArgIterator) !Selection {
-        var p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-        var p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+        const p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+        const p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
 
-        var collection_type: ?State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
+        const collection_type: ?State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
             .Journal
         else if (std.mem.eql(u8, "directory", p1.string))
             .Directory
@@ -61,7 +61,7 @@ pub const Selection = struct {
         else
             null;
 
-        var name = p2.string;
+        const name = p2.string;
 
         if (collection_type) |t| {
             return .{
@@ -302,7 +302,7 @@ pub fn isTime(string: []const u8) bool {
 
 /// Search in the user preferred order
 fn findIndexPreferredJournal(state: *State, index: usize) ?Item {
-    var p_journal: ?*State.Collection = state.getJournal("diary");
+    const p_journal: ?*State.Collection = state.getJournal("diary");
 
     if (p_journal) |j| {
         return j.Journal.getIndex(index);
@@ -432,7 +432,7 @@ pub fn parseDateTimeLike(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8)
 }
 
 fn parseDateTimeLikeImpl(string: []const u8) !utils.Date {
-    var itt = std.mem.tokenize(u8, string, " ");
+    const itt = std.mem.tokenize(u8, string, " ");
     var col = Colloquial{ .tkn = itt, .now = utils.dateFromMs(utils.now()) };
 
     const date = try col.parse();
@@ -629,7 +629,7 @@ test "time selection parsing" {
 fn testTimeParsing(now: utils.Date, s: []const u8, date: utils.Date) !void {
     const eq = std.testing.expectEqual;
 
-    var itt = std.mem.tokenize(u8, s, " ");
+    const itt = std.mem.tokenize(u8, s, " ");
     var col = Colloquial{ .tkn = itt, .now = now };
     const parsed = try col.parse();
 

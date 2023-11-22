@@ -82,7 +82,7 @@ const FindState = struct {
             state.mem.child_allocator,
         );
 
-        var alloc = state.mem.allocator();
+        const alloc = state.mem.allocator();
 
         var env_map = try std.process.getEnvMap(alloc);
 
@@ -104,7 +104,7 @@ const FindState = struct {
             1024,
         );
 
-        var term = try proc.wait();
+        const term = try proc.wait();
         if (term != .Exited) return FindError.SubProcError;
 
         return std.mem.trim(u8, res, " \t\n\r");
@@ -125,7 +125,7 @@ const FindState = struct {
             state.mem.child_allocator,
         );
 
-        var alloc = state.mem.allocator();
+        const alloc = state.mem.allocator();
 
         var env_map = try std.process.getEnvMap(alloc);
 
@@ -139,7 +139,7 @@ const FindState = struct {
 
         const res = try proc.stdout.?.readToEndAlloc(alloc, 1024);
 
-        var term = try proc.wait();
+        const term = try proc.wait();
         if (term != .Exited) return FindError.SubProcError;
 
         return std.mem.trim(u8, res, " \t\n\r");
@@ -181,6 +181,7 @@ const FindError = error{SubProcError};
 
 prefix: ?[]const u8 = null,
 mode: ?enum { Read, Page, Edit } = null,
+what: ?[]const u8 = null,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var self: Self = .{};
@@ -203,6 +204,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
             } else if (arg.is('e', "edit")) {
                 if (self.mode != null) return cli.CLIErrors.DuplicateFlag;
                 self.mode = .Edit;
+            } else if (arg.is('a', "all")) {
+                if (self.what != null) return cli.CLIErrors.DuplicateFlag;
             } else if (arg.is('p', "page")) {
                 if (self.mode != null) return cli.CLIErrors.DuplicateFlag;
                 self.mode = .Page;
@@ -213,6 +216,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     }
 
     self.mode = self.mode orelse .Edit;
+    self.what = self.what orelse "notes";
 
     return self;
 }
@@ -222,7 +226,7 @@ fn addPaths(
     paths: *std.ArrayList([]const u8),
     dir: *State.Collection,
 ) !void {
-    var notelist = try dir.getAll(alloc);
+    const notelist = try dir.getAll(alloc);
     defer alloc.free(notelist);
 
     for (notelist) |note| {
@@ -239,7 +243,7 @@ fn directoryNotesUnder(
 
     var paths = std.ArrayList([]const u8).init(alloc);
 
-    var notelist = try dir.getAll(alloc);
+    const notelist = try dir.getAll(alloc);
     defer alloc.free(notelist);
 
     for (notelist) |note| {
@@ -275,7 +279,7 @@ pub fn run(
     state: *State,
     out_writer: anytype,
 ) !void {
-    var paths: [][]const u8 = if (self.prefix) |p|
+    const paths: [][]const u8 = if (self.prefix) |p|
         try directoryNotesUnder(
             state.allocator,
             p,
@@ -325,7 +329,7 @@ fn readFile(state: *State, path: []const u8, page: bool, out_writer: anytype) !v
     const c_name = utils.inferCollectionName(path).?;
     var collection = state.getCollectionByName(c_name).?;
 
-    var note = collection.directory.?.getByPath(path).?;
+    const note = collection.directory.?.getByPath(path).?;
 
     var printer = BlockPrinter.init(state.allocator, .{ .pretty = false });
     defer printer.deinit();

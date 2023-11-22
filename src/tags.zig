@@ -325,7 +325,7 @@ pub const TagWriter = struct {
     taginfo: []const TagInfo,
 
     pub fn init(alloc: std.mem.Allocator, taginfo: []const TagInfo) TagWriter {
-        var data = std.ArrayList(u8).init(alloc);
+        const data = std.ArrayList(u8).init(alloc);
         return .{ .data = data, .alloc = alloc, .taginfo = taginfo };
     }
 

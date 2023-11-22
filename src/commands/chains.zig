@@ -91,7 +91,7 @@ pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty:
     comptime var cham = Chameleon.init(.Auto);
     const weekend_color = cham.yellow();
 
-    try writer.writeByteNTimes(' ', padding + 4);
+    try writer.writeByteNTimes(' ', padding + 3);
     for (days) |day| {
         const repr: u8 = switch (day.weekday) {
             .Monday => 'M',
@@ -126,9 +126,9 @@ pub fn printChain(
     const pad = padding - name.len;
 
     try writer.writeAll(" ");
-    try writer.writeAll(name);
     try writer.writeByteNTimes(' ', pad);
-    try writer.writeAll(" : ");
+    try writer.writeAll(name);
+    try writer.writeAll("  ");
 
     for (days, 0..) |day, i| {
         if (day.completed) {
@@ -159,7 +159,7 @@ pub fn run(
         const chain = try state.getChainByName(name) orelse
             return cli.SelectionError.NoSuchCollection;
 
-        var items = try prepareChain(state.allocator, today, self.num_days, chain.*);
+        const items = try prepareChain(state.allocator, today, self.num_days, chain.*);
         defer state.allocator.free(items);
 
         const padding = calculatePadding(&[_]State.Chain{chain.*});
@@ -169,13 +169,13 @@ pub fn run(
         try printChain(out_writer, padding, chain.name, items, self.pretty.?);
         try out_writer.writeAll("\n");
     } else {
-        var chains = try state.getChains();
+        const chains = try state.getChains();
 
         const padding = calculatePadding(chains);
 
         var arena = std.heap.ArenaAllocator.init(state.allocator);
         defer arena.deinit();
-        var alloc = arena.allocator();
+        const alloc = arena.allocator();
 
         const first_items = try prepareChain(alloc, today, self.num_days, chains[0]);
 

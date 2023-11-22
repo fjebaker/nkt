@@ -16,7 +16,7 @@ pub fn msFromDate(date: Date) u64 {
 pub fn ListMixin(comptime Self: type, comptime T: type) type {
     return struct {
         pub fn initSize(alloc: std.mem.Allocator, N: usize) !Self {
-            var items = try alloc.alloc(T, N);
+            const items = try alloc.alloc(T, N);
             return .{ .allocator = alloc, .items = items };
         }
 
@@ -208,7 +208,7 @@ test "to date" {
 }
 
 test "time shift" {
-    var date = t: {
+    const date = t: {
         var d = try Date.fromDate(2023, 10, 10);
         d.time.hour = 23;
         d.time.minute = 13;

@@ -110,7 +110,7 @@ const Directory = struct {
 
     pub fn readContent(d: *Directory, note: *Topology.InfoScheme) ![]const u8 {
         return d.content.get(note.name) orelse {
-            var alloc = d.content.allocator();
+            const alloc = d.content.allocator();
             const content = try d.fs.readFileAlloc(alloc, note.path);
             try d.content.putMove(note.name, content);
             return d.content.get(note.name).?;
@@ -121,7 +121,7 @@ const Directory = struct {
         d: *Directory,
         info: Topology.InfoScheme,
     ) !*Topology.InfoScheme {
-        var alloc = d.mem.allocator();
+        const alloc = d.mem.allocator();
         const info_ptr = try utils.push(
             Topology.InfoScheme,
             alloc,
@@ -153,7 +153,7 @@ const Directory = struct {
             .tags = try utils.emptyTagList(alloc),
         };
 
-        var note = try d.addNote(info);
+        const note = try d.addNote(info);
         return .{ .Note = .{ .dir = d, .note = note } };
     }
 
@@ -191,9 +191,9 @@ const Journal = struct {
 
     pub fn readEntries(j: *Journal, day: *Topology.InfoScheme) ![]Entry {
         return j.content.get(day.name) orelse {
-            var alloc = j.content.allocator();
+            const alloc = j.content.allocator();
             const string = try j.fs.readFileAlloc(alloc, day.path);
-            var entries = try Topology.parseEntries(alloc, string);
+            const entries = try Topology.parseEntries(alloc, string);
             try j.content.putMove(day.name, entries);
             return j.content.get(day.name).?;
         };
@@ -210,7 +210,7 @@ const Journal = struct {
         j: *Journal,
         info: Topology.InfoScheme,
     ) !*Topology.InfoScheme {
-        var alloc = j.mem.allocator();
+        const alloc = j.mem.allocator();
         const info_ptr = try utils.push(
             Topology.InfoScheme,
             alloc,
@@ -228,7 +228,7 @@ const Journal = struct {
         const name = j.index.get(index) orelse
             return null;
 
-        var info = for (j.description.infos) |*i| {
+        const info = for (j.description.infos) |*i| {
             if (std.mem.eql(u8, i.name, name)) break i;
         } else unreachable;
 
@@ -253,7 +253,7 @@ const Journal = struct {
             .tags = try utils.emptyTagList(alloc),
         };
 
-        var day = try j.addDay(info);
+        const day = try j.addDay(info);
         return .{ .Day = .{ .journal = j, .day = day } };
     }
 
@@ -324,7 +324,7 @@ const Tasklist = struct {
 
     pub fn readTasks(self: *Tasklist) ![]Task {
         return self.tasks orelse {
-            var alloc = self.mem.allocator();
+            const alloc = self.mem.allocator();
             const string = try self.fs.readFileAlloc(
                 alloc,
                 self.info.path,
@@ -336,7 +336,7 @@ const Tasklist = struct {
     }
 
     fn determineIndexes(self: *Tasklist) !void {
-        var alloc = self.mem.child_allocator;
+        const alloc = self.mem.child_allocator;
 
         const tasks = self.tasks.?;
         std.sort.insertion(Task, tasks, {}, sortCanonical);
@@ -359,7 +359,7 @@ const Tasklist = struct {
         const title = t.index.?.get(index) orelse
             return null;
 
-        var task = for (t.tasks.?) |*task| {
+        const task = for (t.tasks.?) |*task| {
             if (std.mem.eql(u8, title, task.title)) break task;
         } else unreachable;
 
@@ -688,7 +688,7 @@ pub const Collection = union(Type) {
                 var tasks = s.tasks orelse return null;
                 if (index >= tasks.len)
                     return null;
-                var task = &tasks[index];
+                const task = &tasks[index];
                 return .{ .Task = .{ .tasklist = s, .task = task } };
             },
             .Directory => |*s| {
@@ -809,7 +809,7 @@ pub const Collection = union(Type) {
         switch (c.*) {
             .Journal => |*j| {
                 for (j.description.infos) |*day| {
-                    var entries = j.content.get(day.name) orelse continue;
+                    const entries = j.content.get(day.name) orelse continue;
 
                     // update last modified
                     day.modified = time(Topology.Entry, entries, "modified", .Max);
@@ -821,7 +821,7 @@ pub const Collection = union(Type) {
                 }
             },
             .Tasklist => |t| {
-                var tasks = t.tasks orelse return;
+                const tasks = t.tasks orelse return;
                 // update last modified
                 t.info.modified = time(Tasklist.Task, tasks, "modified", .Max);
                 // stringify

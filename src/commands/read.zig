@@ -137,7 +137,7 @@ fn read(
     defer printer.deinit();
 
     if (self.selection.item != null) {
-        var selected: State.MaybeItem =
+        const selected: State.MaybeItem =
             (try self.selection.find(state)) orelse
             return NoSuchCollection;
 
@@ -185,7 +185,7 @@ pub fn readDay(
     day: State.Item,
     printer: *BlockPrinter,
 ) !void {
-    var alloc = day.Day.journal.mem.allocator();
+    const alloc = day.Day.journal.mem.allocator();
 
     const entries = try day.Day.journal.readEntries(day.Day.day);
 
@@ -211,7 +211,7 @@ pub fn readJournal(
     journal: *State.Collection,
     printer: *BlockPrinter,
 ) !void {
-    var alloc = printer.format_printer.mem.allocator();
+    const alloc = printer.format_printer.mem.allocator();
     var day_list = try journal.getAll(alloc);
 
     if (day_list.len == 0) {
