@@ -9,9 +9,37 @@ const BlockPrinter = @import("../BlockPrinter.zig");
 const read_cmd = @import("read.zig");
 const Editor = @import("../Editor.zig");
 
-pub const alias = [_][]const u8{ "f", "fp", "fe", "fr" };
+pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
 
 pub const help = "Find in notes.";
+pub const extended_help =
+    \\Find content in a note, or the name of a note itself.
+    \\
+    \\  nkt find
+    \\    -r/--read              print the output of the note to stdout (default)
+    \\                             alias fr
+    \\    -e/--edit              open the selected note in $EDITOR.
+    \\                             alias fe
+    \\    -p/--page              open the selected note in the configured pager
+    \\                             alias fp
+    \\    --filename             search the filenames instead of contents
+    \\
+;
+
+const FZF_INVOKE_COMMAND = [_][]const u8{
+    "fzf",
+    "--sort",
+    "--phony",
+
+    "--preview-window",
+    "70%:wrap",
+
+    "--min-height",
+    "20",
+
+    "--height",
+    "40%",
+};
 
 const FindState = struct {
     paths: []const []const u8,
@@ -53,32 +81,9 @@ const FindState = struct {
         );
     }
 
-    fn subprocFzfRga(state: *FindState) ![]const u8 {
+    fn spawnFzfProc(state: *FindState, cmd: []const []const u8) ![]const u8 {
         var proc = std.ChildProcess.init(
-            &.{
-                "fzf",
-                "--sort",
-                "--phony",
-
-                "--preview",
-                "[[ ! -z {} ]] && rga --pretty --context 5 {q} {}",
-
-                "--preview-window",
-                "70%:wrap",
-
-                "--min-height",
-                "20",
-
-                "--height",
-                "40%",
-
-                "--bind",
-                try state.concatPaths("change:reload:rga --files-with-matches {q}"),
-
-                // make fzf emit the search term and the result
-                "--bind",
-                "enter:become(echo {q} {})",
-            },
+            cmd,
             state.mem.child_allocator,
         );
 
@@ -106,7 +111,23 @@ const FindState = struct {
 
         const term = try proc.wait();
         if (term != .Exited) return FindError.SubProcError;
+        return res;
+    }
 
+    fn subprocFzfRga(state: *FindState) ![]const u8 {
+        const cmd = FZF_INVOKE_COMMAND ++ [_][]const u8{
+            "--preview",
+            "[[ ! -z {} ]] && rga --pretty --context 5 {q} {}",
+
+            "--bind",
+            try state.concatPaths("change:reload:rga --files-with-matches {q}"),
+
+            // make fzf emit the search term and the result
+            "--bind",
+            "enter:become(echo {q} {})",
+        };
+
+        const res = try state.spawnFzfProc(&cmd);
         return std.mem.trim(u8, res, " \t\n\r");
     }
 
