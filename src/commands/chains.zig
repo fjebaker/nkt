@@ -67,7 +67,9 @@ fn prepareChain(
     days_hence: usize,
     chain: Chain,
 ) ![]Day {
-    const oldest = today.shiftDays(-@as(i32, @intCast(days_hence)));
+    const today_shifted = today.shiftDays(1 - @as(i32, @intCast(days_hence)));
+    // shift the oldest to start at midnight
+    const oldest = today_shifted.shiftSeconds(-today_shifted.time.totalSeconds());
 
     // +1 to include today
     var days = try allocator.alloc(Day, days_hence);
@@ -79,6 +81,7 @@ fn prepareChain(
     while (itt.next()) |item| {
         const date = utils.dateFromMs(item);
         const delta = date.sub(oldest);
+        // see which day this slots into
         if (delta.years == 0 and delta.days >= 0 and delta.days < days.len) {
             days[@intCast(delta.days)].completed = true;
         } else break;
