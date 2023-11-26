@@ -67,26 +67,30 @@ fn prepareChain(
     days_hence: usize,
     chain: Chain,
 ) ![]Day {
-    const today_shifted = today.shiftDays(1 - @as(i32, @intCast(days_hence)));
-    // shift the oldest to start at midnight
-    const oldest = today_shifted.shiftSeconds(-today_shifted.time.totalSeconds());
+    const second_to_day_end = std.time.s_per_day - @as(
+        i64,
+        @intFromFloat(today.time.toSeconds()),
+    );
+    const day_end = today.shiftSeconds(second_to_day_end - 1);
 
-    // +1 to include today
+    // populate day slots
     var days = try allocator.alloc(Day, days_hence);
     for (days, 0..) |*day, i| {
-        day.* = Day.init(oldest.shiftDays(@as(i32, @intCast(i)) + 1));
+        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))));
     }
 
     var itt = utils.ReverseIterator(u64).init(chain.completed);
     while (itt.next()) |item| {
         const date = utils.dateFromMs(item);
-        const delta = date.sub(oldest);
-        // see which day this slots into
-        if (delta.years == 0 and delta.days >= 0 and delta.days < days.len) {
-            days[@intCast(delta.days)].completed = true;
+        const delta = day_end.sub(date);
+
+        if (delta.years == 0 and delta.days < days.len) {
+            const index: usize = @intCast(delta.days);
+            days[index].completed = true;
         } else break;
     }
 
+    std.mem.reverse(Day, days);
     return days;
 }
 
@@ -162,7 +166,7 @@ pub fn run(
         const chain = try state.getChainByName(name) orelse
             return cli.SelectionError.NoSuchCollection;
 
-        const items = try prepareChain(state.allocator, today, self.num_days, chain.*);
+        var items = try prepareChain(state.allocator, today, self.num_days, chain.*);
         defer state.allocator.free(items);
 
         const padding = calculatePadding(&[_]State.Chain{chain.*});
@@ -185,7 +189,7 @@ pub fn run(
         try out_writer.writeAll("\n");
         try printHeadings(out_writer, padding, first_items, self.pretty.?);
         for (chains) |chain| {
-            const items = try prepareChain(alloc, today, self.num_days, chain);
+            var items = try prepareChain(alloc, today, self.num_days, chain);
             try printChain(out_writer, padding, chain.name, items, self.pretty.?);
         }
         try out_writer.writeAll("\n");
