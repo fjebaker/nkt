@@ -67,11 +67,7 @@ fn prepareChain(
     days_hence: usize,
     chain: Chain,
 ) ![]Day {
-    const second_to_day_end = std.time.s_per_day - @as(
-        i64,
-        @intFromFloat(today.time.toSeconds()),
-    );
-    const day_end = today.shiftSeconds(second_to_day_end - 1);
+    const day_end = utils.endOfDay(today);
 
     // populate day slots
     var days = try allocator.alloc(Day, days_hence);

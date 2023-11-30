@@ -233,10 +233,10 @@ pub fn runAsChain(self: *Self, state: *State, out_writer: anytype) !void {
 fn doneToday(chain: *const State.Chain) bool {
     if (chain.completed.len == 0) return false;
 
-    const today = utils.dateFromMs(utils.now());
+    const day_end = utils.endOfDay(utils.dateFromMs(utils.now()));
     const latest = chain.completed[chain.completed.len - 1];
 
-    const delta = today.sub(utils.dateFromMs(latest));
+    const delta = day_end.sub(utils.dateFromMs(latest));
     return (delta.years == 0 and delta.days == 0);
 }
 

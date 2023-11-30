@@ -94,7 +94,7 @@ const EQUINOX = d: {
     break :d date;
 };
 
-fn adjustTimezone(date: Date) Date {
+pub fn adjustTimezone(date: Date) Date {
     if (date.lt(EQUINOX)) return date.shiftHours(1);
     return date.shiftTimezone(&TIMEZONE);
 }
@@ -108,6 +108,15 @@ pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
 
 pub fn now() u64 {
     return @intCast(std.time.milliTimestamp());
+}
+
+pub fn endOfDay(day: Date) Date {
+    const second_to_day_end = std.time.s_per_day - @as(
+        i64,
+        @intFromFloat(day.time.toSeconds()),
+    );
+    const day_end = day.shiftSeconds(second_to_day_end - 1);
+    return day_end;
 }
 
 pub fn toDate(string: []const u8) !Date {
