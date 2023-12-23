@@ -31,6 +31,7 @@ pub const extended_help =
     \\     --due                 list in order of when something is due (default)
     \\     --importance          list in order of importance
     \\     --done                list also those tasks marked as done
+    \\     --archived            list also archived tasks
     \\     --details             also print details of the tasks
     \\
 ;
@@ -41,6 +42,7 @@ number: usize = 25,
 all: bool = false,
 pretty: ?bool = null,
 done: bool = false,
+archived: bool = false,
 details: bool = false,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
@@ -59,6 +61,8 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 self.ordering = .Alphabetical;
             } else if (arg.is(null, "done")) {
                 self.done = true;
+            } else if (arg.is(null, "archived")) {
+                self.archived = true;
             } else if (arg.is(null, "created")) {
                 self.ordering = .Created;
             } else if (arg.is(null, "nopretty")) {
@@ -138,7 +142,10 @@ fn listTasks(
     defer lookup.deinit();
 
     for (tasks) |task| {
-        if (!self.done and task.Task.task.completed != null) {
+        if (!self.done and task.Task.isDone()) {
+            continue;
+        }
+        if (!self.archived and task.Task.isArchived()) {
             continue;
         }
         const index = lookup.get(task.Task.task.title);

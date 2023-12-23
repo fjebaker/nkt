@@ -13,7 +13,7 @@ const Status = Task.Status;
 
 const FormattedEntry = struct {
     due: []const u8,
-    completed: []const u8,
+    pretty_date: ?[]const u8,
     task: Task,
     status: Status,
     index: ?usize,
@@ -77,19 +77,27 @@ fn formatDueDate(
 pub fn add(self: *TaskPrinter, task: Task, index: ?usize) !void {
     var alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
-    const completed: []const u8 = if (task.completed) |cmpl|
+
+    // make date pretty
+    const pretty_date: ?[]const u8 =
+        if (task.completed) |cmpl|
         try alloc.dupe(
             u8,
             &try utils.formatDateBuf(utils.dateFromMs(cmpl)),
         )
+    else if (task.archived) |arch|
+        try alloc.dupe(
+            u8,
+            &try utils.formatDateBuf(utils.dateFromMs(arch)),
+        )
     else
-        "";
+        null;
 
     try self.entries.append(
         .{
             .due = due,
             .status = task.status(self.now),
-            .completed = completed,
+            .pretty_date = pretty_date,
             .task = task,
             .index = index,
         },
@@ -152,10 +160,11 @@ fn printTask(
         try fp.addText("    ", .{});
     }
 
-    const string = if (entry.status == .Done) entry.completed else entry.due;
+    const string = entry.pretty_date orelse entry.due;
     try fp.addNTimes(' ', 1 + padding.due - strLen(string), .{});
 
     const indicator: []const u8 = switch (entry.status) {
+        .Archived => "A",
         .Done => "✓",
         .NearlyDue => "*",
         .PastDue => "!",
@@ -165,6 +174,7 @@ fn printTask(
         .PastDue => cham.bold().redBright(),
         .NearlyDue => cham.yellow(),
         .Done => cham.greenBright(),
+        .Archived => cham.dim(),
         else => null,
     };
     try fp.addFmtText("{s} {s}", .{ string, indicator }, .{ .cham = due_color });
