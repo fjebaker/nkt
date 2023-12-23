@@ -79,7 +79,7 @@ pub const Entry = struct {
 pub const Journal = Description;
 
 pub const Task = struct {
-    pub const Status = enum { PastDue, NearlyDue, NoStatus, Done };
+    pub const Status = enum { PastDue, NearlyDue, NoStatus, Done, Archived };
     pub const Importance = enum { low, high, urgent };
     title: []const u8,
     details: []const u8,
@@ -90,9 +90,11 @@ pub const Task = struct {
     importance: Importance,
     tags: []Tag,
     done: bool,
+    archived: ?u64,
 
     pub fn status(t: Task, now: utils.Date) Status {
         if (t.done) return .Done;
+        if (t.archived != null) return .Archived;
         const due = if (t.due) |dm|
             utils.Date.fromTimestamp(@intCast(dm))
         else
