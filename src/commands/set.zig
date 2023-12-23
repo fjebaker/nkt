@@ -17,6 +17,7 @@ pub const extended_help =
     \\=========
     \\
     \\  nkt set done "go to the shops"    # set a task as done
+    \\  nkt set archive "go to moon"      # archive a task (set as incomplete)
     \\  nkt set todo "pick up milk"       # set a completed task as todo
     \\  nkt set todo "email boss" \       # update due date of a task
     \\      --by tomorrow
@@ -30,11 +31,13 @@ const parseDateTimeLike = cli.selections.parseDateTimeLike;
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 const TaskAttributes = enum {
+    Archive,
     Done,
     Todo,
     fn parseMode(string: []const u8) !TaskAttributes {
-        if (std.mem.eql(u8, string, "todo")) return .Todo;
+        if (std.mem.eql(u8, string, "archive")) return .Archive;
         if (std.mem.eql(u8, string, "done")) return .Done;
+        if (std.mem.eql(u8, string, "todo")) return .Todo;
         return cli.CLIErrors.BadArgument;
     }
 };
@@ -184,7 +187,23 @@ pub fn runAsTask(self: *Self, state: *State, out_writer: anytype) !void {
                         .{task.getName()},
                     );
                 } else {
-                    _ = try out_writer.writeAll("Task is already marked as done\n");
+                    _ = try out_writer.writeAll(
+                        "Task is already marked as done\n",
+                    );
+                }
+            },
+            .Archive => {
+                if (!task.Task.isArchived()) {
+                    task.Task.archive();
+                    try state.writeChanges();
+                    try out_writer.print(
+                        "Task '{s}' archived\n",
+                        .{task.getName()},
+                    );
+                } else {
+                    _ = try out_writer.writeAll(
+                        "Task is already archived\n",
+                    );
                 }
             },
             .Todo => {

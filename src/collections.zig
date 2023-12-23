@@ -317,6 +317,7 @@ const Tasklist = struct {
             .importance = options.importance,
             .tags = try utils.emptyTagList(alloc),
             .done = false,
+            .archived = null,
         };
 
         return try utils.push(Task, alloc, &(self.tasks.?), new_task);
@@ -482,6 +483,14 @@ pub const Item = union(ItemType) {
         pub fn setDone(self: @This()) void {
             self.task.done = true;
             self.task.completed = utils.now();
+        }
+
+        pub fn isArchived(self: @This()) bool {
+            return self.task.archived != null;
+        }
+
+        pub fn archive(self: @This()) void {
+            self.task.archived = utils.now();
         }
 
         pub fn setTodo(self: @This()) void {
