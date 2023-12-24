@@ -90,7 +90,7 @@ pub const Task = struct {
     importance: Importance,
     tags: []Tag,
     done: bool,
-    archived: ?u64,
+    archived: ?u64 = null,
 
     pub fn status(t: Task, now: utils.Date) Status {
         if (t.done) return .Done;
