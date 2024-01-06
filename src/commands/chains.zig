@@ -116,6 +116,18 @@ pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty:
     try writer.writeAll("\n");
 }
 
+fn consecutiveDays(days: []const Day) usize {
+    var tally: usize = 0;
+    for (0..days.len) |i| {
+        const index = days.len - 1 - i;
+        const day = days[index];
+        if (day.completed) {
+            tally += 1;
+        } else break;
+    }
+    return tally;
+}
+
 pub fn printChain(
     writer: anytype,
     padding: usize,
@@ -148,6 +160,13 @@ pub fn printChain(
         }
         if (day.weekday == .Sunday) try writer.writeByte(' ');
     }
+
+    // write the current consecutive streak
+    const count = consecutiveDays(days);
+    if (count > 0) {
+        try writer.print("  {d: <5}", .{count});
+    }
+
     try writer.writeAll("\n");
 }
 
