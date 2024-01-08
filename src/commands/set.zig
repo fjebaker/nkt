@@ -27,7 +27,7 @@ pub const extended_help =
 
 const Importance = @import("../collections/Topology.zig").Task.Importance;
 
-const parseDateTimeLike = cli.selections.parseDateTimeLike;
+const parseDateTimeLikeFlag = cli.selections.parseDateTimeLikeFlag;
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
 const TaskAttributes = enum {
@@ -70,7 +70,7 @@ const Mode = union(enum) {
                         const val = (try itt.getValue()).string;
                         self.importance = std.meta.stringToEnum(Importance, val) orelse
                             return cli.CLIErrors.BadArgument;
-                    } else if (try parseDateTimeLike(arg, itt, "by")) |date| {
+                    } else if (try parseDateTimeLikeFlag(arg, itt, "by")) |date| {
                         if (self.by != null) return cli.CLIErrors.DuplicateFlag;
                         self.by = date;
                     } else {

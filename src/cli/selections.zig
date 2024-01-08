@@ -416,19 +416,22 @@ fn stringIn(s: []const u8, opts: []const []const u8) bool {
     return false;
 }
 
-pub fn parseDateTimeLike(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8) !?utils.Date {
+pub fn parseDateTimeLikeFlag(arg: cli.Arg, itt: *cli.ArgIterator, match: []const u8) !?utils.Date {
     if (arg.is(null, match)) {
         const string = (try itt.getValue()).string;
-        // common substitutions
-        const date = try parseDateTimeLikeImpl(
-            if (std.mem.eql(u8, string, "tonight"))
-                "today evening"
-            else
-                string,
-        );
-        return date;
+        return try parseDateTimeLike(string);
     }
     return null;
+}
+
+pub fn parseDateTimeLike(string: []const u8) !utils.Date {
+    // common substitutions
+    return try parseDateTimeLikeImpl(
+        if (std.mem.eql(u8, string, "tonight"))
+            "today evening"
+        else
+            string,
+    );
 }
 
 fn parseDateTimeLikeImpl(string: []const u8) !utils.Date {
