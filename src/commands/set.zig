@@ -17,6 +17,8 @@ pub const extended_help =
     \\=========
     \\
     \\  nkt set done "go to the shops"    # set a task as done
+    \\  nkt set done t7                   # set task t7 as done
+    \\  nkt set done --tl work t7         # set task t7 in tasklist "work" as done
     \\  nkt set archive "go to moon"      # archive a task (set as incomplete)
     \\  nkt set todo "pick up milk"       # set a completed task as todo
     \\  nkt set todo "email boss" \       # update due date of a task

@@ -104,6 +104,18 @@ pub const Selection = struct {
         return .{ .item = ItemSelection.today() };
     }
 
+    fn updateCollection(s: *Selection, collection: CollectionSelection) !void {
+        if (s.collection != null) {
+            // check that we are still being consistent
+            if (s.collection.?.container != collection.container) {
+                return SelectionError.IncompatibleSelection;
+            }
+        } else {
+            // only update if current selection is null
+            s.collection = collection;
+        }
+    }
+
     fn qualifiedIndex(s: *Selection, string: []const u8) !?usize {
         if (string.len > 1) {
             const slice = string[1..];
@@ -121,7 +133,7 @@ pub const Selection = struct {
                         return SelectionError.AmbiguousSelection;
                     }
                 }
-                s.collection = collection;
+                try s.updateCollection(collection);
                 return index;
             }
         }
@@ -146,7 +158,7 @@ pub const Selection = struct {
                     return SelectionError.AmbiguousSelection;
                 }
             }
-            s.collection = collection;
+            try s.updateCollection(collection);
             return true;
         }
         return false;
@@ -164,7 +176,7 @@ pub const Selection = struct {
                     return SelectionError.AmbiguousSelection;
                 }
             }
-            s.collection = collection;
+            try s.updateCollection(collection);
             return true;
         }
         return false;
