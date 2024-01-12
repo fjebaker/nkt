@@ -174,6 +174,10 @@ pub fn getTasklist(self: *Self, name: []const u8) ?*Collection {
     return getByName(.Tasklist, self.tasklists, name);
 }
 
+pub fn getTasklists(self: *Self) []Collection {
+    return self.tasklists;
+}
+
 pub fn getSelectedCollection(self: *Self, collection: CollectionType, name: []const u8) ?*Collection {
     return switch (collection) {
         .Journal => self.getJournal(name),

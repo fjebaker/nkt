@@ -18,7 +18,8 @@ pub const extended_help =
     \\List notes in various ways to the terminal.
     \\  nkt list
     \\     <what>                list the notes in a directory, journal, or tasks. this option may
-    \\                             also be `all` to list everything (default: all)
+    \\                             also be `all` to list everything. To list all tasklists use
+    \\                             `tasks` (default: all)
     \\     -n/--limit int        maximum number of entries to list (default: 25)
     \\     --all                 list all entries (ignores `--limit`)
     \\     --modified            sort by last modified (default)
@@ -178,6 +179,12 @@ pub fn run(
         try listNames(cnames, .Journal, out_writer, .{});
     } else if (is(self.selection, "tasklists")) {
         try listNames(cnames, .Tasklist, out_writer, .{});
+    } else if (is(self.selection, "tasks")) {
+        const tls = state.getTasklists();
+        for (tls) |*c| {
+            try out_writer.print("Tasks in tasklist '{s}':\n", .{c.getName()});
+            try self.listTasks(state.allocator, state, c, out_writer);
+        }
     } else if (is(self.selection, "tags")) {
         try self.listTags(state.allocator, state.getTagInfo(), out_writer);
     } else if (is(self.selection, "chains")) {
@@ -227,6 +234,8 @@ fn listCollection(
     order: State.Ordering,
     writer: anytype,
 ) !void {
+    if (c.* == .Tasklist) unreachable;
+
     const items = try c.getAll(alloc);
     defer alloc.free(items);
 
