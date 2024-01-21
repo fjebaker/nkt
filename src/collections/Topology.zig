@@ -75,6 +75,10 @@ pub const Entry = struct {
     modified: u64,
     item: []const u8,
     tags: []Tag,
+
+    pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
+        return lhs.created < rhs.created;
+    }
 };
 pub const Journal = Description;
 

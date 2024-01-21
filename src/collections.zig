@@ -819,6 +819,7 @@ pub const Collection = union(Type) {
             .Journal => |*j| {
                 for (j.description.infos) |*day| {
                     const entries = j.content.get(day.name) orelse continue;
+                    std.sort.insertion(Topology.Entry, entries, {}, Topology.Entry.sortCreated);
 
                     // update last modified
                     day.modified = time(Topology.Entry, entries, "modified", .Max);
