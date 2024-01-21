@@ -18,6 +18,7 @@ pub const SelectionError = error{
     NoSuchCollection,
     NoSuchItem,
     UnknownCollection,
+    UnspecifiedCollection,
 };
 
 pub const SelectionSet = enum {
@@ -44,6 +45,7 @@ pub const CollectionSelection = struct {
 
 pub const Selection = struct {
     item: ?ItemSelection = null,
+    fallback_collection: ?CollectionSelection = null,
     collection: ?CollectionSelection = null,
     tag: ?[]const u8 = null,
     chain: ?[]const u8 = null,
@@ -88,6 +90,10 @@ pub const Selection = struct {
     /// Use selection to attempt to resolve an item in the state. Returns null
     /// if no item found.
     pub fn find(s: *Selection, state: *State) !?State.MaybeItem {
+        if (s.collection == null) {
+            s.collection = s.fallback_collection orelse
+                return SelectionError.UnspecifiedCollection;
+        }
         if (s.item == null) return null;
 
         const maybe = try findImpl(state, s.collection, s.item.?) orelse
@@ -105,15 +111,16 @@ pub const Selection = struct {
     }
 
     fn updateCollection(s: *Selection, collection: CollectionSelection) !void {
-        if (s.collection != null) {
+        if (s.collection) |current| {
             // check that we are still being consistent
-            if (s.collection.?.container != collection.container) {
+            if (current.container != collection.container) {
                 return SelectionError.IncompatibleSelection;
             }
-        } else {
-            // only update if current selection is null
-            s.collection = collection;
+            if (current.name.len > 0 and collection.name.len > 0) {
+                return SelectionError.AmbiguousSelection;
+            }
         }
+        s.collection = collection;
     }
 
     fn qualifiedIndex(s: *Selection, string: []const u8) !?usize {
@@ -133,7 +140,8 @@ pub const Selection = struct {
                         return SelectionError.AmbiguousSelection;
                     }
                 }
-                try s.updateCollection(collection);
+                // set the fallback incase a different collection is specified
+                s.fallback_collection = collection;
                 return index;
             }
         }
