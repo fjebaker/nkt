@@ -322,3 +322,46 @@ pub fn ReverseIterator(comptime T: type) type {
         }
     };
 }
+
+/// Represents dot-deliniated hierarchy in note names.
+pub const Hierarchy = struct {
+    root: []const u8,
+    rest: ?[]const u8 = null,
+
+    pub const Error = error{InvalidHierarchy};
+
+    pub fn init(s: []const u8) Hierarchy {
+        const index = std.mem.indexOfScalar(u8, s, '.') orelse
+            return .{ .root = s };
+        return .{ .root = s[0..index], .rest = s[index + 1 .. s.len] };
+    }
+
+    pub fn child(h: Hierarchy) ?Hierarchy {
+        if (h.rest) |rest| {
+            return Hierarchy.init(rest);
+        }
+        return null;
+    }
+};
+
+fn testHierarchy(string: []const u8, comptime components: []const []const u8) !void {
+    var list = std.ArrayList([]const u8).init(std.testing.allocator);
+    defer list.deinit();
+
+    var root = Hierarchy.init(string);
+    try list.append(root.root);
+
+    while (root.child()) |child| {
+        root = child;
+        try list.append(root.root);
+    }
+
+    for (list.items, components) |acc, exp| {
+        try std.testing.expectEqualStrings(exp, acc);
+    }
+}
+
+test "hierarchy" {
+    try testHierarchy("notes.thing.other", &.{ "notes", "thing", "other" });
+    try testHierarchy("notes", &.{"notes"});
+}

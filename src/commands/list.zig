@@ -190,17 +190,23 @@ pub fn run(
     } else if (is(self.selection, "chains")) {
         try listChains(try state.getChains(), out_writer);
     } else {
-        const collection: State.MaybeCollection = state.getCollectionByName(self.selection) orelse
+        const choice = utils.Hierarchy.init(self.selection);
+        const collection: State.MaybeCollection = state.getCollectionByName(choice.root) orelse
             return State.Error.NoSuchCollection;
 
         if (collection.directory) |c| {
             try out_writer.print("Notes in directory '{s}':\n", .{c.getName()});
-            try self.listCollection(
+            try listDirectory(
                 state.allocator,
                 c,
                 self.ordering orelse .Alphabetical,
                 out_writer,
+                choice.child(),
             );
+        } else {
+            if (choice.child() != null) {
+                return utils.Hierarchy.Error.InvalidHierarchy;
+            }
         }
         if (collection.journal) |c| {
             try out_writer.print("Entries in journal '{s}':\n", .{c.getName()});
@@ -227,19 +233,17 @@ fn listChains(chains: []State.Chain, writer: anytype) !void {
     try writer.writeAll("\n");
 }
 
-fn listCollection(
-    _: *const Self,
+fn listDirectory(
     alloc: std.mem.Allocator,
     c: *State.Collection,
     order: State.Ordering,
     writer: anytype,
+    h: ?utils.Hierarchy,
 ) !void {
-    if (c.* == .Tasklist) unreachable;
-
     const items = try c.getAll(alloc);
     defer alloc.free(items);
-
     c.sort(items, order);
+
     const padding = p: {
         var longest: usize = 0;
         for (items) |item| {
@@ -250,20 +254,40 @@ fn listCollection(
 
     for (items) |item| {
         const name = item.getName();
-        if (c.* == .Directory) {
-            const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
-                std.debug.print("ERR: {s}\n", .{item.getPath()});
-                return err;
-            };
-            const date = utils.dateFromMs(item.Note.note.modified);
-            const fmt_date = try utils.formatDateTimeBuf(date);
-
-            try writer.print(" - {d: >7}  {s}", .{ size.size, name });
-            try writer.writeByteNTimes(' ', padding - name.len + 2);
-            try writer.print("{s}\n", .{fmt_date});
-        } else {
-            try writer.print(" - {s}\n", .{item.getName()});
+        if (h) |hier| {
+            if (!std.mem.startsWith(u8, name, hier.root))
+                continue;
         }
+
+        const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
+            std.debug.print("ERR: {s}\n", .{item.getPath()});
+            return err;
+        };
+        const date = utils.dateFromMs(item.Note.note.modified);
+        const fmt_date = try utils.formatDateTimeBuf(date);
+
+        try writer.print(" - {d: >7}  {s}", .{ size.size, name });
+        try writer.writeByteNTimes(' ', padding - name.len + 2);
+        try writer.print("{s}\n", .{fmt_date});
+    }
+}
+
+fn listCollection(
+    _: *const Self,
+    alloc: std.mem.Allocator,
+    c: *State.Collection,
+    order: State.Ordering,
+    writer: anytype,
+) !void {
+    if (c.* == .Tasklist) unreachable;
+    if (c.* == .Directory) unreachable;
+
+    const items = try c.getAll(alloc);
+    defer alloc.free(items);
+    c.sort(items, order);
+
+    for (items) |item| {
+        try writer.print(" - {s}\n", .{item.getName()});
     }
 }
 
