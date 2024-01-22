@@ -180,17 +180,6 @@ pub const Selection = struct {
         }
     }
 
-    /// Parses hierarchy strings as selections, for example `notes.some.note` or `my_tasklist.t5`. Returns an error if the string is invalid.
-    pub fn parseHierachy(
-        s: *Selection,
-        string: []const u8,
-    ) !void {
-        // this can just call the parseItemImpl as well after it has worked out
-        // any collection prefixes
-        _ = s;
-        _ = string;
-    }
-
     /// Parse the argument as a collection flag, that is, `--journal NAME`, and
     /// related.  Returns true if the collection has been updated. Raises an
     /// error if cannot parse the flag.
