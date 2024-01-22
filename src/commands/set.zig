@@ -27,7 +27,7 @@ pub const extended_help =
     \\
 ;
 
-const Importance = @import("../collections/Topology.zig").Task.Importance;
+const Importance = @import("../Topology.zig").Task.Importance;
 
 const parseDateTimeLikeFlag = cli.selections.parseDateTimeLikeFlag;
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;

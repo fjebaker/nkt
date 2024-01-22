@@ -1,10 +1,10 @@
 const std = @import("std");
-const utils = @import("../utils.zig");
+const utils = @import("utils.zig");
 
 const Self = @This();
 
 pub const DATA_STORE_FILENAME = "topology.json";
-const TOPOLOGY_SCHEMA_VERSION = "0.1.0";
+pub const TOPOLOGY_SCHEMA_VERSION = "0.1.0";
 
 pub const Tag = struct {
     name: []const u8,

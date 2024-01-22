@@ -5,7 +5,7 @@ const Chameleon = @import("chameleon").Chameleon;
 const FormatPrinter = @import("FormatPrinter.zig");
 
 const TaskPrinter = @import("TaskPrinter.zig");
-const Task = @import("collections/Topology.zig").Task;
+const Task = @import("Topology.zig").Task;
 
 const tags = @import("tags.zig");
 

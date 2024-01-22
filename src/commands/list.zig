@@ -118,7 +118,7 @@ pub fn listNames(
     _ = try writer.writeAll("\n");
 }
 
-const Task = @import("../collections/Topology.zig").Task;
+const Task = @import("../Topology.zig").Task;
 fn listTasks(
     self: *Self,
     alloc: std.mem.Allocator,

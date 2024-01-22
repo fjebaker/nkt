@@ -26,7 +26,7 @@ pub const extended_help =
 ++ cli.selections.DATE_TIME_SELECTOR_HELP ++
     \\
 ;
-const Importance = @import("../collections/Topology.zig").Task.Importance;
+const Importance = @import("../Topology.zig").Task.Importance;
 
 const parseDateTimeLikeFlag = cli.selections.parseDateTimeLikeFlag;
 

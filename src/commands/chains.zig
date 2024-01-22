@@ -7,7 +7,7 @@ const utils = @import("../utils.zig");
 
 const State = @import("../State.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
-const Entry = @import("../collections/Topology.zig").Entry;
+const Entry = @import("../Topology.zig").Entry;
 
 const Self = @This();
 

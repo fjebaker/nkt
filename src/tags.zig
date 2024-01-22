@@ -1,5 +1,5 @@
 const std = @import("std");
-const Topology = @import("collections/Topology.zig");
+const Topology = @import("Topology.zig");
 
 const utils = @import("utils.zig");
 

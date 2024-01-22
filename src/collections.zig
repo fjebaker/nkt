@@ -3,7 +3,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const content_map = @import("collections/content_map.zig");
 const FileSystem = @import("FileSystem.zig");
-const Topology = @import("collections/Topology.zig");
+const Topology = @import("Topology.zig");
 const indexing = @import("collections/indexing.zig");
 
 const IndexContainer = indexing.IndexContainer;

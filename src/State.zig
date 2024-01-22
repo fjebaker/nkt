@@ -16,7 +16,7 @@ pub const MaybeItem = collections.MaybeItem;
 
 pub const Error = error{NoSuchCollection};
 
-const Topology = @import("collections/Topology.zig");
+const Topology = @import("Topology.zig");
 const FileSystem = @import("FileSystem.zig");
 
 pub const Chain = Topology.Chain;
