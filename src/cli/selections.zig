@@ -91,8 +91,7 @@ pub const Selection = struct {
     /// if no item found.
     pub fn find(s: *Selection, state: *State) !?State.MaybeItem {
         if (s.collection == null) {
-            s.collection = s.fallback_collection orelse
-                return SelectionError.UnspecifiedCollection;
+            s.collection = s.fallback_collection;
         }
         if (s.item == null) return null;
 
