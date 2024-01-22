@@ -349,6 +349,7 @@ const Tasklist = struct {
         var counter: usize = 0;
         for (tasks) |task| {
             if (task.done) continue;
+            if (task.archived != null) continue;
             try index.put(counter, task.title);
             counter += 1;
         }
