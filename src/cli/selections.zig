@@ -14,6 +14,7 @@ pub const SelectionError = error{
     ChildAlreadyExists,
     DuplicateSelection,
     IncompatibleSelection,
+    IndexUnknownName,
     InvalidSelection,
     NoSuchCollection,
     NoSuchItem,
@@ -43,6 +44,21 @@ pub const CollectionSelection = struct {
     name: []const u8,
 };
 
+const DEFAULT_TASKLIST: CollectionSelection = .{
+    .container = .Tasklist,
+    .name = "todo",
+};
+
+const DEFAULT_JOURNAL: CollectionSelection = .{
+    .container = .Journal,
+    .name = "diary",
+};
+
+const DEFAULT_DIRECTORY: CollectionSelection = .{
+    .container = .Directory,
+    .name = "notes",
+};
+
 pub const Selection = struct {
     item: ?ItemSelection = null,
     fallback_collection: ?CollectionSelection = null,
@@ -50,9 +66,13 @@ pub const Selection = struct {
     tag: ?[]const u8 = null,
     chain: ?[]const u8 = null,
 
+    /// Parse a collection by name, for example `directory notes` resolves to
+    /// the Directory collection with name "notes"
     pub fn positionalNamedCollection(itt: *cli.ArgIterator) !Selection {
-        const p1 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
-        const p2 = (try itt.nextPositional()) orelse return cli.CLIErrors.TooFewArguments;
+        const p1 = (try itt.nextPositional()) orelse
+            return cli.CLIErrors.TooFewArguments;
+        const p2 = (try itt.nextPositional()) orelse
+            return cli.CLIErrors.TooFewArguments;
 
         const collection_type: ?State.CollectionType = if (std.mem.eql(u8, "journal", p1.string))
             .Journal
@@ -64,7 +84,6 @@ pub const Selection = struct {
             null;
 
         const name = p2.string;
-
         if (collection_type) |t| {
             return .{
                 .collection = .{ .container = t, .name = name },
@@ -78,6 +97,9 @@ pub const Selection = struct {
         return cli.CLIErrors.BadArgument;
     }
 
+    /// Validates the selection has an `Item`, `Collection` or `Both` selected.
+    /// Note that this does not check that the selection exists, merely that
+    /// the selection is ready to `find`.
     pub fn validate(s: *Selection, what: enum { Item, Collection, Both }) bool {
         const bad = switch (what) {
             .Item => (s.item == null),
@@ -127,8 +149,8 @@ pub const Selection = struct {
             const slice = string[1..];
             const collection: CollectionSelection = switch (string[0]) {
                 // return defaults for each
-                't' => .{ .container = .Tasklist, .name = "todo" },
-                'j' => .{ .container = .Journal, .name = "diary" },
+                't' => DEFAULT_TASKLIST,
+                'j' => DEFAULT_JOURNAL,
                 // cannot select note by index
                 else => return null,
             };
@@ -158,6 +180,20 @@ pub const Selection = struct {
         }
     }
 
+    /// Parses hierarchy strings as selections, for example `notes.some.note` or `my_tasklist.t5`. Returns an error if the string is invalid.
+    pub fn parseHierachy(
+        s: *Selection,
+        string: []const u8,
+    ) !void {
+        // this can just call the parseItemImpl as well after it has worked out
+        // any collection prefixes
+        _ = s;
+        _ = string;
+    }
+
+    /// Parse the argument as a collection flag, that is, `--journal NAME`, and
+    /// related.  Returns true if the collection has been updated. Raises an
+    /// error if cannot parse the flag.
     pub fn parseCollection(s: *Selection, arg: cli.Arg, itt: *cli.ArgIterator) !bool {
         if (try parseCollectionFlags(arg, itt, false)) |collection| {
             if (s.collection != null) {
@@ -227,7 +263,7 @@ pub const Selection = struct {
         return parseCollectionCustom("", arg, itt, allow_short);
     }
 
-    /// Parse ArgIterator into a ItemSelection. Does not validate that the
+    /// Parse `ArgIterator` into a `ItemSelection.` Does not validate that the
     /// selection exists. If no positional argument is available, returns null,
     /// allowing caller to set defaults.
     pub fn initOptionalItem(
@@ -244,6 +280,8 @@ pub const Selection = struct {
         return try s.parseItemImpl(arg.string);
     }
 
+    /// Transforms the current Selection to a name. Returns an error if the
+    /// transformation is not possible.
     pub fn getItemName(s: *const Selection, alloc: std.mem.Allocator) ![]const u8 {
         switch (s.item.?) {
             .ByDate => |date| {
@@ -251,7 +289,7 @@ pub const Selection = struct {
                 return try alloc.dupe(u8, &date_string);
             },
             .ByName => |name| return try alloc.dupe(u8, name),
-            .ByIndex => unreachable,
+            .ByIndex => return SelectionError.IndexUnknownName,
         }
     }
 };
@@ -292,6 +330,61 @@ fn parseCollectionCustom(
         };
     }
     return null;
+}
+
+fn testSelectionString(string: []const u8, comptime expected: Selection) !void {
+    var sel: Selection = .{};
+
+    const split_args = try cli.splitArgs(std.testing.allocator, string);
+    defer std.testing.allocator.free(split_args);
+
+    var itt = cli.ArgIterator.init(split_args);
+    while (try itt.next()) |arg| {
+        _ = try sel.parse(arg, &itt);
+    }
+
+    if (expected.collection != null) {
+        try std.testing.expectEqualDeep(
+            expected.collection,
+            sel.collection,
+        );
+    } else {
+        try std.testing.expectEqualDeep(
+            expected.fallback_collection,
+            sel.fallback_collection,
+        );
+    }
+
+    try std.testing.expectEqualDeep(
+        expected.item,
+        sel.item,
+    );
+}
+
+test "selection.parsing" {
+    // qualified index
+    try testSelectionString("t9", .{
+        .fallback_collection = DEFAULT_TASKLIST,
+        .item = .{ .ByIndex = 9 },
+    });
+
+    // only index
+    try testSelectionString("0", .{
+        .collection = null,
+        .item = .{ .ByIndex = 0 },
+    });
+
+    // with collection specifier
+    try testSelectionString("--tl doing t3", .{
+        .collection = .{ .container = .Tasklist, .name = "doing" },
+        .item = .{ .ByIndex = 3 },
+    });
+
+    // with collection specifier, reversed
+    try testSelectionString("t3 --tl other", .{
+        .collection = .{ .container = .Tasklist, .name = "other" },
+        .item = .{ .ByIndex = 3 },
+    });
 }
 
 pub fn isNumeric(c: u8) bool {

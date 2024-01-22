@@ -90,6 +90,16 @@ const ArgumentType = enum {
     }
 };
 
+/// Splits argument string into tokenized arguments. Called owns memory.
+pub fn splitArgs(allocator: std.mem.Allocator, args: []const u8) ![][]const u8 {
+    var list = std.ArrayList([]const u8).init(allocator);
+    var itt = std.mem.tokenize(u8, args, " ");
+    while (itt.next()) |arg| {
+        try list.append(arg);
+    }
+    return list.toOwnedSlice();
+}
+
 pub const ArgIterator = struct {
     args: Iterator([]const u8),
     current: []const u8 = "",
