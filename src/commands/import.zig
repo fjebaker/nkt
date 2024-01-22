@@ -20,7 +20,7 @@ pub const extended_help =
     \\     --journal name        name of journal to import to (needs .json)
     \\     --dir name            name of directory to import to (anything)
     \\     --tasklist name       name of tasklist to import to (needs .json)
-    \\     --move                move the file instead of copying
+    \\     -m/--move             move the file instead of copying
     \\
 ;
 
@@ -39,7 +39,7 @@ pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Se
         if (arg.flag) {
             if (try sel.parseCollection(arg, itt)) {
                 self.where = sel.collection.?;
-            } else if (arg.is(null, "move")) {
+            } else if (arg.is('m', "move")) {
                 self.move = true;
             } else {
                 return cli.CLIErrors.UnknownFlag;
