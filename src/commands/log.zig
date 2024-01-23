@@ -13,16 +13,18 @@ pub const extended_help =
     \\Quickly add a note to a given journal from the command line.
     \\
     \\  nkt log
-    \\     <text>                text to log
     \\     [-j/--journal name]   name of journal to write to (default: diary)
+    \\     <text>                text to log
+    \\     [tag1,tag2,...]       optional tags for the entry
     \\
 ;
 
 text: ?[]const u8 = null,
+tags: std.ArrayList([]const u8),
 journal: ?[]const u8 = null,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{};
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
+    var self: Self = .{ .tags = std.ArrayList([]const u8).init(alloc) };
 
     while (try itt.next()) |arg| {
         if (arg.flag) {
@@ -31,8 +33,13 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
                 self.journal = (try itt.getValue()).string;
             }
         } else {
-            if (self.text != null) return cli.CLIErrors.TooManyArguments;
-            self.text = arg.string;
+            if (self.text != null) {
+                if (arg.string[0] == '@') {
+                    try self.tags.append(arg.string[1..]);
+                } else return cli.CLIErrors.BadArgument;
+            } else {
+                self.text = arg.string;
+            }
         }
     }
     self.text = self.text orelse return cli.CLIErrors.TooFewArguments;
@@ -56,7 +63,9 @@ pub fn run(
     var contexts = try tags.parseContexts(state.allocator, self.text.?);
     defer contexts.deinit();
 
-    const ts = try contexts.getTags(state.getTagInfo());
+    const allowed_tags = state.getTagInfo();
+
+    const ts = try contexts.getTags(allowed_tags);
 
     var ptr_to_entry = try entry.Day.add(self.text.?);
     try tags.addTags(
@@ -64,6 +73,20 @@ pub fn run(
         &ptr_to_entry.tags,
         ts,
     );
+
+    if (self.tags.items.len > 0) {
+        const appended_tags = try tags.makeTagList(
+            state.allocator,
+            self.tags.items,
+            allowed_tags,
+        );
+        defer state.allocator.free(appended_tags);
+        try tags.addTags(
+            journal.Journal.content.allocator(),
+            &ptr_to_entry.tags,
+            appended_tags,
+        );
+    }
 
     try state.writeChanges();
     try out_writer.print(

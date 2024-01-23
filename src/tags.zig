@@ -52,15 +52,7 @@ pub const ContextParse = struct {
         return c.mem.?.allocator();
     }
 
-    fn tagNameValid(name: []const u8, allowed_tags: []const TagInfo) bool {
-        for (allowed_tags) |tag| {
-            if (std.mem.eql(u8, tag.name, name)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
+    /// Transfrom the `ContextParse` into a tag list, validating against the allowed tags.
     pub fn getTags(c: *ContextParse, allowed_tags: []const TagInfo) ![]Tag {
         var alloc = c.arenaAlloc();
         var tags = try alloc.alloc(Tag, c.positions.len);
@@ -70,10 +62,7 @@ pub const ContextParse = struct {
         var i: usize = 0;
         var names = c.nameIterator();
         while (names.next()) |name| {
-            if (!tagNameValid(name, allowed_tags)) {
-                return TagError.InvalidTag;
-            }
-            tags[i] = .{ .name = name, .added = now };
+            tags[i] = try validateTag(name, allowed_tags, now);
             i += 1;
         }
 
@@ -93,9 +82,49 @@ pub const ContextParse = struct {
     }
 };
 
+fn tagNameValid(name: []const u8, allowed_tags: []const TagInfo) bool {
+    for (allowed_tags) |tag| {
+        if (std.mem.eql(u8, tag.name, name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Validates the tagname in `name` with the allowed tags `allowed_tags`. If
+/// the tag is valid, returns a new tag with creation time set to `now`.
+pub fn validateTag(
+    name: []const u8,
+    allowed_tags: []const TagInfo,
+    now: u64,
+) !Tag {
+    if (!tagNameValid(name, allowed_tags)) {
+        return TagError.InvalidTag;
+    }
+    return .{ .name = name, .added = now };
+}
+
+/// Validate and create a tag list from a list of strings given a set of allowed tag infos.
+pub fn makeTagList(
+    alloc: std.mem.Allocator,
+    names: []const []const u8,
+    allowed_tags: []const TagInfo,
+) ![]Tag {
+    const now = utils.now();
+
+    var tags = try alloc.alloc(Tag, names.len);
+    errdefer alloc.free(tags);
+
+    for (tags, names) |*tag, name| {
+        tag.* = try validateTag(name, allowed_tags, now);
+    }
+
+    return tags;
+}
+
 fn testContextValidation(names: []const []const u8, allowed: []const TagInfo) !void {
     for (names) |name| {
-        if (!ContextParse.tagNameValid(name, allowed)) {
+        if (!tagNameValid(name, allowed)) {
             return TagError.InvalidTag;
         }
     }
@@ -349,13 +378,16 @@ pub const TagWriter = struct {
     }
 };
 
+/// Add tags `new` to `existing`
 pub fn addTags(alloc: std.mem.Allocator, existing: *[]Tag, new: []const Tag) !void {
     var maximal = std.StringArrayHashMap(Tag).init(alloc);
     defer maximal.deinit();
 
+    // add current
     for (existing.*) |t| {
         try maximal.put(t.name, t);
     }
+    // add new
     for (new) |t| {
         try maximal.put(t.name, t);
     }

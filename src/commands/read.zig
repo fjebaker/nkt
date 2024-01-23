@@ -4,6 +4,7 @@ const Chameleon = @import("chameleon").Chameleon;
 
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
@@ -146,7 +147,7 @@ fn read(
         }
         if (selected.day) |day| {
             printer.addTagInfo(state.getTagInfo());
-            try self.readDay(day, &printer);
+            try self.readDay(day, state, &printer);
         }
         if (selected.task) |task| {
             printer.format_printer.opts.max_lines = null;
@@ -158,14 +159,14 @@ fn read(
         .Journal => {
             const journal = state.getJournal(w.name) orelse
                 return NoSuchCollection;
-            try self.readJournal(journal, &printer);
+            try self.readJournal(journal, state, &printer);
         },
         else => unreachable, // todo
     } else {
         // default behaviour
         const journal = state.getJournal("diary").?;
         printer.addTagInfo(state.getTagInfo());
-        try self.readJournal(journal, &printer);
+        try self.readJournal(journal, state, &printer);
     }
 
     try printer.drain(out_writer);
@@ -183,6 +184,7 @@ pub fn readNote(
 pub fn readDay(
     self: *Self,
     day: State.Item,
+    state: *State,
     printer: *BlockPrinter,
 ) !void {
     const alloc = day.Day.journal.mem.allocator();
@@ -200,15 +202,16 @@ pub fn readDay(
         .{},
     );
     if (self.full_date) {
-        try addItems(entries, .FullTime, printer);
+        try addItems(entries, .FullTime, state, printer);
     } else {
-        try addItems(entries, .ClockTime, printer);
+        try addItems(entries, .ClockTime, state, printer);
     }
 }
 
 pub fn readJournal(
     self: *Self,
     journal: *State.Collection,
+    state: *State,
     printer: *BlockPrinter,
 ) !void {
     const alloc = printer.format_printer.mem.allocator();
@@ -233,7 +236,7 @@ pub fn readJournal(
 
     printer.reverse();
     for (day_list[0 .. last + 1]) |day| {
-        try self.readDay(day, printer);
+        try self.readDay(day, state, printer);
         if (!printer.couldFit(1)) break;
     }
     printer.reverse();
@@ -242,9 +245,12 @@ pub fn readJournal(
 fn addItems(
     entries: []Entry,
     comptime format: enum { FullTime, ClockTime },
+    state: *State,
     printer: *BlockPrinter,
 ) !void {
     const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
+    const tag_infos = state.getTagInfo();
+
     for (entries[offset..]) |entry| {
         const date = utils.dateFromMs(entry.created);
         switch (format) {
@@ -252,7 +258,7 @@ fn addItems(
                 const time_of_day = try utils.formatTimeBuf(date);
                 try printer.addFormatted(
                     .Item,
-                    "{s} | {s}\n",
+                    "{s} | {s}",
                     .{ time_of_day, entry.item },
                     .{},
                 );
@@ -261,12 +267,24 @@ fn addItems(
                 const full_time = try utils.formatDateTimeBuf(date);
                 try printer.addFormatted(
                     .Item,
-                    "{s} | {s}\n",
+                    "{s} | {s}",
                     .{ full_time, entry.item },
                     .{},
                 );
             },
         }
+
+        if (entry.tags.len > 0) {
+            try printer.addToCurrent(" ", .{ .is_counted = false });
+        }
+        for (entry.tags) |tag| {
+            try printer.addToCurrent("█", .{
+                .cham = tags.getTagColor(tag_infos, tag.name),
+                .is_counted = false,
+            });
+        }
+
+        try printer.addToCurrent("\n", .{ .is_counted = false });
     }
 }
 
