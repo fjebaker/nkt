@@ -87,7 +87,7 @@ pub fn isAlias(
     return false;
 }
 
-const TIMEZONE = time.timezones.GB;
+const TIMEZONE = time.timezones.Europe.London;
 const EQUINOX = d: {
     var date = Date.fromDate(2023, 10, 29) catch @compileError("Equinox: bad date");
     date.time.hour = 2;
