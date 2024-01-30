@@ -1,38 +1,22 @@
 const std = @import("std");
 const tags = @import("tags.zig");
 const utils = @import("utils.zig");
-
-const Chameleon = @import("chameleon").Chameleon;
+const colors = @import("colors.zig");
 
 const FormatPrinter = @import("FormatPrinter.zig");
 
-const FormatSpecifier = struct {
-    open: []const u8,
-    close: []const u8,
-
-    pub fn underline(
-        spec: *FormatSpecifier,
-        leaky_alloc: std.mem.Allocator,
-    ) !void {
-        comptime var cham = Chameleon.init(.Auto);
-        const mod = cham.underline();
-        spec.open = try std.mem.concat(leaky_alloc, u8, &.{ spec.open, mod.open });
-        spec.close = try std.mem.concat(leaky_alloc, u8, &.{ spec.close, mod.close });
-    }
-};
-
-const NO_FORMAT = FormatSpecifier{ .open = "", .close = "" };
+/// Tracks the formatting applied to the text object. Limited to up to 5
+/// stacked color / style specifiers.
+pub const Farbe = colors.Farbe;
 
 pub const RichText = struct {
     text: []const u8,
-    fmt: ?FormatSpecifier,
+    fmt: ?Farbe,
     pub fn write(t: RichText, writer: anytype, pretty: bool) !void {
-        if (pretty) {
-            if (t.fmt) |fmt| _ = try writer.writeAll(fmt.open);
-        }
-        _ = try writer.writeAll(t.text);
-        if (pretty) {
-            if (t.fmt) |fmt| _ = try writer.writeAll(fmt.close);
+        if (pretty and t.fmt != null) {
+            try t.fmt.?.write(writer, "{s}", .{t.text});
+        } else {
+            _ = try writer.writeAll(t.text);
         }
     }
 };
@@ -66,29 +50,26 @@ pub fn add(fp: *FormatPrinter, rich: RichText) !void {
     try fp.texts.append(rich);
 }
 
-const PRE_FMT: FormatSpecifier = blk: {
-    comptime var cham = Chameleon.init(.Auto);
-    const c = cham.bgRgb(48, 48, 48).rgb(236, 106, 101);
-    break :blk .{ .open = c.open, .close = c.close };
-};
+const PRE_COLOR = colors.ComptimeFarbe.init().bgRgb(48, 48, 48).fgRgb(236, 106, 101);
+const URI_COLOR = colors.ComptimeFarbe.init().fgRgb(58, 133, 134).underlined();
 
-const URI_FMT: FormatSpecifier = blk: {
-    comptime var cham = Chameleon.init(.Auto);
-    const c = cham.rgb(58, 133, 134).underline();
-    break :blk .{ .open = c.open, .close = c.close };
-};
-
-fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) ?Block {
+fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
     const text = parser.text;
     const start = parser.i - 1;
+    var allocator = fp.mem.allocator();
     switch (text[start]) {
         '@' => {
             if (tags.parseContextString(text[start..]) catch null) |tag| {
                 const tag_infos = fp.tag_infos orelse
                     return null;
-                const cham = tags.getTagColor(tag_infos, tag[1..]) orelse
+
+                const fmt = (try tags.getTagFormat(
+                    allocator,
+                    tag_infos,
+                    tag[1..],
+                )) orelse
                     return null;
-                const fmt = .{ .open = cham.open, .close = cham.close };
+
                 const end = tag.len + start;
                 parser.skipN(end - start);
                 return .{ .mark = .Tag, .start = start, .end = end, .fmt = fmt };
@@ -109,7 +90,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) ?Block {
                     .mark = .Pre,
                     .start = start,
                     .end = end + 1,
-                    .fmt = PRE_FMT,
+                    .fmt = PRE_COLOR.runtime(allocator),
                 };
             }
         },
@@ -120,7 +101,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) ?Block {
                     .mark = .Uri,
                     .start = uri.start,
                     .end = uri.end,
-                    .fmt = URI_FMT,
+                    .fmt = URI_COLOR.runtime(allocator),
                 };
             }
         },
@@ -132,7 +113,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) ?Block {
 const Block = struct {
     start: usize,
     end: usize,
-    fmt: FormatSpecifier,
+    fmt: Farbe,
     mark: ?enum { Tag, Pre, Uri } = null,
 };
 
@@ -206,7 +187,7 @@ const Parser = struct {
 fn addTextImpl(
     fp: *FormatPrinter,
     text: []const u8,
-    fmt: FormatSpecifier,
+    fmt: Farbe,
     count: bool,
 ) !void {
     var parser = Parser.init(fp.mem.child_allocator, text);
@@ -224,7 +205,7 @@ fn addTextImpl(
             continue;
         }
 
-        if (fp.identifySubBlock(&parser)) |sub_block| {
+        if (try fp.identifySubBlock(&parser)) |sub_block| {
             // write what we currently have
             try fp.add(.{
                 .text = text[current.start..sub_block.start],
@@ -258,19 +239,15 @@ fn addTextImpl(
 }
 
 pub const TextOptions = struct {
-    cham: ?Chameleon = null,
+    fmt: ?Farbe = null,
     is_counted: bool = true,
 };
 
 pub fn addText(fp: *FormatPrinter, text: []const u8, opts: TextOptions) !void {
     if (text.len == 0) return;
-    const fmt: FormatSpecifier = if (opts.cham) |c|
-        .{ .open = c.open, .close = c.close }
-    else
-        NO_FORMAT;
-
     // store a copy
     var alloc = fp.mem.allocator();
+    const fmt = opts.fmt orelse Farbe.init(alloc);
     try fp.addTextImpl(try alloc.dupe(u8, text), fmt, opts.is_counted);
 }
 

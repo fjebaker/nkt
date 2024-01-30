@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const time = b.dependency("time", .{}).module("zig-datetime");
     const chameleon = b.dependency("chameleon", .{}).module("chameleon");
+    const farbe = b.dependency("farbe", .{}).module("farbe");
 
     const exe = b.addExecutable(.{
         .name = "nkt",
@@ -16,6 +17,7 @@ pub fn build(b: *std.Build) void {
 
     exe.addModule("time", time);
     exe.addModule("chameleon", chameleon);
+    exe.addModule("farbe", farbe);
 
     b.installArtifact(exe);
 
@@ -39,6 +41,7 @@ pub fn build(b: *std.Build) void {
 
     unit_tests.addModule("time", time);
     unit_tests.addModule("chameleon", chameleon);
+    unit_tests.addModule("farbe", farbe);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 

@@ -4,6 +4,8 @@ const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const tags = @import("../tags.zig");
 
+const colors = @import("../colors.zig");
+
 const State = @import("../State.zig");
 
 const Self = @This();
@@ -42,7 +44,7 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
     } else if (self.selection.tag) |tagname| {
         const info: tags.TagInfo = .{
             .name = tagname,
-            .color = "yellow",
+            .color = colors.randomColor(),
             .created = utils.now(),
         };
 

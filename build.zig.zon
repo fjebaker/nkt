@@ -7,9 +7,13 @@
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
             .hash = "1220209352d22a38b0ec94f5bc1ab95dce7d77be65ed3f1d31b9cc58292e6279406b",
         },
+        .farbe = .{
+            .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
+            .hash = "12207269ace434bd258232591e0abea457fe6aab1a9e2e5faf17780107c35c8a932c",
+        },
         .chameleon = .{
             .url = "https://github.com/tr1ckydev/chameleon/archive/main.tar.gz",
             .hash = "122025fc3719d1628573cfb727d5b9af553530933255ef41af0a59e9a6f245690cef",
-        } 
-    }
+        },
+    },
 }

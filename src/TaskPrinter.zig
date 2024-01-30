@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils.zig");
-const Chameleon = @import("chameleon").Chameleon;
+const colors = @import("colors.zig");
+const Farbe = colors.Farbe;
 
 const FormatPrinter = @import("FormatPrinter.zig");
 
@@ -129,7 +130,10 @@ pub fn drain(
     tag_infos: ?[]const tags.TagInfo,
     details: bool,
 ) !void {
-    var fp = FormatPrinter.init(self.mem.child_allocator, .{ .pretty = self.pretty });
+    var fp = FormatPrinter.init(
+        self.mem.child_allocator,
+        .{ .pretty = self.pretty },
+    );
     defer fp.deinit();
 
     fp.tag_infos = tag_infos;
@@ -152,10 +156,14 @@ fn printTask(
     padding: Padding,
     details: bool,
 ) !void {
-    comptime var cham = Chameleon.init(.Auto);
+    var allocator = fp.mem.allocator();
 
     if (entry.index) |index| {
-        try fp.addFmtText(" {d: >3}", .{index}, .{ .cham = cham.dim() });
+        try fp.addFmtText(
+            " {d: >3}",
+            .{index},
+            .{ .fmt = colors.DIM.runtime(allocator) },
+        );
     } else {
         try fp.addText("    ", .{});
     }
@@ -171,13 +179,17 @@ fn printTask(
         else => " ",
     };
     const due_color = switch (entry.status) {
-        .PastDue => cham.bold().redBright(),
-        .NearlyDue => cham.yellow(),
-        .Done => cham.greenBright(),
-        .Archived => cham.dim(),
+        .PastDue => colors.RED.bold(),
+        .NearlyDue => colors.YELLOW,
+        .Done => colors.GREEN,
+        .Archived => colors.DIM,
         else => null,
     };
-    try fp.addFmtText("{s} {s}", .{ string, indicator }, .{ .cham = due_color });
+    try fp.addFmtText(
+        "{s} {s}",
+        .{ string, indicator },
+        .{ .fmt = if (due_color) |c| c.fixed() else null },
+    );
 
     try fp.addText(" | ", .{});
 
@@ -187,22 +199,24 @@ fn printTask(
         else => " ",
     };
     const importance_color = switch (entry.task.importance) {
-        .high => cham.yellow(),
-        .urgent => cham.bold().redBright(),
+        .high => colors.YELLOW,
+        .urgent => colors.RED.bold(),
         else => null,
     };
 
     try fp.addFmtText(
         "{s} {s}",
         .{ importance, entry.task.title },
-        .{ .cham = importance_color },
+        .{ .fmt = if (importance_color) |c| c.fixed() else null },
     );
 
     const has_details = entry.task.details.len > 0;
 
     const text_pad: usize = p: {
         if (!details and has_details) {
-            try fp.addText(" [+]", .{ .cham = cham.dim() });
+            try fp.addText(" [+]", .{
+                .fmt = colors.DIM.fixed(),
+            });
             break :p 4;
         } else break :p 0;
     };
@@ -221,8 +235,6 @@ fn printDetails(
     pretty: bool,
 ) !void {
     _ = pretty;
-    const cham = Chameleon.init(.Auto);
-    _ = cham;
     // if (pretty) try writeColour(cham.dim(), writer, .Open);
     const indent = padding.due + 12;
 

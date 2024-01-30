@@ -3,7 +3,8 @@ const std = @import("std");
 const tags = @import("tags.zig");
 
 const FormatPrinter = @import("FormatPrinter.zig");
-const Chameleon = @import("chameleon").Chameleon;
+const colors = @import("colors.zig");
+const Farbe = colors.Farbe;
 
 const BlockPrinter = @import("BlockPrinter.zig");
 
@@ -66,6 +67,8 @@ pub fn addToCurrent(bp: *BlockPrinter, text: []const u8, opts: FormatPrinter.Tex
     bp.current.?.end_index = end;
 }
 
+const HEADING_FORMAT = colors.CYAN.bold().fixed();
+
 pub fn addFormatted(
     bp: *BlockPrinter,
     what: enum { Heading, Item },
@@ -73,7 +76,6 @@ pub fn addFormatted(
     args: anytype,
     opts: FormatPrinter.TextOptions,
 ) !void {
-    comptime var cham = Chameleon.init(.Auto);
     var alloc = bp.format_printer.mem.child_allocator;
 
     const string = try std.fmt.allocPrint(alloc, fmt, args);
@@ -82,10 +84,10 @@ pub fn addFormatted(
     switch (what) {
         .Heading => {
             var new_opts = opts;
-            new_opts.cham = new_opts.cham orelse cham.cyanBright().bold().underline();
+            new_opts.fmt = new_opts.fmt orelse HEADING_FORMAT;
             try bp.addBlock(string, new_opts);
 
-            new_opts.cham = null;
+            new_opts.fmt = null;
             new_opts.is_counted = false;
             try bp.addToCurrent("\n\n", new_opts);
         },

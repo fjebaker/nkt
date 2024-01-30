@@ -1,10 +1,11 @@
 const std = @import("std");
 const utils = @import("utils.zig");
+const colors = @import("colors.zig");
 
 const Self = @This();
 
 pub const DATA_STORE_FILENAME = "topology.json";
-pub const TOPOLOGY_SCHEMA_VERSION = "0.1.0";
+pub const TOPOLOGY_SCHEMA_VERSION = "0.2.0";
 
 pub const Tag = struct {
     name: []const u8,
@@ -14,7 +15,7 @@ pub const Tag = struct {
 pub const TagInfo = struct {
     name: []const u8,
     created: u64,
-    color: []const u8,
+    color: colors.Color,
 };
 
 pub const InfoScheme = struct {

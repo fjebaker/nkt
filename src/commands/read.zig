@@ -5,6 +5,7 @@ const Chameleon = @import("chameleon").Chameleon;
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const tags = @import("../tags.zig");
+const colors = @import("../colors.zig");
 
 const State = @import("../State.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
@@ -278,8 +279,12 @@ fn addItems(
             try printer.addToCurrent(" ", .{ .is_counted = false });
         }
         for (entry.tags) |tag| {
-            try printer.addToCurrent("█", .{
-                .cham = tags.getTagColor(tag_infos, tag.name),
+            try printer.addToCurrent("@", .{
+                .fmt = try tags.getTagFormat(
+                    printer.format_printer.mem.allocator(),
+                    tag_infos,
+                    tag.name,
+                ),
                 .is_counted = false,
             });
         }
@@ -288,12 +293,17 @@ fn addItems(
     }
 }
 
+const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();
+const URGENT_FORMAT = colors.RED.bold().fixed();
+const WARN_FORMAT = colors.YELLOW.fixed();
+const DIM_FORMAT = colors.DIM.fixed();
+const COMPLETED_FORMAT = colors.GREEN.fixed();
+
 fn readTask(
     _: *Self,
     task: State.Item,
     printer: *BlockPrinter,
 ) !void {
-    comptime var cham = Chameleon.init(.Auto);
     const t = task.Task.task;
     const status = t.status(utils.Date.now());
 
@@ -313,7 +323,7 @@ fn readTask(
         .Item,
         "Task" ++ " " ** 11 ++ ":   {s}\n\n",
         .{t.title},
-        .{ .cham = cham.underline().bold() },
+        .{ .fmt = HEADING_FORMAT },
     );
 
     try addInfoLine(
@@ -339,9 +349,9 @@ fn readTask(
         "  {s}\n",
         .{due_s},
         switch (status) {
-            .PastDue => cham.bold().redBright(),
-            .NearlyDue => cham.yellowBright(),
-            else => cham.dim(),
+            .PastDue => URGENT_FORMAT,
+            .NearlyDue => WARN_FORMAT,
+            else => DIM_FORMAT,
         },
     );
     try addInfoLine(
@@ -355,9 +365,9 @@ fn readTask(
             .urgent => "! Urgent",
         }},
         switch (t.importance) {
-            .high => cham.yellowBright(),
-            .low => cham.dim(),
-            .urgent => cham.bold().redBright(),
+            .high => WARN_FORMAT,
+            .low => DIM_FORMAT,
+            .urgent => URGENT_FORMAT,
         },
     );
     try addInfoLine(
@@ -367,11 +377,11 @@ fn readTask(
         "  {s}\n",
         .{completed_s},
         switch (status) {
-            .Done => cham.greenBright(),
-            else => cham.dim(),
+            .Done => COMPLETED_FORMAT,
+            else => DIM_FORMAT,
         },
     );
-    try printer.addToCurrent("\nDetails:\n\n", .{ .cham = cham.underline() });
+    try printer.addToCurrent("\nDetails:\n\n", .{ .fmt = HEADING_FORMAT });
     try printer.addToCurrent(t.details, .{});
     try printer.addToCurrent("\n", .{});
 }
@@ -382,10 +392,10 @@ fn addInfoLine(
     comptime delim: []const u8,
     comptime value_fmt: []const u8,
     args: anytype,
-    cham: ?Chameleon,
+    fmt: ?colors.Farbe,
 ) !void {
     const padd = 15 - key.len;
     try printer.addToCurrent(key, .{});
     try printer.addToCurrent(" " ** padd ++ delim ++ " ", .{});
-    try printer.addFormatted(.Item, value_fmt, args, .{ .cham = cham });
+    try printer.addFormatted(.Item, value_fmt, args, .{ .fmt = fmt });
 }

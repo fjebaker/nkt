@@ -148,7 +148,7 @@ fn printZshCompletionFile(alloc: std.mem.Allocator, writer: anytype) !void {
         \\}
         \\
         \\_list_note_options() {
-        \\    compadd $(nkt completion --listing notes)
+        \\    compadd $(nkt completion --listing)
         \\}
         \\_list_prefixed_options() {
         \\    compadd $(nkt completion --prefixed)

@@ -2,6 +2,7 @@ const std = @import("std");
 const Topology = @import("Topology.zig");
 
 const utils = @import("utils.zig");
+const colors = @import("colors.zig");
 
 const Chameleon = @import("chameleon").Chameleon;
 
@@ -132,7 +133,7 @@ fn testContextValidation(names: []const []const u8, allowed: []const TagInfo) !v
 
 test "context validation" {
     const allowed = [_]TagInfo{
-        TagInfo{ .name = "something", .created = 0, .color = "red" },
+        TagInfo{ .name = "something", .created = 0, .color = colors.C_RED },
     };
     try testContextValidation(&.{"something"}, &allowed);
     testContextValidation(&.{"smthg"}, &allowed) catch |err| {
@@ -308,16 +309,16 @@ pub fn prettyPrint(
     }
 
     var tag_index: usize = 0;
-    var color = getTagColorContext(taginfos, context, tag_index);
+    var color = getTagColorContext(alloc, taginfos, context, tag_index);
 
     // todo: this would work much better as a while loop
     for (0.., string) |i, c| {
         const current = context.positions[tag_index];
         if (i == current.start) {
-            _ = try writer.writeAll(color.start);
+            try color.writeOpen(writer);
         }
         if (i == current.end) {
-            _ = try writer.writeAll(color.end);
+            try color.writeClose(writer);
 
             tag_index += 1;
             if (tag_index >= context.positions.len) {
@@ -325,27 +326,32 @@ pub fn prettyPrint(
                 _ = try writer.writeAll(string[i..]);
                 break;
             }
-            color = getTagColorContext(taginfos, context, tag_index);
+
+            color.deinit();
+            color = getTagColorContext(alloc, taginfos, context, tag_index);
         }
         _ = try writer.writeByte(c);
     }
 }
 
-const TagColor = struct { start: []const u8, end: []const u8 };
 fn getTagColorContext(
+    alloc: std.mem.Allocator,
     infos: []const TagInfo,
     ctx: ContextParse,
     index: usize,
-) TagColor {
+) colors.Farbe {
     const name = ctx.getName(index);
-    const cham = getTagColor(infos, name).?;
-    return .{ .start = cham.open, .end = cham.close };
+    const fmt = (try getTagFormat(alloc, infos, name)).?;
+    return fmt;
 }
 
-pub fn getTagColor(infos: []const TagInfo, name: []const u8) ?Chameleon {
+pub fn getTagFormat(alloc: std.mem.Allocator, infos: []const TagInfo, name: []const u8) !?colors.Farbe {
     const tag = getTag(infos, name) orelse
         return null;
-    return tagColor(tag.color);
+    var f = try tag.color.toFarbe(alloc);
+    errdefer f.deinit();
+    try f.bold();
+    return f;
 }
 
 pub const TagWriter = struct {
