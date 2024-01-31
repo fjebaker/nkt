@@ -1,9 +1,8 @@
 const std = @import("std");
 
-const Chameleon = @import("chameleon").Chameleon;
-
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const colors = @import("../colors.zig");
 
 const State = @import("../State.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
@@ -90,10 +89,10 @@ fn prepareChain(
     return days;
 }
 
-pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty: bool) !void {
-    comptime var cham = Chameleon.init(.Auto);
-    const weekend_color = cham.yellow();
+const COMPLETED_FORMAT = colors.GREEN.fixed();
+const WEEKEND_FORMAT = colors.YELLOW.fixed();
 
+pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty: bool) !void {
     try writer.writeByteNTimes(' ', padding + 3);
     for (days) |day| {
         const repr: u8 = switch (day.weekday) {
@@ -103,13 +102,14 @@ pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty:
             .Friday => 'F',
             .Saturday, .Sunday => 'S',
         };
+
         if (repr == 'S' and pretty)
-            try writer.writeAll(weekend_color.open);
+            try WEEKEND_FORMAT.writeOpen(writer);
 
         try writer.writeByte(repr);
 
         if (repr == 'S' and pretty)
-            try writer.writeAll(weekend_color.close);
+            try WEEKEND_FORMAT.writeClose(writer);
 
         if (day.weekday == .Sunday) try writer.writeByte(' ');
     }
@@ -135,9 +135,6 @@ pub fn printChain(
     days: []const Day,
     pretty: bool,
 ) !void {
-    comptime var cham = Chameleon.init(.Auto);
-    const completed_color = cham.greenBright();
-
     const pad = padding - name.len;
 
     try writer.writeAll(" ");
@@ -147,9 +144,9 @@ pub fn printChain(
 
     for (days, 0..) |day, i| {
         if (day.completed) {
-            if (pretty) try writer.writeAll(completed_color.open);
+            if (pretty) try COMPLETED_FORMAT.writeOpen(writer);
             try writer.writeAll("█");
-            if (pretty) try writer.writeAll(completed_color.close);
+            if (pretty) try COMPLETED_FORMAT.writeClose(writer);
         } else {
             if (i == days.len - 1) {
                 // special character for today if not completed
