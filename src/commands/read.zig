@@ -25,7 +25,7 @@ pub const extended_help =
 ++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -n/--limit int        maximum number of entries to display (default: 25)
     \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
-    \\     --all                 display all items (overwrites `--limit`)
+    \\     -a/--all              display all items (overwrites `--limit`)
     \\     --pretty/--nopretty   force pretty or no pretty printing
     \\     -p/--page             read via pager
     \\
@@ -59,7 +59,7 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
             if (arg.is('n', "limit")) {
                 const value = try itt.getValue();
                 self.number = try value.as(usize);
-            } else if (arg.is(null, "all")) {
+            } else if (arg.is('a', "all")) {
                 self.all = true;
             } else if (arg.is(null, "no-pretty")) {
                 if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
