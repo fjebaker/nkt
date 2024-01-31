@@ -57,7 +57,7 @@ const Mode = union(enum) {
     Task: struct {
         selection: cli.Selection = .{},
         attr: ?TaskAttributes = null,
-        by: ?utils.Date = null,
+        by: ?union(enum) { date: utils.Date, whenever } = null,
         importance: ?Importance = null,
 
         pub fn parse(self: *@This(), itt: *cli.ArgIterator) !void {
@@ -72,9 +72,18 @@ const Mode = union(enum) {
                         const val = (try itt.getValue()).string;
                         self.importance = std.meta.stringToEnum(Importance, val) orelse
                             return cli.CLIErrors.BadArgument;
-                    } else if (try parseDateTimeLikeFlag(arg, itt, "by")) |date| {
+                    } else if (arg.is(null, "by")) {
                         if (self.by != null) return cli.CLIErrors.DuplicateFlag;
-                        self.by = date;
+                        const string = (try itt.getValue()).string;
+                        if (std.mem.eql(u8, string, "whenever")) {
+                            self.by = .whenever;
+                        } else {
+                            self.by = .{
+                                .date = try cli.selections.parseDateTimeLike(
+                                    string,
+                                ),
+                            };
+                        }
                     } else {
                         return cli.CLIErrors.UnknownFlag;
                     }
@@ -210,7 +219,10 @@ pub fn runAsTask(self: *Self, state: *State, out_writer: anytype) !void {
             },
             .Todo => {
                 if (task_self.by) |by| {
-                    task.Task.task.due = utils.msFromDate(by);
+                    task.Task.task.due = switch (by) {
+                        .date => |date| utils.msFromDate(date),
+                        .whenever => null,
+                    };
                 }
                 if (task_self.importance) |imp| {
                     task.Task.task.importance = imp;
