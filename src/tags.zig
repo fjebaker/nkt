@@ -430,3 +430,32 @@ fn tagColor(name: []const u8) Chameleon {
         .yellow => cham.yellowBright(),
     };
 }
+
+/// If there are any mutual tag names in the tag lists, returns true, else
+/// false.
+pub fn tagsInTagList(tags1: []const Tag, tags2: []const Tag) bool {
+    for (tags1) |t1| {
+        for (tags2) |t2| {
+            if (std.mem.eql(u8, t1.name, t2.name)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+pub fn filterTagged(
+    comptime T: type,
+    alloc: std.mem.Allocator,
+    items: []const T,
+    tags: []const Tag,
+) ![]T {
+    var filtered = std.ArrayList(T).init(alloc);
+    defer filtered.deinit();
+    for (items) |item| {
+        if (tagsInTagList(item.tags, tags)) {
+            try filtered.append(item);
+        }
+    }
+    return filtered.toOwnedSlice();
+}

@@ -21,6 +21,8 @@ pub const extended_help =
     \\                             entry. if choice is ambiguous, will print both,
     \\                             else specify with the `--journal` or `--dir`
     \\                             flags
+    \\     [@tags]               show only those entries that have been tagged with
+    \\                             chosen tags.
     \\
 ++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -n/--limit int        maximum number of entries to display (default: 25)
@@ -39,11 +41,14 @@ all: bool = false,
 full_date: bool = false,
 pager: bool = false,
 pretty: ?bool = null,
+selected_tags: ?[][]const u8 = null,
 
 const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
+pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
     var self: Self = .{};
+    var tag_list = std.ArrayList([]const u8).init(alloc);
+    defer tag_list.deinit();
 
     itt.rewind();
     const prog_name = (try itt.next()).?.string;
@@ -51,9 +56,6 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
 
     itt.counter = 0;
     while (try itt.next()) |arg| {
-        // parse selection
-        if (try self.selection.parse(arg, itt)) continue;
-
         // handle other options
         if (arg.flag) {
             if (arg.is('n', "limit")) {
@@ -75,13 +77,23 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Sel
                 return cli.CLIErrors.UnknownFlag;
             }
         } else {
-            return cli.CLIErrors.TooManyArguments;
+            if (arg.string[0] == '@') {
+                try tag_list.append(arg.string[1..]);
+                continue;
+            }
         }
+        // parse selection
+        if (try self.selection.parse(arg, itt)) continue;
     }
 
     // don't pretty if to pager or being piped
     self.pretty = self.pretty orelse
         if (self.pager) false else !opts.piped;
+
+    // update the tags field if any were passed
+    if (tag_list.items.len > 0) {
+        self.selected_tags = try tag_list.toOwnedSlice();
+    }
 
     return self;
 }
@@ -136,6 +148,17 @@ fn read(
     );
     defer printer.deinit();
 
+    const tag_infos = state.getTagInfo();
+    const selected_tags = if (self.selected_tags) |names|
+        try tags.makeTagList(
+            state.allocator,
+            names,
+            tag_infos,
+        )
+    else
+        null;
+    defer if (selected_tags) |st| state.allocator.free(st);
+
     if (self.selection.item != null) {
         const selected: State.MaybeItem =
             (try self.selection.find(state)) orelse
@@ -146,11 +169,11 @@ fn read(
         }
         if (selected.day) |day| {
             printer.addTagInfo(state.getTagInfo());
-            try self.readDay(day, state, &printer);
+            try self.readDay(day, selected_tags, state, &printer);
         }
         if (selected.task) |task| {
             printer.format_printer.opts.max_lines = null;
-            printer.addTagInfo(state.getTagInfo());
+            printer.addTagInfo(tag_infos);
             try self.readTask(task, &printer);
         }
     } else if (self.selection.collection) |w| switch (w.container) {
@@ -158,14 +181,14 @@ fn read(
         .Journal => {
             const journal = state.getJournal(w.name) orelse
                 return NoSuchCollection;
-            try self.readJournal(journal, state, &printer);
+            try self.readJournal(journal, selected_tags, state, &printer);
         },
         else => unreachable, // todo
     } else {
         // default behaviour
         const journal = state.getJournal("diary").?;
-        printer.addTagInfo(state.getTagInfo());
-        try self.readJournal(journal, state, &printer);
+        printer.addTagInfo(tag_infos);
+        try self.readJournal(journal, selected_tags, state, &printer);
     }
 
     try printer.drain(out_writer);
@@ -183,12 +206,25 @@ pub fn readNote(
 pub fn readDay(
     self: *Self,
     day: State.Item,
+    selected_tags: ?[]const tags.Tag,
     state: *State,
     printer: *BlockPrinter,
 ) !void {
     const alloc = day.Day.journal.mem.allocator();
 
-    const entries = try day.Day.journal.readEntries(day.Day.day);
+    // read all entries
+    const all_entries = try day.Day.journal.readEntries(day.Day.day);
+
+    // if tags are selected, filter only those entries
+    const filtered_entries = if (selected_tags) |tgs|
+        try tags.filterTagged(Entry, state.allocator, all_entries, tgs)
+    else
+        null;
+    defer if (filtered_entries) |fe| state.allocator.free(fe);
+    const entries = filtered_entries orelse all_entries;
+
+    // no print if there are no entries for this day
+    if (entries.len == 0) return;
 
     const date = utils.dateFromMs(day.Day.day.created);
     const day_of_week = try utils.dayOfWeek(alloc, date);
@@ -200,16 +236,18 @@ pub fn readDay(
         .{ day.getName(), day_of_week, month },
         .{},
     );
+
     if (self.full_date) {
-        try addItems(entries, .FullTime, state, printer);
+        try self.addItems(entries, .FullTime, state, printer);
     } else {
-        try addItems(entries, .ClockTime, state, printer);
+        try self.addItems(entries, .ClockTime, state, printer);
     }
 }
 
 pub fn readJournal(
     self: *Self,
     journal: *State.Collection,
+    selected_tags: ?[]const tags.Tag,
     state: *State,
     printer: *BlockPrinter,
 ) !void {
@@ -235,13 +273,14 @@ pub fn readJournal(
 
     printer.reverse();
     for (day_list[0 .. last + 1]) |day| {
-        try self.readDay(day, state, printer);
+        try self.readDay(day, selected_tags, state, printer);
         if (!printer.couldFit(1)) break;
     }
     printer.reverse();
 }
 
 fn addItems(
+    _: *Self,
     entries: []Entry,
     comptime format: enum { FullTime, ClockTime },
     state: *State,
