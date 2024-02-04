@@ -174,27 +174,36 @@ const FindState = struct {
 
     pub fn find(state: *FindState) !?Result {
         const selected = try state.subprocFzfRga();
+        if (selected.len == 0) return null;
 
-        const sep = std.mem.indexOfScalar(u8, selected, ' ') orelse
-            return null;
-        const search_term = selected[0..sep];
-        const path = selected[sep + 1 ..];
+        const maybe_sep = std.mem.lastIndexOfScalar(u8, selected, ' ');
 
-        // todo: this could instead use the json output of rg
-        const grep_result = try state.subprocRga(search_term, path);
+        if (maybe_sep) |sep| {
+            const search_term = selected[0..sep];
+            const path = selected[sep + 1 ..];
 
-        const line_num_sep = std.mem.indexOfScalar(u8, grep_result, ':') orelse
-            return null;
+            // todo: this could instead use the json output of rg
+            const grep_result = try state.subprocRga(search_term, path);
 
-        return .{
-            .path = path,
-            .search_term = search_term,
-            .line_number = try std.fmt.parseInt(
-                usize,
-                grep_result[0..line_num_sep],
-                10,
-            ),
-        };
+            const line_num_sep = std.mem.indexOfScalar(u8, grep_result, ':') orelse
+                return null;
+
+            return .{
+                .path = path,
+                .search_term = search_term,
+                .line_number = try std.fmt.parseInt(
+                    usize,
+                    grep_result[0..line_num_sep],
+                    10,
+                ),
+            };
+        } else {
+            return .{
+                .path = selected,
+                .search_term = "",
+                .line_number = 0,
+            };
+        }
     }
 };
 
