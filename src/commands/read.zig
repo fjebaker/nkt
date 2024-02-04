@@ -289,7 +289,21 @@ fn addItems(
     const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
     const tag_infos = state.getTagInfo();
 
+    // the previously printed entry
+    var previous: ?Entry = null;
+
     for (entries[offset..]) |entry| {
+        // if there is more than an hour between two entries, print a newline
+        // to separate clearer
+        if (previous) |prev| {
+            const diff = if (prev.created < entry.created)
+                entry.created - prev.created
+            else
+                prev.created - entry.created;
+            if (diff > std.time.ms_per_hour) {
+                try printer.addToCurrent("\n", .{ .is_counted = false });
+            }
+        }
         const date = utils.dateFromMs(entry.created);
         switch (format) {
             .ClockTime => {
@@ -327,6 +341,7 @@ fn addItems(
         }
 
         try printer.addToCurrent("\n", .{ .is_counted = false });
+        previous = entry;
     }
 }
 
