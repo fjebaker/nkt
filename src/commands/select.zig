@@ -56,7 +56,17 @@ fn printSelection(out_writer: anytype, item: State.Item) !void {
             try out_writer.print("> Note: {s}\n", .{note.note.name});
         },
         .Day => |day| {
-            try out_writer.print("> Day: {s}\n", .{day.day.name});
+            const index = day.indexAtTime() catch |err| {
+                if (err == State.Item.DayError.NoTimeGiven) {
+                    try out_writer.print("> Day: {s}\n", .{day.day.name});
+                    return;
+                } else return err;
+            };
+
+            try out_writer.print(
+                "> Day: {s} index: {d} \n",
+                .{ day.day.name, index },
+            );
         },
         .Task => |task| {
             try out_writer.print("> Task: {s}\n", .{task.task.title});
