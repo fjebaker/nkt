@@ -71,7 +71,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
                     return null;
 
                 const end = tag.len + start;
-                parser.skipN(end - start);
+                parser.skipN(end - start - 1);
                 return .{ .mark = .Tag, .start = start, .end = end, .fmt = fmt };
             }
         },
@@ -195,25 +195,29 @@ fn addTextImpl(
 
     var current: Block = .{ .start = 0, .end = text.len, .fmt = fmt };
     while (parser.nextIndex()) |i| {
-        if (i > current.end) {
-            // write the formatted block
+        if (i >= current.end) {
+            // when we've reached the end of the currently scanned block, write
+            // it to the output with its format
             try fp.add(
                 .{ .text = text[current.start..current.end], .fmt = current.fmt },
             );
+            // retrieve the previous block
             current = parser.pop();
-            if (i > text.len) break;
+            if (i >= text.len) break;
             continue;
         }
 
         if (try fp.identifySubBlock(&parser)) |sub_block| {
-            // write what we currently have
+            // we found a new block so write everything that we've scanned of
+            // the current block so far
             try fp.add(.{
                 .text = text[current.start..sub_block.start],
                 .fmt = current.fmt,
             });
 
-            // shift the start of the remaining
-            current.start = parser.current();
+            // wherever the new block ends is the start of the new current
+            // block
+            current.start = sub_block.end;
 
             // save current to get it back later
             try parser.push(current);
