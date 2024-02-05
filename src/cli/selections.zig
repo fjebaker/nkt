@@ -65,6 +65,7 @@ pub const Selection = struct {
     collection: ?CollectionSelection = null,
     tag: ?[]const u8 = null,
     chain: ?[]const u8 = null,
+    time: ?[]const u8 = null,
 
     /// Parse a collection by name, for example `directory notes` resolves to
     /// the Directory collection with name "notes"
@@ -117,8 +118,17 @@ pub const Selection = struct {
         }
         if (s.item == null) return null;
 
-        const maybe = try findImpl(state, s.collection, s.item.?) orelse
+        var maybe = try findImpl(state, s.collection, s.item.?) orelse
             return null;
+
+        if (s.time) |time| {
+            if (maybe.day) |*d| {
+                // assign the time to the day
+                d.Day.time = time;
+            }
+            // no longer assign a note if time given
+            maybe.note = null;
+        }
 
         if (maybe.day == null and maybe.note == null and maybe.task == null)
             return null;
@@ -173,11 +183,16 @@ pub const Selection = struct {
     /// selection exists. Will raise an error if cannot parse positional.
     pub fn parse(s: *Selection, arg: cli.Arg, itt: *cli.ArgIterator) !bool {
         if (arg.flag) {
-            return try s.parseCollection(arg, itt);
+            if (arg.is(null, "time")) {
+                const value = try itt.getValue();
+                s.time = value.string;
+            } else {
+                return try s.parseCollection(arg, itt);
+            }
         } else {
             try s.parseItem(arg);
-            return true;
         }
+        return true;
     }
 
     /// Parse the argument as a collection flag, that is, `--journal NAME`, and
@@ -241,6 +256,9 @@ pub const Selection = struct {
         \\     --tl/--tasklist <n>   name of tasklist
         \\     --journal <n>         name of journal
         \\     --dir/--directory <n> name of directory
+        \\     --time string         time of the item to remove from the chosen
+        \\                            entry. must be specified in `hh:mm:ss`
+        \\
         \\
     ;
 

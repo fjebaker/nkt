@@ -429,6 +429,7 @@ const Tasklist = struct {
 };
 
 pub const Item = union(ItemType) {
+    pub const DayError = error{ NoSuchTime, NoTimeGiven };
     Note: struct {
         dir: *Directory,
         note: *Topology.InfoScheme,
@@ -441,6 +442,31 @@ pub const Item = union(ItemType) {
     Day: struct {
         journal: *Journal,
         day: *Topology.InfoScheme,
+        time: ?[]const u8 = null,
+
+        pub fn getEntry(self: @This(), index: usize) !Topology.Entry {
+            const entries = try self.read();
+            return entries[index];
+        }
+
+        /// Get the index of the entry corresponding to the time in
+        /// `self.time`. Return null if time null or invalid.
+        pub fn indexAtTime(self: @This()) !usize {
+            const t = self.time orelse return DayError.NoTimeGiven;
+            const entries = try self.read();
+
+            // find the selected index
+            const index = for (0..entries.len) |i| {
+                const entry = entries[i];
+                const created_time = try utils.formatTimeBuf(
+                    utils.dateFromMs(entry.created),
+                );
+                if (std.mem.eql(u8, &created_time, t)) {
+                    break i;
+                }
+            } else return DayError.NoSuchTime;
+            return index;
+        }
 
         pub fn read(self: @This()) ![]Topology.Entry {
             return try self.journal.readEntries(self.day);

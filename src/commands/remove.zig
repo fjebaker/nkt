@@ -11,31 +11,23 @@ pub const alias = [_][]const u8{"rm"};
 
 pub const help = "Remove items from collections.";
 pub const extended_help =
-    \\Remove a note from a directory, an entry from a journal, or an item 
+    \\Remove a note from a directory, an entry from a journal, or an item
     \\from an entry.
     \\  nkt remove
-    \\     --collection <type>   remove full collection instead of child of 
+    \\     --collection <type>   remove full collection instead of child of
     \\                           collection (default: false)
     \\     <what>                what to remove: name of a journal entry, or a note.
     \\                             if choice is ambiguous, will fail unless
     \\                             specified with the `--journal` or `--dir`
     \\                             flags. for removing items from an entry,
     \\                             specify the time stamp with `--time`
-    \\     --time name           time of the item to remove from the chosen
-    \\                            entry. must be specified in `hh:mm:ss`
-    \\
 ++ cli.Selection.COLLECTION_FLAG_HELP ++
     \\     -f                    don't prompt for removal
     \\
 ;
 
-const RemoveChild = struct {
-    selection: cli.Selection = .{},
-    time: ?[]const u8 = null,
-};
-
 selection: union(enum) {
-    Child: RemoveChild,
+    Child: cli.Selection,
     Collection: cli.selections.CollectionSelection,
 } = .{ .Child = .{} },
 
@@ -47,22 +39,17 @@ fn initChild(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self 
     itt.counter = 0;
     while (try itt.next()) |arg| {
         // parse selection
-        if (try child.selection.parse(arg, itt)) continue;
+        if (try child.parse(arg, itt)) continue;
 
         // handle other options
         if (arg.flag) {
-            if (arg.is(null, "time")) {
-                const value = try itt.getValue();
-                child.time = value.string;
-            } else {
-                return cli.CLIErrors.UnknownFlag;
-            }
+            return cli.CLIErrors.UnknownFlag;
         } else {
             return cli.CLIErrors.TooManyArguments;
         }
     }
 
-    if (!child.selection.validate(.Item)) {
+    if (!child.validate(.Item)) {
         return cli.CLIErrors.TooFewArguments;
     }
     return self;
@@ -118,14 +105,14 @@ pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
 }
 
 fn runChild(
-    self: *RemoveChild,
+    selection: *cli.Selection,
     state: *State,
     _: anytype,
 ) !void {
     // we need to be interactive, so no buffering:
     var out_writer = std.io.getStdOut().writer();
 
-    const item: State.MaybeItem = (try self.selection.find(state)) orelse
+    const item: State.MaybeItem = (try selection.find(state)) orelse
         return NoSuchCollection;
 
     if (item.note != null and item.day == null) {
@@ -141,18 +128,18 @@ fn runChild(
             _ = try out_writer.writeAll("Note deleted\n");
         }
     } else if (item.day) |day| {
-        if (self.time) |time| {
+        if (day.Day.time != null) {
             // if a time is provided, then we delete the entry
-            try removeItemInEntry(state, day, time, out_writer);
+            try removeItemInEntry(state, day, out_writer);
         } else {
             try out_writer.print(
-                "Delete ENTIRE entry '{s}' in journal '{s}'?\n",
+                "Delete ENTIRETY OF '{s}' in journal '{s}'?\n",
                 .{ day.getName(), day.Day.journal.description.name },
             );
             if (try confirmPrompt(state, out_writer)) {
                 try day.remove();
                 try state.writeChanges();
-                _ = try out_writer.writeAll("Entry deleted\n");
+                _ = try out_writer.writeAll("Journal page deleted\n");
             }
         }
     } else if (item.task) |task_item| {
@@ -169,26 +156,14 @@ fn runChild(
     } else unreachable;
 }
 
-fn removeItemInEntry(state: *State, day: State.Item, time: []const u8, out_writer: anytype) !void {
-    const entries = try day.Day.read();
-
-    // find the selected index
-    const index = for (0..entries.len) |i| {
-        const entry = entries[i];
-        const created_time = try utils.formatTimeBuf(
-            utils.dateFromMs(entry.created),
-        );
-        if (std.mem.eql(u8, &created_time, time)) {
-            break i;
-        }
-    } else return cli.SelectionError.InvalidSelection;
-
-    const entry = entries[index];
+fn removeItemInEntry(state: *State, day: State.Item, out_writer: anytype) !void {
+    const index = try day.Day.indexAtTime();
+    const entry = try day.Day.getEntry(index);
 
     // print the item
     try out_writer.print(
         "Selected item in {s}:\n\n {s} - {s}\n\n",
-        .{ day.getName(), time, entry.item },
+        .{ day.getName(), day.Day.time.?, entry.item },
     );
     // delete message
     try out_writer.print(
