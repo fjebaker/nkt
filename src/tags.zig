@@ -459,3 +459,27 @@ pub fn filterTagged(
     }
     return filtered.toOwnedSlice();
 }
+
+pub fn removeAndUpdate(
+    allocator: std.mem.Allocator,
+    pool: []const Tag,
+    remove: []const Tag,
+    add: []const Tag,
+) ![]Tag {
+    var new_tags = std.ArrayList(Tag).init(allocator);
+    defer new_tags.deinit();
+
+    for (add) |tag| {
+        try new_tags.append(tag);
+    }
+
+    for (pool) |tag| {
+        for (remove) |r| {
+            if (std.mem.eql(u8, tag.name, r.name)) break;
+        } else {
+            try new_tags.append(tag);
+        }
+    }
+
+    return new_tags.toOwnedSlice();
+}

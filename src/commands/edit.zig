@@ -1,11 +1,14 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
+const tags = @import("../tags.zig");
 
 const State = @import("../State.zig");
 const Editor = @import("../Editor.zig");
 
 const Self = @This();
+
+pub const EditError = error{InvalidEdit};
 
 pub const alias = [_][]const u8{"e"};
 
@@ -118,6 +121,9 @@ fn findOrCreateDefault(self: *Self, state: *State) !struct {
     if (item) |i| {
         if (i.numActive() == 1 and (i.getActive() catch unreachable) == .Day) {
             // need at least a note or a task
+            if (i.day.?.Day.time) |_| {
+                return .{ .new = false, .item = i };
+            }
         } else {
             return .{ .new = false, .item = item.? };
         }
@@ -183,6 +189,55 @@ pub fn run(
         try out_writer.print(
             "Task details for '{s}' in '{s}' updated\n",
             .{ task.getName(), task.collectionName() },
+        );
+    } else if (item.day) |day| {
+        const index = try day.Day.indexAtTime();
+        var entry = try day.Day.getEntryPtr(index);
+
+        var editor = try Editor.init(state.allocator);
+        defer editor.deinit();
+
+        // todo: might lead to topology getting out of sync
+        const day_allocator = day.Day.journal.mem.allocator();
+        const raw_text = try editor.editTemporaryContent(
+            day_allocator,
+            entry.item,
+        );
+
+        const entry_text = std.mem.trim(u8, raw_text, " \t\n\r");
+
+        // validate the changes to the entry
+        // must not have any new lines, all subsequent lines will be treated as tags
+        if (std.mem.count(u8, entry_text, "\n") != 0) {
+            return EditError.InvalidEdit;
+        }
+
+        const allowed_tags = state.getTagInfo();
+
+        var old_context = try tags.parseContexts(state.allocator, entry.item);
+        defer old_context.deinit();
+        const old_tags = try old_context.getTags(allowed_tags);
+
+        var new_context = try tags.parseContexts(state.allocator, entry_text);
+        defer new_context.deinit();
+        const new_tags = try new_context.getTags(allowed_tags);
+
+        entry.tags = try tags.removeAndUpdate(
+            day.Day.journal.content.allocator(),
+            entry.tags,
+            old_tags,
+            new_tags,
+        );
+
+        const now = utils.now();
+        entry.item = entry_text;
+        entry.modified = now;
+        day.Day.day.modified = now;
+
+        try state.writeChanges();
+        try out_writer.print(
+            "Entry '{s}' in '{s}' updated\n",
+            .{ day.Day.time.?, day.collectionName() },
         );
     } else {
         return cli.SelectionError.InvalidSelection;

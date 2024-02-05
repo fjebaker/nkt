@@ -449,6 +449,11 @@ pub const Item = union(ItemType) {
             return entries[index];
         }
 
+        pub fn getEntryPtr(self: @This(), index: usize) !*Topology.Entry {
+            const entries = try self.read();
+            return &entries[index];
+        }
+
         /// Get the index of the entry corresponding to the time in
         /// `self.time`. Return null if time null or invalid.
         pub fn indexAtTime(self: @This()) !usize {
