@@ -182,6 +182,10 @@ pub fn run(
             task.Task.task.details,
         );
 
+        if (std.mem.eql(u8, new_details, task.Task.task.details)) {
+            return;
+        }
+
         task.Task.task.details = new_details;
         task.Task.task.modified = utils.now();
 
@@ -205,6 +209,9 @@ pub fn run(
         );
 
         const entry_text = std.mem.trim(u8, raw_text, " \t\n\r");
+        if (std.mem.eql(u8, entry.item, entry_text)) {
+            return;
+        }
 
         // validate the changes to the entry
         // must not have any new lines, all subsequent lines will be treated as tags
