@@ -101,12 +101,7 @@ pub fn main() !void {
     };
     defer cmd.deinit();
 
-    // resolve the home path
-    const home_dir_path = std.os.getenv("HOME").?;
-    const root_path = try std.fs.path.join(
-        allocator,
-        &.{ home_dir_path, ".nkt" },
-    );
+    const root_path = try get_nkt_home_dir(allocator);
     defer allocator.free(root_path);
 
     // initialize the state
@@ -121,6 +116,23 @@ pub fn main() !void {
     try bw.flush();
 
     return std.process.cleanExit();
+}
+
+/// Caller owns the memory
+fn get_nkt_home_dir(allocator: std.mem.Allocator) ![]u8 {
+    var envmap = try std.process.getEnvMap(allocator);
+    defer envmap.deinit();
+    if (envmap.get("NKT_ROOT_DIR")) |path| {
+        return allocator.dupe(u8, path);
+    }
+
+    // resolve the home path
+    const home_dir_path = envmap.get("HOME").?;
+    const root_path = try std.fs.path.join(
+        allocator,
+        &.{ home_dir_path, ".nkt" },
+    );
+    return root_path;
 }
 
 test "root" {
