@@ -2,9 +2,9 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const Commands = @import("../main.zig").Commands;
-const CommandError = @import("../main.zig").CommandError;
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Commands = commands.Commands;
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
@@ -12,7 +12,7 @@ pub const help = "Print this help message.";
 
 command: []const u8,
 
-pub fn init(_:std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
+pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
     var command: []const u8 = "";
 
     if (try itt.next()) |arg| {
@@ -52,7 +52,7 @@ pub fn printExtendedHelp(writer: anytype, command: []const u8) !void {
     }
 
     if (unknown_command) {
-        return CommandError.UnknownCommand;
+        return commands.Error.UnknownCommand;
     }
 
     try writer.print("No extended help for '{s}' available.\n", .{command});
@@ -70,7 +70,7 @@ pub fn printHelp(writer: anytype) !void {
 
 pub fn run(
     self: *Self,
-    _: *State,
+    _: *Root,
     out_writer: anytype,
 ) !void {
     if (self.command.len > 0) {

@@ -1,8 +1,7 @@
 const std = @import("std");
-pub const selections = @import("cli/selections.zig");
-
-pub const Selection = selections.Selection;
-pub const SelectionError = selections.SelectionError;
+// pub const selections = @import("cli/selections.zig");
+// pub const Selection = selections.Selection;
+// pub const SelectionError = selections.SelectionError;
 
 pub const Options = struct {
     piped: bool, // output is being piped
@@ -214,10 +213,6 @@ fn argIs(arg: Arg, comptime expected: Arg) !void {
     try std.testing.expectEqual(expected.flag, arg.flag);
     try std.testing.expectEqual(expected.index, arg.index);
     try std.testing.expectEqualStrings(expected.string, arg.string);
-}
-
-test "submodules" {
-    _ = selections;
 }
 
 test "argument iteration" {

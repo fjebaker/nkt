@@ -11,8 +11,17 @@ pub const MAXIMUM_BYTES_READ = std.math.pow(usize, 2, 24);
 root_path: []const u8,
 dir: std.fs.Dir,
 
+pub fn initElseCreate(root_path: []const u8) !Self {
+    return Self.init(root_path) catch |err| {
+        if (err == error.FileNotFound) {
+            try std.fs.makeDirAbsolute(root_path);
+            return try Self.init(root_path);
+        } else return err;
+    };
+}
+
 pub fn init(root_path: []const u8) !Self {
-    var dir = try std.fs.cwd().openDir(root_path, .{});
+    var dir = try std.fs.openDirAbsolute(root_path, .{});
     errdefer dir.close();
 
     return .{
@@ -78,6 +87,7 @@ pub fn readFileAllocElseNull(
 }
 
 pub fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
+    std.log.default.debug("Creating directory: '{s}'", .{path});
     self.dir.makeDir(path) catch |err| {
         if (err != std.os.MakeDirError.PathAlreadyExists) return err;
     };
@@ -104,20 +114,13 @@ pub fn removeFile(self: *const Self, path: []const u8) !void {
 }
 
 pub fn overwrite(self: *const Self, rel_path: []const u8, content: []const u8) !void {
+    std.log.default.debug("Overwriting '{s}'", .{rel_path});
     var fs = try self.openElseCreate(rel_path);
     defer fs.close();
     // seek to start to remove anything that may already be in the file
     try fs.seekTo(0);
     try fs.writeAll(content);
     try fs.setEndPos(content.len);
-}
-
-pub fn iterableDiaryDirectory(self: *const Self) !std.fs.IterableDir {
-    return self.dir.openIterableDir(DIARY_DIRECTORY, .{});
-}
-
-pub fn iterableDirectoryCollection(self: *const Self) !std.fs.IterableDir {
-    return self.dir.openIterableDir(NOTES_DIRECTORY, .{});
 }
 
 /// Turn a path relative to the root directory into an absolute file path.

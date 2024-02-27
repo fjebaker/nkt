@@ -44,17 +44,17 @@ pub const CollectionSelection = struct {
     name: []const u8,
 };
 
-const DEFAULT_TASKLIST: CollectionSelection = .{
+pub const DEFAULT_TASKLIST: CollectionSelection = .{
     .container = .Tasklist,
     .name = "todo",
 };
 
-const DEFAULT_JOURNAL: CollectionSelection = .{
+pub const DEFAULT_JOURNAL: CollectionSelection = .{
     .container = .Journal,
     .name = "diary",
 };
 
-const DEFAULT_DIRECTORY: CollectionSelection = .{
+pub const DEFAULT_DIRECTORY: CollectionSelection = .{
     .container = .Directory,
     .name = "notes",
 };
