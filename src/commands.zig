@@ -72,7 +72,10 @@ pub const Commands = union(enum) {
         const command = try args.next() orelse
             return Error.NoCommandGiven;
 
-        if (command.flag) return Error.UnknownCommand;
+        if (command.flag) {
+            try throwUnknownCommand(command.string);
+            unreachable;
+        }
 
         inline for (@typeInfo(Commands).Union.fields) |field| {
             const is_field = std.mem.eql(u8, command.string, field.name);
@@ -85,9 +88,19 @@ pub const Commands = union(enum) {
                 return @unionInit(Commands, field.name, instance);
             }
         }
-        return Error.UnknownCommand;
+
+        try throwUnknownCommand(command.string);
+        unreachable;
     }
 };
+
+fn throwUnknownCommand(name: []const u8) !void {
+    try cli.throwError(
+        Error.UnknownCommand,
+        "'{s}'\n(use 'help' for a list of commands)",
+        .{name},
+    );
+}
 
 pub fn execute(
     allocator: std.mem.Allocator,

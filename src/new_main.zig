@@ -13,6 +13,7 @@ const help = @import("commands/help.zig");
 fn handle_execution_error(writer: anytype, err: anyerror) !void {
     if (utils.inErrorSet(err, commands.Error)) |e| switch (e) {
         commands.Error.NoCommandGiven => {
+            try writer.writeAll("No command given.\n\n");
             try help.printHelp(writer);
             std.process.exit(0);
         },

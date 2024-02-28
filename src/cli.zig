@@ -31,11 +31,11 @@ fn errorString(err: CLIErrors) []const u8 {
 }
 
 /// Wrapper for returning errors with helpful messages printed to `stderr`
-pub fn throwError(comptime err: CLIErrors, comptime fmt: []const u8, args: anytype) !void {
+pub fn throwError(comptime err: anyerror, comptime fmt: []const u8, args: anytype) !void {
     var stderr = std.io.getStdErr();
     var writer = stderr.writer();
 
-    const err_string = errorString(err);
+    const err_string = @errorName(err);
 
     // do we use color?
     if (stderr.isTty()) {
