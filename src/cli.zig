@@ -1,18 +1,12 @@
 const std = @import("std");
 
 const utils = @import("utils.zig");
+const farbe = @import("farbe");
 const ListIterator = utils.ListIterator;
 
 // pub const selections = @import("cli/selections.zig");
 // pub const Selection = selections.Selection;
 // pub const SelectionError = selections.SelectionError;
-
-/// Command line argument options that control the input out output sources
-pub const Options = struct {
-    /// Output is being piped. Contextually this means ANSI escape codes and
-    /// interaction will be disabled
-    piped: bool = false,
-};
 
 pub const CLIErrors = error{
     BadArgument,
@@ -26,17 +20,34 @@ pub const CLIErrors = error{
     UnknownFlag,
 };
 
+fn errorString(err: CLIErrors) []const u8 {
+    inline for (@typeInfo(CLIErrors).ErrorSet.?) |e| {
+        const same_name = err == @field(anyerror, e.name);
+        if (same_name) {
+            return e.name;
+        }
+    }
+    unreachable;
+}
+
 /// Wrapper for returning errors with helpful messages printed to `stderr`
 pub fn throwError(comptime err: CLIErrors, comptime fmt: []const u8, args: anytype) !void {
-    var stderr = std.io.getStdErr().writer();
-    try stderr.print("{!}: ", .{err});
-    try stderr.print(fmt ++ "\n", args);
+    var stderr = std.io.getStdErr();
+    var writer = stderr.writer();
 
-    if (@import("builtin").mode == .Debug) {
-        return err;
+    const err_string = errorString(err);
+
+    // do we use color?
+    if (stderr.isTty()) {
+        const f = farbe.ComptimeFarbe.init().fgRgb(255, 0, 0).bold();
+        try f.write(writer, "{s}: ", .{err_string});
     } else {
-        std.process.exit(1);
+        try writer.print("{s}: ", .{err_string});
     }
+    try writer.print(fmt ++ "\n", args);
+
+    // let the OS clean up
+    std.process.exit(1);
 }
 
 /// Argument abstraction
@@ -238,6 +249,14 @@ pub const ArgIterator = struct {
         } else {
             try throwError(CLIErrors.UnknownFlag, "--{s}", .{arg.string});
         }
+    }
+
+    pub fn throwBadArgument(
+        self: *const ArgIterator,
+        comptime msg: []const u8,
+    ) !void {
+        const arg: Arg = self.previous.?;
+        try throwError(CLIErrors.BadArgument, msg ++ ": '{s}'", .{arg.string});
     }
 
     pub fn throwTooManyArguments(self: *const ArgIterator) !void {
