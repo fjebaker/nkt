@@ -333,12 +333,10 @@ pub fn extendedHelp(
     comptime items: []const ExtendedHelpItem,
     comptime opts: ExtendedHelpOptions,
 ) []const u8 {
+    // for future use
+    _ = opts;
     @setEvalBranchQuota(5000);
     comptime var help: []const u8 = "";
-
-    if (opts.description.len > 0) {
-        help = help ++ opts.description ++ "\n\n";
-    }
 
     inline for (items) |item| {
         help = help ++
@@ -346,29 +344,48 @@ pub fn extendedHelp(
             item.arg ++
             " " ** (CENTRE_PADDING - item.arg.len);
 
-        comptime var line_len: usize = 0;
-        comptime var itt = std.mem.split(u8, item.help, " ");
-
-        // so we can reinsert the spaces correctly we do the first word first
-        if (itt.next()) |first_word| {
-            help = help ++ first_word;
-            line_len += first_word.len;
-        }
-        // followed by all others words
-        while (itt.next()) |word| {
-            help = help ++ " ";
-            line_len += word.len;
-            if (line_len > HELP_LEN) {
-                help = help ++
-                    "\n" ++
-                    " " ** (LEFT_PADDING + CENTRE_PADDING + HELP_INDENT);
-                line_len = HELP_INDENT;
-            }
-            help = help ++ word;
-        }
+        help = help ++ comptimeWrap(item.help, .{
+            .left_pad = LEFT_PADDING + CENTRE_PADDING,
+            .continuation_indent = HELP_INDENT,
+            .column_limit = HELP_LEN,
+        });
 
         help = help ++ "\n";
     }
 
     return help ++ "\n";
+}
+
+pub const WrappingOptions = struct {
+    left_pad: usize = 0,
+    continuation_indent: usize = 0,
+    column_limit: usize = 80,
+};
+
+/// Wrap a string over a number of lines in a comptime context
+pub fn comptimeWrap(comptime text: []const u8, comptime opts: WrappingOptions) []const u8 {
+    comptime var out: []const u8 = "";
+    comptime var line_len: usize = 0;
+    // comptime var itt = std.mem.split(u8, item.help, " ");
+    comptime var itt = std.mem.split(u8, text, " ");
+
+    // so we can reinsert the spaces correctly we do the first word first
+    if (itt.next()) |first_word| {
+        out = out ++ first_word;
+        line_len += first_word.len;
+    }
+    // followed by all others words
+    while (itt.next()) |word| {
+        out = out ++ " ";
+        line_len += word.len;
+        if (line_len > opts.column_limit) {
+            out = out ++
+                "\n" ++
+                " " ** (opts.left_pad + opts.continuation_indent);
+            line_len = opts.continuation_indent;
+        }
+        out = out ++ word;
+    }
+
+    return out;
 }
