@@ -62,10 +62,9 @@ pub fn main() !void {
     var out_buffered = std.io.bufferedWriter(out_fd.writer());
     var out = out_buffered.writer();
 
-    const root_path = try get_nkt_home_dir(allocator);
-    defer allocator.free(root_path);
-
-    const opts: cli.Options = .{ .piped = !out_fd.isTty() };
+    const opts: cli.Options = .{
+        .piped = !out_fd.isTty(),
+    };
 
     // parse the command, use arena allocator so we don't have to be too
     // careful about tracking allocations
@@ -80,13 +79,17 @@ pub fn main() !void {
     );
     defer cmd.deinit();
 
+    // get the root directory of nkt
+    const root_path = try get_nkt_home_dir(allocator);
+    defer allocator.free(root_path);
+    // initialize the file system abstraction
     var fs = try FileSystem.init(root_path);
     defer fs.deinit();
 
-    var root = try Root.new(allocator);
+    var root = Root.new(allocator);
     // give a filesystem handle to the root
     root.fs = fs;
-    try cmd.run(&root, out);
+    try cmd.run(&root, out, opts);
 
     // _ = out;
     // try migrate.migratePath(allocator, root_path);
@@ -102,4 +105,5 @@ pub fn main() !void {
 
 test "main" {
     _ = Root;
+    _ = cli;
 }

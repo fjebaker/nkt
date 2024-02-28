@@ -10,17 +10,41 @@ const Self = @This();
 
 pub const help = "Print this help message.";
 
-command: []const u8,
+pub const extended_help = cli.extendedHelp(
+    &.{
+        .{ .arg = "[command]", .help = "Subcommand to print extended help for." },
+    },
+    .{ .description = "Print help messages and additional information about subcommands." },
+);
+
+command: ?[]const u8,
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var command: []const u8 = "";
-
-    if (try itt.next()) |arg| {
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
-        command = arg.string;
+    var command: ?[]const u8 = null;
+    while (try itt.next()) |arg| {
+        if (arg.flag) {
+            try itt.throwUnknownFlag();
+        }
+        if (command == null) {
+            command = arg.string;
+        } else {
+            try itt.throwTooManyArguments();
+        }
     }
-
     return .{ .command = command };
+}
+
+pub fn run(
+    self: *Self,
+    _: *Root,
+    out_writer: anytype,
+    _: cli.Options,
+) !void {
+    if (self.command) |command| {
+        try printExtendedHelp(out_writer, command);
+    } else {
+        try printHelp(out_writer);
+    }
 }
 
 pub fn printExtendedHelp(writer: anytype, command: []const u8) !void {
@@ -65,17 +89,5 @@ pub fn printHelp(writer: anytype) !void {
     inline for (info.fields) |field| {
         const descr = @field(field.type, "help");
         try writer.print(" - {s: <11} {s}\n", .{ field.name, descr });
-    }
-}
-
-pub fn run(
-    self: *Self,
-    _: *Root,
-    out_writer: anytype,
-) !void {
-    if (self.command.len > 0) {
-        try printExtendedHelp(out_writer, self.command);
-    } else {
-        try printHelp(out_writer);
     }
 }

@@ -1,4 +1,26 @@
 const std = @import("std");
+
+pub fn ListIterator(comptime T: type) type {
+    return struct {
+        data: []const T,
+        index: usize = 0,
+        pub fn init(items: []const T) @This() {
+            return .{ .data = items };
+        }
+        pub fn next(self: *@This()) ?T {
+            if (self.index < self.data.len) {
+                const v = self.data[self.index];
+                self.index += 1;
+                return v;
+            }
+            return null;
+        }
+    };
+}
+
+// needs revisting below here
+// vvvvvvvvvvvvvvvvvvvvvvvvvv
+
 pub const time = @import("time");
 pub const DateError = error{DateStringTooShort};
 

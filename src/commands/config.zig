@@ -7,11 +7,7 @@ const Self = @This();
 pub const help = "View and modify the configuration of nkt";
 
 pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    if (try itt.next()) |arg| {
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
-        return cli.CLIErrors.TooManyArguments;
-    }
-
+    try itt.assertNoArguments();
     return .{};
 }
 
@@ -19,6 +15,7 @@ pub fn run(
     _: *Self,
     root: *Root,
     out_writer: anytype,
+    _: cli.Options,
 ) !void {
     try out_writer.print(
         \\nkt schema version     : {s}

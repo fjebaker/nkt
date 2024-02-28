@@ -125,7 +125,7 @@ tag_descriptors: ?tags.DescriptorList = null,
 chain_list: ?chains.ChainList = null,
 fs: ?FileSystem = null,
 
-pub fn new(alloc: std.mem.Allocator) !Root {
+pub fn new(alloc: std.mem.Allocator) Root {
     var info: Info = .{
         .tasklists = &.{},
         .directories = &.{},
@@ -271,7 +271,7 @@ pub fn getDescriptor(
 
 test "add and get descriptors" {
     var alloc = std.testing.allocator;
-    var root = try Root.new(alloc);
+    var root = Root.new(alloc);
     defer root.deinit();
 
     const new_directory: Descriptor = .{
@@ -317,7 +317,7 @@ pub fn serialize(self: *const Root, allocator: std.mem.Allocator) ![]const u8 {
 
 test "serialize" {
     var alloc = std.testing.allocator;
-    var root = try Root.new(alloc);
+    var root = Root.new(alloc);
     defer root.deinit();
 
     const str = try root.serialize(alloc);
