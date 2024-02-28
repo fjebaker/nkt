@@ -8,18 +8,21 @@ const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const help = "Print this help message.";
+pub const short_help = "Print this help message or help for other commands.";
+pub const long_help =
+    \\Print help messages and additional information about subcommands.
+;
 
-pub const extended_help = cli.extendedHelp(
-    &.{
-        .{ .arg = "[command]", .help = "Subcommand to print extended help for." },
+pub const argument_help = cli.extendedHelp(&.{
+    .{
+        .arg = "[command]",
+        .help = "Subcommand to print extended help for.",
     },
-    .{ .description = "Print help messages and additional information about subcommands." },
-);
+}, .{});
 
 command: ?[]const u8,
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var command: ?[]const u8 = null;
     while (try itt.next()) |arg| {
         if (arg.flag) {
@@ -27,18 +30,23 @@ pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
         }
         if (command == null) {
             command = arg.string;
+            if (!isValidCommand(command.?)) {
+                try itt.throwBadArgument("invalid command");
+            }
         } else {
             try itt.throwTooManyArguments();
         }
     }
+
     return .{ .command = command };
 }
 
-pub fn run(
+pub fn execute(
     self: *Self,
+    _: std.mem.Allocator,
     _: *Root,
     out_writer: anytype,
-    _: cli.Options,
+    _: commands.Options,
 ) !void {
     if (self.command) |command| {
         try printExtendedHelp(out_writer, command);
@@ -47,28 +55,49 @@ pub fn run(
     }
 }
 
-pub fn printExtendedHelp(writer: anytype, command: []const u8) !void {
+fn isValidCommand(command: []const u8) bool {
+    // assert the argument is valid
+    const info = @typeInfo(Commands).Union;
+    inline for (info.fields) |field| {
+        if (std.mem.eql(u8, field.name, command)) return true;
+    }
+    return false;
+}
+
+fn printExtendedHelp(writer: anytype, command: []const u8) !void {
     var unknown_command = true;
 
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
-        const has_extended_help = @hasDecl(field.type, "extended_help");
+        const has_long_help = @hasDecl(field.type, "long_help");
+        if (!has_long_help) {
+            @compileError("Subcommand " ++ field.name ++ " needs to define `long_help`");
+        }
+
+        const has_argument_help = @hasDecl(field.type, "argument_help");
         const field_right =
             std.mem.eql(u8, field.name, command) or utils.isAlias(field, command);
 
-        if (has_extended_help and field_right) {
-            const eh = @field(field.type, "extended_help");
+        if (has_argument_help and field_right) {
+            const eh = @field(field.type, "argument_help");
             try writer.print("Extended help for {s}:\n\n", .{field.name});
 
+            const long = comptime cli.comptimeWrap(
+                @field(field.type, "long_help"),
+                .{ .column_limit = 80 },
+            );
+            try writer.writeAll(long);
+            try writer.writeAll("\n\n");
+
             if (@hasDecl(field.type, "alias")) {
-                _ = try writer.writeAll("Aliases:");
+                try writer.writeAll("Aliases:");
                 for (@field(field.type, "alias")) |alias| {
                     try writer.print(" {s}", .{alias});
                 }
-                _ = try writer.writeAll("\n\n");
+                try writer.writeAll("\n\n");
             }
 
-            _ = try writer.writeAll(eh);
+            try writer.writeAll(eh);
             return;
         }
 
@@ -87,7 +116,7 @@ pub fn printHelp(writer: anytype) !void {
 
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
-        const descr = @field(field.type, "help");
+        const descr = @field(field.type, "short_help");
         try writer.print(" - {s: <11} {s}\n", .{ field.name, descr });
     }
 }
