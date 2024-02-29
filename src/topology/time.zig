@@ -49,7 +49,7 @@ pub fn getTimeZone(allocator: std.mem.Allocator) !TimeZone {
 
     const tz = time.datetime.Timezone.create(
         try allocator.dupe(u8, designation),
-        @intCast(local_offset),
+        @intCast(@divFloor(local_offset, 60)), // convert to minutes
     );
     return .{ .tz = tz, .allocator = allocator };
 }
