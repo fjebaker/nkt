@@ -159,6 +159,7 @@ tag_descriptors: ?tags.DescriptorList = null,
 chain_list: ?chains.ChainList = null,
 fs: ?FileSystem = null,
 
+/// Initialize a new `Root` with all default values
 pub fn new(alloc: std.mem.Allocator) Root {
     var info: Info = .{
         .tasklists = &.{},
@@ -174,6 +175,29 @@ pub fn new(alloc: std.mem.Allocator) Root {
         .allocator = alloc,
         .arena = std.heap.ArenaAllocator.init(alloc),
     };
+}
+
+/// Load the `Root` information from the topology file in the home directory.
+pub fn load(self: *Root) !void {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    const contents = try fs.readFileAlloc(self.allocator, ROOT_FILEPATH);
+    defer self.allocator.free(contents);
+
+    try self.loadFromString(contents);
+}
+
+/// Load the `Root.Info` from a JSON string. Will make copies of all strings,
+/// so the input string may be freed later.
+pub fn loadFromString(self: *Root, string: []const u8) !void {
+    var alloc = self.arena.allocator();
+    self.info = try std.json.parseFromSliceLeaky(
+        Info,
+        alloc,
+        string,
+        .{ .allocate = .alloc_always },
+    );
 }
 
 pub fn deinit(self: *Root) void {
@@ -514,67 +538,98 @@ pub fn addNewCollection(
     };
 }
 
-/// Add a new `Journal` to the index, and return a pointer into the cache to
-/// allow modification.
-pub fn addNewJournal(self: *Root, descr: Descriptor) !Journal {
-    try self.addDescriptor(descr, .CollectionJournal);
-    try self.cache.journals.put(
+fn lookupCollection(
+    self: *Root,
+    descr: Descriptor,
+    comptime t: CollectionType,
+) t.ToType() {
+    const info_ptr = &@field(self.cache, t.toFieldName()).getPtr(descr.name).?.item;
+    return switch (t) {
+        .CollectionJournal => .{
+            .info = info_ptr,
+            .fs = self.fs,
+            .allocator = self.allocator,
+        },
+        .CollectionDirectory => .{
+            .info = info_ptr,
+            .fs = self.fs,
+            .allocator = self.allocator,
+        },
+        .CollectionTasklist => .{
+            .info = info_ptr,
+            .allocator = self.allocator,
+        },
+    };
+}
+
+fn addNewCollectionFromDescription(
+    self: *Root,
+    descr: Descriptor,
+    comptime t: CollectionType,
+) !t.ToType() {
+    try self.addDescriptor(descr, t);
+    try @field(self.cache, t.toFieldName()).put(
         descr.name,
         .{ .item = .{}, .modified = true },
     );
-    return self.lookupJournal(descr);
-}
-
-fn lookupJournal(self: *Root, descr: Descriptor) Journal {
-    return .{
-        .info = &self.cache.journals.getPtr(descr.name).?.item,
-        .fs = self.fs,
-        .allocator = self.allocator,
-    };
+    return self.lookupCollection(descr, t);
 }
 
 /// Add a new `Tasklist` to the index, and return a pointer into the cache to
 /// allow modification.
 pub fn addNewTasklist(self: *Root, descr: Descriptor) !Tasklist {
-    try self.addDescriptor(descr, .CollectionTasklist);
-    try self.cache.tasklists.put(
-        descr.name,
-        .{ .item = .{}, .modified = true },
-    );
-    return self.lookupTasklist(descr);
-}
-
-fn lookupTasklist(self: *Root, descr: Descriptor) Tasklist {
-    return .{
-        .info = &self.cache.tasklists.getPtr(descr.name).?.item,
-        .allocator = self.allocator,
-    };
+    return try self.addNewCollectionFromDescription(descr, .CollectionTasklist);
 }
 
 /// Add a new `Directory` to the index, and return a pointer into the cache to
 /// allow modification.
 pub fn addNewDirectory(self: *Root, descr: Descriptor) !Directory {
-    try self.addDescriptor(descr, .CollectionDirectory);
-    try self.cache.directories.put(
-        descr.name,
-        .{ .item = .{}, .modified = true },
-    );
-    return self.lookupDirectory(descr);
+    return try self.addNewCollectionFromDescription(descr, .CollectionDirectory);
 }
 
-fn lookupDirectory(self: *Root, descr: Descriptor) Directory {
-    return .{
-        .info = &self.cache.directories.getPtr(descr.name).?.item,
-        .fs = self.fs,
-        .allocator = self.allocator,
-    };
+/// Add a new `Journal` to the index, and return a pointer into the cache to
+/// allow modification.
+pub fn addNewJournal(self: *Root, descr: Descriptor) !Journal {
+    return try self.addNewCollectionFromDescription(descr, .CollectionJournal);
+}
+
+/// Get a desired collection by name and `CollectionType`. Returns the
+/// associated collection type, or null if no such collection can be found.
+/// Will read any associated topology files from disk if needed.
+pub fn getCollection(
+    self: *Root,
+    name: []const u8,
+    comptime t: CollectionType,
+) !?t.ToType() {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    const descr = self.getDescriptor(name, t) orelse return null;
+    const info_content = try fs.readFileAlloc(self.allocator, descr.path);
+    defer self.allocator.free(info_content);
+
+    const InfoType = t.ToType().Info;
+    var alloc = self.arena.allocator();
+
+    var info = std.json.parseFromSliceLeaky(
+        alloc,
+        InfoType,
+        info_content,
+        .{ .allocate = .alloc_always },
+    );
+
+    // create the stash
+    @field(self.cache, t.toFieldName()).put(
+        descr.name,
+        .{ .item = info, .modified = true },
+    );
+
+    try self.lookupCollection(descr, t);
 }
 
 /// Get a `Journal` by name. Returns `null` if name is invalid.
 pub fn getJournal(self: *Root, name: []const u8) !?Journal {
-    const descr = self.getDescriptor(name, .CollectionJournal) orelse
-        return null;
-    _ = descr;
+    return self.getCollection(name, .CollectionJournal);
 }
 
 /// Add all of the default collections to the root
@@ -644,19 +699,19 @@ pub fn createFilesystem(self: *Root) !void {
     }
 
     // journals
-    try self.writeDescriptors(lookupJournal, fs, self.info.journals);
-    try self.writeDescriptors(lookupDirectory, fs, self.info.directories);
-    try self.writeDescriptors(lookupTasklist, fs, self.info.tasklists);
+    try self.writeDescriptors(fs, .CollectionJournal);
+    try self.writeDescriptors(fs, .CollectionDirectory);
+    try self.writeDescriptors(fs, .CollectionTasklist);
 }
 
 fn writeDescriptors(
     self: *Root,
-    comptime lookup_fn: anytype,
     fs: *FileSystem,
-    descrs: []const Descriptor,
+    comptime t: CollectionType,
 ) !void {
+    const descrs = @field(self.info, t.toFieldName());
     for (descrs) |descr| {
-        var item = lookup_fn(self, descr);
+        var item = self.lookupCollection(descr, t);
         // make the directory
         const dir_name = std.fs.path.dirname(descr.path).?;
         try fs.makeDirIfNotExists(dir_name);
