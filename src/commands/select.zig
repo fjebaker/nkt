@@ -8,6 +8,17 @@ const State = @import("../State.zig");
 const Self = @This();
 
 pub const help = "Select an item or collection";
+pub const short_help = "Select an item or collection.";
+pub const long_help =
+    \\Select an item or collection
+;
+
+pub const argument_help = cli.extendedHelp(&.{
+    .{
+        .arg = "[command]",
+        .help = "Subcommand to print extended help for.",
+    },
+}, .{});
 
 selection: cli.Selection = .{},
 

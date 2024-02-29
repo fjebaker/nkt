@@ -864,6 +864,9 @@ pub const Collection = union(Type) {
             },
             .Tasklist => |t| {
                 const tasks = t.tasks orelse return;
+                // ensure there are tasks to be written
+                if (tasks.len == 0) return;
+
                 // update last modified
                 t.info.modified = time(Tasklist.Task, tasks, "modified", .Max);
                 // stringify

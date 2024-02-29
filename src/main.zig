@@ -107,7 +107,10 @@ pub fn main() !void {
     // initialize the state
     var state = try State.init(
         allocator,
-        .{ .root_path = root_path },
+        .{
+            .root_path = root_path,
+            .create_home = cmd == .init,
+        },
     );
     defer state.deinit();
 
