@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli.zig");
 const utils = @import("utils.zig");
 
+const time = @import("topology/time.zig");
 const Root = @import("topology/Root.zig");
 
 pub const Error = error{ NoCommandGiven, UnknownCommand };
@@ -11,6 +12,9 @@ pub const Options = struct {
     /// Output is being piped. Contextually this means ANSI escape codes and
     /// interaction will be disabled
     piped: bool = false,
+
+    /// The local timezone for converting dates
+    tz: time.TimeZone,
 };
 
 pub const Commands = union(enum) {
@@ -39,6 +43,7 @@ pub const Commands = union(enum) {
         allocator: std.mem.Allocator,
         root: *Root,
         out_fd: anytype,
+        tz: time.TimeZone,
     ) !void {
 
         // create a buffered writer
@@ -48,6 +53,7 @@ pub const Commands = union(enum) {
         // construct runtime options
         const opts: Options = .{
             .piped = !out_fd.isTty(),
+            .tz = tz,
         };
 
         switch (self.*) {
@@ -107,6 +113,7 @@ pub fn execute(
     itt: *cli.ArgIterator,
     root: *Root,
     out_fd: std.fs.File,
+    tz: time.TimeZone,
 ) !void {
     // an allocator that doesn't need to be tracked by the command
     // allows everything to be freed at once
@@ -114,5 +121,5 @@ pub fn execute(
     defer arena.deinit();
 
     var cmd = try Commands.init(arena.allocator(), itt);
-    try cmd.execute(arena.allocator(), root, out_fd);
+    try cmd.execute(arena.allocator(), root, out_fd, tz);
 }

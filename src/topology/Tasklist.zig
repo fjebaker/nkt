@@ -1,7 +1,7 @@
 const std = @import("std");
 const tags = @import("tags.zig");
 const Tag = tags.Tag;
-const Time = @import("types.zig").Time;
+const Time = @import("time.zig").Time;
 const utils = @import("../utils.zig");
 
 const Tasklist = @This();

@@ -1,5 +1,5 @@
 const std = @import("std");
-const Time = @import("types.zig").Time;
+const Time = @import("time.zig").Time;
 const colors = @import("../colors.zig");
 
 pub const Tag = struct {

@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const commands = @import("../commands.zig");
 const Root = @import("../topology/Root.zig");
+const time = @import("../topology/time.zig");
 
 const Self = @This();
 
@@ -19,11 +20,18 @@ pub fn execute(
     _: std.mem.Allocator,
     root: *Root,
     out_writer: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     try out_writer.print(
         \\nkt schema version     : {s}
         \\root directory         : {s}
+        \\timezone               : {s}
+        \\local time             : {s}
         \\
-    , .{ Root.schemaVersion(), root.fs.?.root_path });
+    , .{
+        Root.schemaVersion(),
+        root.fs.?.root_path,
+        opts.tz.tz.name,
+        try time.formatDateTimeBuf(opts.tz.localTimeNow()),
+    });
 }

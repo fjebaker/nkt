@@ -1,8 +1,10 @@
 const std = @import("std");
 const cli = @import("cli.zig");
+const selections = @import("selections.zig");
 const utils = @import("utils.zig");
 
 const Root = @import("topology/Root.zig");
+const time = @import("topology/time.zig");
 const FileSystem = @import("FileSystem.zig");
 const commands = @import("commands.zig");
 const Commands = commands.Commands;
@@ -66,8 +68,12 @@ pub fn main() !void {
     // get the output fd
     const out_fd = std.io.getStdOut();
 
+    // get the local timezone information
+    var tz = try time.getTimeZone(allocator);
+    defer tz.deinit();
+
     // execute the command
-    commands.execute(allocator, &arg_iterator, &root, out_fd) catch |err| {
+    commands.execute(allocator, &arg_iterator, &root, out_fd, tz) catch |err| {
         try handle_execution_error(out_fd.writer(), err);
     };
 
@@ -83,4 +89,5 @@ pub fn main() !void {
 test "main" {
     _ = Root;
     _ = cli;
+    _ = selections;
 }
