@@ -12,8 +12,7 @@ pub const short_help = "Print this help message or help for other commands.";
 pub const long_help =
     \\Print help messages and additional information about subcommands.
 ;
-
-pub const argument_help = cli.extendedHelp(&.{
+pub const arguments = cli.ArgumentsHelp(&.{
     .{
         .arg = "command",
         .help = "Subcommand to print extended help for.",
@@ -23,22 +22,18 @@ pub const argument_help = cli.extendedHelp(&.{
 command: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var command: ?[]const u8 = null;
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            try itt.throwUnknownFlag();
-        }
-        if (command == null) {
-            command = arg.string;
-            if (!isValidCommand(command.?)) {
-                try itt.throwBadArgument("invalid command");
-            }
-        } else {
-            try itt.throwTooManyArguments();
+    const args = try arguments.parseAll(itt);
+    if (args.command) |cmd| {
+        if (!isValidCommand(cmd)) {
+            try cli.throwError(
+                cli.CLIErrors.BadArgument,
+                "help: no such command: '{s}'",
+                .{cmd},
+            );
         }
     }
 
-    return .{ .command = command };
+    return .{ .command = args.command };
 }
 
 pub fn execute(
@@ -64,7 +59,10 @@ fn isValidCommand(command: []const u8) bool {
     return false;
 }
 
-fn printExtendedHelp(writer: anytype, command: []const u8) !void {
+fn printExtendedHelp(
+    writer: anytype,
+    command: []const u8,
+) !void {
     var unknown_command = true;
 
     const info = @typeInfo(Commands).Union;
@@ -74,12 +72,11 @@ fn printExtendedHelp(writer: anytype, command: []const u8) !void {
             @compileError("Subcommand " ++ field.name ++ " needs to define `long_help`");
         }
 
-        const has_argument_help = @hasDecl(field.type, "argument_help");
-        const field_right =
+        const has_arguments = @hasDecl(field.type, "arguments");
+        const field_correct =
             std.mem.eql(u8, field.name, command) or utils.isAlias(field, command);
 
-        if (has_argument_help and field_right) {
-            const arg_help = @field(field.type, "argument_help");
+        if (field_correct) {
             try writer.print("Extended help for '{s}':\n\n", .{field.name});
 
             const long = comptime cli.comptimeWrap(
@@ -97,14 +94,18 @@ fn printExtendedHelp(writer: anytype, command: []const u8) !void {
                 try writer.writeAll("\n\n");
             }
 
-            if (arg_help.len > 0) {
-                try writer.writeAll("Arguments:\n\n");
-                try writer.writeAll(arg_help);
+            if (has_arguments) {
+                const args = @field(field.type, "arguments");
+                if (args.arguments.len > 0) {
+                    try writer.writeAll("Arguments:\n\n");
+                    try args.writeHelp(writer);
+                }
             }
+            try writer.writeByte('\n');
             return;
         }
 
-        if (field_right) unknown_command = false;
+        if (field_correct) unknown_command = false;
     }
 
     if (unknown_command) {

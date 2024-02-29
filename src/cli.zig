@@ -85,7 +85,6 @@ pub const Arg = struct {
             .Float => std.fmt.parseFloat(T, self.string),
             else => @compileError("Could not parse type given."),
         } catch {
-            std.debug.print("{any}\n", .{self});
             return CLIErrors.CouldNotParse;
         };
 
@@ -268,6 +267,18 @@ pub const ArgIterator = struct {
         );
     }
 
+    /// Throw a general unknown argument error. To be used when it doesn't
+    /// matter what the argument was, it was just unwanted.  Throw `UnknownFlag`
+    /// if the last argument was a flag, else throw a `BadArgument` error.
+    pub fn throwUnknown(self: *const ArgIterator) !void {
+        const arg: Arg = self.previous.?;
+        if (arg.flag) {
+            try self.throwUnknownFlag();
+        } else {
+            try self.throwBadArgument("unknown argument");
+        }
+    }
+
     pub fn assertNoArguments(self: *ArgIterator) !void {
         if (try self.next()) |arg| {
             if (arg.flag) {
@@ -313,53 +324,303 @@ test "argument iteration" {
     try argIs((try argitt.next()).?, .{ .flag = true, .string = "q" });
 }
 
-const ExtendedHelpItem = struct {
+/// Argument wrapper for generating help strings and parsing
+pub const ArgumentDescriptor = struct {
+    /// Argument name. Can be either the name itself or a flag Short flags
+    /// should just be `-f`, long flags `--flag`, and short and long
+    /// `-f/--flag`
     arg: []const u8,
+
+    /// Help string
     help: []const u8,
+
+    /// Is a required argument
     required: bool = false,
+
+    /// Should be parsed by the helper
+    parse: bool = true,
 };
 
-const ExtendedHelpOptions = struct {
-    description: []const u8 = "",
+/// For future use
+pub const ExtendedHelpOptions = struct {
+    // description: []const u8 = "",
 };
+
+pub const ArgumentError = error{MalformedName};
 
 const LEFT_PADDING = 4;
 const CENTRE_PADDING = 22;
 const HELP_LEN = 48;
 const HELP_INDENT = 2;
 
-/// Comptime function for constructing extended help strings. Also used to
-/// inform the shell autocompletion.
-pub fn extendedHelp(
-    comptime items: []const ExtendedHelpItem,
-    comptime opts: ExtendedHelpOptions,
-) []const u8 {
-    // for future use
-    _ = opts;
-    @setEvalBranchQuota(10000);
-    comptime var help: []const u8 = "";
+fn allAlphanumeric(s: []const u8) bool {
+    for (s) |c| {
+        if (!std.ascii.isAlphanumeric(c)) return false;
+    }
+    return true;
+}
 
-    inline for (items) |item| {
-        const arg_text = if (item.required)
-            "<" ++ item.arg ++ ">"
-        else
-            "[" ++ item.arg ++ "]";
+const ArgTypeInfo = union(enum) {
+    ShortFlag: struct {
+        name: []const u8,
+        required: bool,
+    },
+    LongFlag: struct {
+        name: []const u8,
+        required: bool,
+    },
+    ShortOrLongFlag: struct {
+        short: []const u8,
+        long: []const u8,
+        required: bool,
+    },
+    Positional: struct {
+        name: []const u8,
+        required: bool,
+    },
 
-        help = help ++
-            " " ** LEFT_PADDING ++
-            arg_text ++
-            " " ** (CENTRE_PADDING - arg_text.len);
-
-        help = help ++ comptimeWrap(item.help, .{
-            .left_pad = LEFT_PADDING + CENTRE_PADDING,
-            .continuation_indent = HELP_INDENT,
-            .column_limit = HELP_LEN,
-        });
-
-        help = help ++ "\n";
+    fn getName(self: ArgTypeInfo) []const u8 {
+        return switch (self) {
+            .ShortFlag => |f| f.name,
+            .LongFlag => |f| f.name,
+            .ShortOrLongFlag => |f| f.long,
+            .Positional => |p| p.name,
+        };
     }
 
-    return help ++ "\n";
+    fn getRequired(self: ArgTypeInfo) bool {
+        return switch (self) {
+            inline else => |f| f.required,
+        };
+    }
+};
+
+fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!ArgTypeInfo {
+    // get rid of any spaces
+    const arg = if (std.mem.indexOfScalar(u8, arg_name, ' ')) |i|
+        arg_name[0..i]
+    else
+        arg_name;
+
+    if (arg[0] == '-') {
+        if (arg.len == 2 and std.ascii.isAlphanumeric(arg[1])) {
+            return .{
+                .ShortFlag = .{
+                    .name = arg[1..],
+                    .required = required,
+                },
+            };
+        } else if (arg.len > 2 and arg[2] == '/') {
+            const short = arg[0..2];
+            const long = arg[3..];
+            if (long[0] == '-' and
+                long[1] == '-' and
+                allAlphanumeric(long[2..]) and
+                allAlphanumeric(short[1..]))
+            {
+                return .{
+                    .ShortOrLongFlag = .{
+                        .short = short[1..],
+                        .long = long[2..],
+                        .required = required,
+                    },
+                };
+            }
+        } else if (arg[1] == '-' and allAlphanumeric(arg[2..])) {
+            return .{
+                .LongFlag = .{
+                    .name = arg[2..],
+                    .required = required,
+                },
+            };
+        }
+    } else if (allAlphanumeric(arg)) {
+        // positional
+        return .{
+            .Positional = .{
+                .name = arg,
+                .required = required,
+            },
+        };
+    }
+    return ArgumentError.MalformedName;
+}
+
+fn testArgName(arg: []const u8, comptime expected: ArgTypeInfo) !void {
+    const info = try getArgTypeInfo(arg, false);
+    try std.testing.expectEqualDeep(expected, info);
+}
+
+test "arg name extraction" {
+    try testArgName("hello", .{
+        .Positional = .{
+            .name = "hello",
+            .required = false,
+        },
+    });
+    try testArgName("-f", .{
+        .ShortFlag = .{
+            .name = "f",
+            .required = false,
+        },
+    });
+    try testArgName("-k/--kiss", .{
+        .ShortOrLongFlag = .{
+            .short = "k",
+            .long = "kiss",
+            .required = false,
+        },
+    });
+    try std.testing.expectError(
+        ArgumentError.MalformedName,
+        getArgTypeInfo("-k//--kiss", false),
+    );
+    try std.testing.expectError(
+        ArgumentError.MalformedName,
+        getArgTypeInfo("-k//--kiss", false),
+    );
+}
+
+fn makeField(
+    comptime arg_name: []const u8,
+    comptime required: bool,
+) std.builtin.Type.StructField {
+    const T = if (required) []const u8 else ?[]const u8;
+    const default = if (required) "" else null;
+    return .{
+        .name = arg_name,
+        .type = T,
+        .default_value = @ptrCast(&@as(T, default)),
+        .is_comptime = false,
+        .alignment = @alignOf(T),
+    };
+}
+
+pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: ExtendedHelpOptions) type {
+    _ = opts;
+
+    comptime var parseable: []const ArgTypeInfo = &.{};
+    inline for (args) |arg| {
+        if (arg.parse) {
+            const info = getArgTypeInfo(arg.arg, arg.required) catch
+                @compileError("Could not extract name from argument for " ++ arg.arg);
+            parseable = parseable ++ .{info};
+        }
+    }
+
+    // create the fields for returning the arguments
+    comptime var fields: []const std.builtin.Type.StructField = &.{};
+    inline for (parseable) |info| {
+        fields = fields ++ .{
+            makeField(info.getName(), info.getRequired()),
+        };
+    }
+
+    const ParsedArguments = @Type(
+        .{ .Struct = .{
+            .layout = .Auto,
+            .is_tuple = false,
+            .fields = fields,
+            .decls = &.{},
+        } },
+    );
+
+    return struct {
+        pub const arguments: []const ArgumentDescriptor = args;
+
+        /// Write the help string for the arguments
+        pub fn writeHelp(writer: anytype) !void {
+            for (arguments) |arg| {
+                try writer.writeByteNTimes(' ', LEFT_PADDING);
+                // print the argument itself
+                if (arg.required) {
+                    try writer.print("<{s}>", .{arg.arg});
+                } else {
+                    try writer.print("[{s}]", .{arg.arg});
+                }
+                try writer.writeByteNTimes(' ', CENTRE_PADDING - arg.arg.len - 2);
+                try writeWrapped(writer, arg.help, .{
+                    .left_pad = LEFT_PADDING + CENTRE_PADDING,
+                    .continuation_indent = HELP_INDENT,
+                    .column_limit = HELP_LEN,
+                });
+
+                try writer.writeByte('\n');
+            }
+        }
+
+        const Self = @This();
+
+        itt: *ArgIterator,
+        parsed: ParsedArguments = .{},
+
+        pub fn init(itt: *ArgIterator) Self {
+            return .{ .itt = itt };
+        }
+
+        /// Parses all arguments and exhausts the `ArgIterator`. Returns a
+        /// structure containing all the arguments.
+        pub fn parseAll(itt: *ArgIterator) !ParsedArguments {
+            var self = Self.init(itt);
+            while (try itt.next()) |arg| {
+                switch (try self.parseArgImpl(arg)) {
+                    .UnparsedFlag => try itt.throwUnknownFlag(),
+                    .UnparsedPositional => try itt.throwTooManyArguments(),
+                    else => {},
+                }
+            }
+            return self.parsed;
+        }
+
+        /// Parse the arguments from the argument iterator. This method is to
+        /// be fed one argument at a time. Returns `false` if the argument was
+        /// not used, allowing other parsing code to be used in tandem.
+        pub fn parseArg(self: *Self, arg: Arg) !bool {
+            return switch (try self.parseArgImpl(arg)) {
+                .ParsedFlag, .ParsedPositional => true,
+                .UnparsedFlag, .UnparsedPositional => false,
+            };
+        }
+
+        const ParseArgOutcome = enum {
+            ParsedFlag,
+            ParsedPositional,
+            UnparsedFlag,
+            UnparsedPositional,
+        };
+
+        fn parseArgImpl(self: *Self, arg: Arg) !ParseArgOutcome {
+            inline for (parseable) |p| {
+                switch (p) {
+                    .LongFlag => |i| if (arg.is(null, i.name)) {
+                        const next = try self.itt.getValue();
+                        @field(self.parsed, p.getName()) = next.string;
+                        return .ParsedFlag;
+                    },
+                    .ShortFlag => |i| if (arg.is(i.name, null)) {
+                        const next = try self.itt.getValue();
+                        @field(self.parsed, p.getName()) = next.string;
+                        return .ParsedFlag;
+                    },
+                    .ShortOrLongFlag => |i| if (arg.is(i.short[0], i.long)) {
+                        const next = try self.itt.getValue();
+                        @field(self.parsed, p.getName()) = next.string;
+                        return .ParsedFlag;
+                    },
+                    .Positional => if (!arg.flag) {
+                        @field(self.parsed, p.getName()) = arg.string;
+                        return .ParsedPositional;
+                    },
+                }
+            }
+
+            if (arg.flag) {
+                return .UnparsedFlag;
+            } else {
+                return .UnparsedPositional;
+            }
+        }
+    };
 }
 
 pub const WrappingOptions = struct {
@@ -368,7 +629,8 @@ pub const WrappingOptions = struct {
     column_limit: usize = 70,
 };
 
-/// Wrap a string over a number of lines in a comptime context
+/// Wrap a string over a number of lines in a comptime context. See also
+/// `writeWrapped` for a runtime version.
 pub fn comptimeWrap(comptime text: []const u8, comptime opts: WrappingOptions) []const u8 {
     @setEvalBranchQuota(10000);
     comptime var out: []const u8 = "";
@@ -394,4 +656,25 @@ pub fn comptimeWrap(comptime text: []const u8, comptime opts: WrappingOptions) [
     }
 
     return out;
+}
+
+/// Wrap a string over a number of lines in a comptime context.
+pub fn writeWrapped(writer: anytype, text: []const u8, opts: WrappingOptions) !void {
+    var line_len: usize = 0;
+    var itt = std.mem.splitAny(u8, text, " \n");
+    if (itt.next()) |first| {
+        try writer.writeAll(first);
+        line_len += first.len;
+    }
+
+    while (itt.next()) |word| {
+        try writer.writeByte(' ');
+        line_len += word.len;
+        if (line_len > opts.column_limit) {
+            try writer.writeByte('\n');
+            try writer.writeByteNTimes(' ', opts.left_pad + opts.continuation_indent);
+            line_len = opts.continuation_indent;
+        }
+        try writer.writeAll(word);
+    }
 }
