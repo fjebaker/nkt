@@ -529,11 +529,7 @@ pub fn addNewCollection(
         .path = try self.newPathFrom(name, t),
     };
 
-    return switch (t) {
-        .CollectionDirectory => self.addNewDirectory(descr),
-        .CollectionJournal => self.addNewJournal(descr),
-        .CollectionTasklist => self.addNewTasklist(descr),
-    };
+    return self.addNewCollectionFromDescription(descr, t);
 }
 
 fn lookupCollection(
@@ -625,7 +621,8 @@ pub fn getCollection(
     try self.lookupCollection(descr, t);
 }
 
-/// Get a `Journal` by name. Returns `null` if name is invalid.
+/// Get a `Journal` by name. Returns `null` if name is invalid. `deinit` must
+/// be called on the journal by the caller.
 pub fn getJournal(self: *Root, name: []const u8) !?Journal {
     return self.getCollection(name, .CollectionJournal);
 }
