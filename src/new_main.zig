@@ -109,19 +109,9 @@ const TestState = struct {
 };
 
 fn testExecute(
-    comptime command: [:0]const u8,
     state: TestState,
+    comptime args: []const [:0]const u8,
 ) !void {
-    comptime var args: []const []const u8 = &.{};
-
-    // cut up the command
-    comptime {
-        var itt = std.mem.tokenize(u8, command, " ");
-        inline while (itt.next()) |word| {
-            args = args ++ [_][]const u8{word};
-        }
-    }
-
     var arg_iterator = cli.ArgIterator.init(args);
     // no skip first since tests exclude the command name
     try commands.execute(
@@ -164,6 +154,6 @@ test "end-to-end" {
     };
 
     // basic commands work
-    try testExecute("help", state);
-    try testExecute("config", state);
+    try testExecute(state, &.{"help"});
+    try testExecute(state, &.{"config"});
 }
