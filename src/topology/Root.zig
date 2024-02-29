@@ -202,9 +202,6 @@ pub fn loadFromString(self: *Root, string: []const u8) !void {
 
 pub fn deinit(self: *Root) void {
     self.cache.deinit();
-    self.allocator.free(self.info.tasklists);
-    self.allocator.free(self.info.directories);
-    self.allocator.free(self.info.journals);
     if (self.tag_descriptors) |*td| td.deinit();
     if (self.chain_list) |*cl| cl.deinit();
     self.arena.deinit();
@@ -295,7 +292,8 @@ pub fn getTags(self: *Root) ?[]const Tag.Descriptor {
 /// `CollectionType` and name already exists.
 pub fn addDescriptor(self: *Root, descr: Descriptor, comptime t: CollectionType) !void {
     var list = std.ArrayList(Descriptor).fromOwnedSlice(
-        self.allocator,
+        // we use the arena allocator for the infos
+        self.arena.allocator(),
         @field(self.info, t.toFieldName()),
     );
 
