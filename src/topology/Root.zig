@@ -6,14 +6,21 @@ pub const Tasklist = @import("Tasklist.zig");
 const chains = @import("chains.zig");
 const tags = @import("tags.zig");
 pub const Tag = tags.Tag;
-const types = @import("time.zig");
-pub const Time = types.Time;
-pub const timeNow = types.timeNow;
+const time = @import("time.zig");
+pub const Time = time.Time;
+pub const timeNow = time.timeNow;
 const FileSystem = @import("../FileSystem.zig");
 
 const Root = @This();
 
-pub const Error = error{ DuplicateItem, NeedsFileSystem };
+/// The filename of the root topology file
+pub const ROOT_FILEPATH = "topology.json";
+
+pub const Error = error{
+    DuplicateItem,
+    NeedsFileSystem,
+    InvalidExtension,
+};
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
     .major = 0,
@@ -63,7 +70,15 @@ pub const CollectionType = enum {
         };
     }
 
-    fn toType(comptime t: CollectionType) type {
+    fn getTopologyName(comptime t: CollectionType) []const u8 {
+        return switch (t) {
+            .CollectionDirectory => Directory.TOPOLOGY_FILENAME,
+            .CollectionJournal => Journal.TOPOLOGY_FILENAME,
+            .CollectionTasklist => Tasklist.TOPOLOGY_FILENAME,
+        };
+    }
+
+    fn ToType(comptime t: CollectionType) type {
         return switch (t) {
             .CollectionDirectory => Directory,
             .CollectionJournal => Journal,
@@ -138,6 +153,8 @@ const Cache = struct {
 info: Info,
 cache: Cache,
 allocator: std.mem.Allocator,
+// allocator for when things need to have the same lifetime as the root
+arena: std.heap.ArenaAllocator,
 tag_descriptors: ?tags.DescriptorList = null,
 chain_list: ?chains.ChainList = null,
 fs: ?FileSystem = null,
@@ -155,6 +172,7 @@ pub fn new(alloc: std.mem.Allocator) Root {
         .info = info,
         .cache = cache,
         .allocator = alloc,
+        .arena = std.heap.ArenaAllocator.init(alloc),
     };
 }
 
@@ -165,6 +183,7 @@ pub fn deinit(self: *Root) void {
     self.allocator.free(self.info.journals);
     if (self.tag_descriptors) |*td| td.deinit();
     if (self.chain_list) |*cl| cl.deinit();
+    self.arena.deinit();
     self.* = undefined;
 }
 
@@ -230,7 +249,7 @@ fn createFileStructure(
     try fs.makeDirIfNotExists(dir_name);
 
     // get the type of the collection we have just added
-    const T = t.toType();
+    const T = t.ToType();
 
     // serialize a new blank topology file
     const str = try T.defaultSerialize(self.allocator);
@@ -419,6 +438,82 @@ test "serialize" {
     try std.testing.expectEqualStrings(str_with_dir, expected_with_dir);
 }
 
+fn getPathPrefix(t: CollectionType) []const u8 {
+    return switch (t) {
+        .CollectionDirectory => Directory.PATH_PREFIX,
+        .CollectionJournal => Journal.PATH_PREFIX,
+        .CollectionTasklist => unreachable,
+    };
+}
+
+// TODO: verify the extension is actually a valid one / we have a text compiler
+// for it
+fn getExtension(_: *const Root, comptime t: CollectionType, opts: NewCollectionOptions) error{InvalidExtension}![]const u8 {
+    const ext = switch (t) {
+        .CollectionDirectory => opts.extension orelse "md",
+        .CollectionTasklist, .CollectionJournal => "json",
+    };
+
+    // trim the period
+    if (ext[0] == '.') {
+        return ext[1..];
+    } else {
+        return ext;
+    }
+}
+
+fn newPathFrom(
+    self: *Root,
+    name: []const u8,
+    comptime t: CollectionType,
+) ![]const u8 {
+    var alloc = self.arena.allocator();
+    const base_dir = switch (t) {
+        .CollectionDirectory => try std.mem.join(
+            alloc,
+            ".",
+            &.{ Directory.PATH_PREFIX, name },
+        ),
+        .CollectionJournal => try std.mem.join(
+            alloc,
+            ".",
+            &.{ Journal.PATH_PREFIX, name },
+        ),
+        .CollectionTasklist => Tasklist.TASKLIST_DIRECTORY,
+    };
+
+    return try std.fs.path.join(
+        alloc,
+        &.{ base_dir, t.getTopologyName() },
+    );
+}
+
+const NewCollectionOptions = struct {
+    extension: ?[]const u8 = null,
+};
+
+/// Add a new collection of type `CollectionType`. Returns the corresponding
+/// collection instance.
+pub fn addNewCollection(
+    self: *Root,
+    name: []const u8,
+    comptime t: CollectionType,
+) !t.ToType() {
+    const now = time.timeNow();
+    const descr: Descriptor = .{
+        .name = name,
+        .created = now,
+        .modified = now,
+        .path = try self.newPathFrom(name, t),
+    };
+
+    return switch (t) {
+        .CollectionDirectory => self.addNewDirectory(descr),
+        .CollectionJournal => self.addNewJournal(descr),
+        .CollectionTasklist => self.addNewTasklist(descr),
+    };
+}
+
 /// Add a new `Journal` to the index, and return a pointer into the cache to
 /// allow modification.
 pub fn addNewJournal(self: *Root, descr: Descriptor) !Journal {
@@ -475,10 +570,47 @@ fn lookupDirectory(self: *Root, descr: Descriptor) Directory {
     };
 }
 
-pub const ROOT_FILEPATH = "topology.json";
+/// Get a `Journal` by name. Returns `null` if name is invalid.
+pub fn getJournal(self: *Root, name: []const u8) !?Journal {
+    const descr = self.getDescriptor(name, .CollectionJournal) orelse
+        return null;
+    _ = descr;
+}
+
+/// Add all of the default collections to the root
+pub fn addInitialCollections(self: *Root) !void {
+    _ = try self.addNewCollection(
+        self.info.default_directory,
+        .CollectionDirectory,
+    );
+    // the journal has an accompanying notes directory
+    _ = try self.addNewCollection(
+        self.info.default_journal,
+        .CollectionJournal,
+    );
+    _ = try self.addNewCollection(
+        self.info.default_journal,
+        .CollectionDirectory,
+    );
+    _ = try self.addNewCollection(
+        self.info.default_tasklist,
+        .CollectionTasklist,
+    );
+
+    // initialize an empty tag descriptor list
+    self.tag_descriptors = tags.DescriptorList{
+        .allocator = self.allocator,
+    };
+
+    // initialize an empty chain list
+    self.chain_list = chains.ChainList{
+        .mem = std.heap.ArenaAllocator.init(self.allocator),
+    };
+}
 
 /// Create the file system. Overwrites any existing files, only to be used for
-/// initalization or migration, else risks deleting existing data if not all read.
+/// initalization or migration, else risks deleting existing data if not all
+/// read.
 pub fn createFilesystem(self: *Root) !void {
     var fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
 

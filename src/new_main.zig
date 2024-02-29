@@ -54,7 +54,7 @@ pub fn main() !void {
     defer allocator.free(root_path);
 
     // initialize the file system abstraction
-    var fs = try FileSystem.init(root_path);
+    var fs = try FileSystem.initElseCreate(root_path);
     defer fs.deinit();
 
     // get the output fd
@@ -66,7 +66,9 @@ pub fn main() !void {
 
     try nkt_main(allocator, raw_args, out_fd, tz, fs);
 
-    if (@import("builtin").mode != .Debug) {
+    if (@import("builtin").mode == .Debug) {
+        std.log.default.debug("clean exit", .{});
+    } else {
         // let the operating system clear up for us
         std.process.exit(0);
     }
@@ -86,6 +88,7 @@ pub fn nkt_main(
     _ = try arg_iterator.next();
 
     var root = Root.new(allocator);
+    defer root.deinit();
     // give a filesystem handle to the root
     root.fs = fs;
 

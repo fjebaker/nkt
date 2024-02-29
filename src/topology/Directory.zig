@@ -7,6 +7,7 @@ const FileSystem = @import("../FileSystem.zig");
 const Directory = @This();
 
 pub const TOPOLOGY_FILENAME = "topology.json";
+pub const PATH_PREFIX = "dir";
 
 pub const Note = struct {
     name: []const u8,

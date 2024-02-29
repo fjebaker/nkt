@@ -91,3 +91,37 @@ pub fn readTagDescriptors(
     defer parsed.deinit();
     return try DescriptorList.init(allocator, parsed.value.tags);
 }
+
+pub const Error = error{TagNotLowercase};
+
+/// name of the tag if it is, else null. Will throw a `TagNotLowercase` error
+/// if the tag is not lowercase.
+pub fn isTagString(string: []const u8) error{TagNotLowercase}!?[]const u8 {
+    if (string[0] == '@') {
+        for (string[1..], 1..) |c, end| {
+            switch (c) {
+                'a'...'z', '.', '-' => {},
+                'A'...'Z' => return Error.TagNotLowercase,
+                else => return string[1 .. end - 1],
+            }
+        }
+        return string[1..];
+    }
+    return null;
+}
+
+fn testIsTagString(string: []const u8, comptime name: ?[]const u8) !void {
+    const parsed = try isTagString(string);
+    try std.testing.expectEqualDeep(name, parsed);
+}
+
+test "tag strings" {
+    try testIsTagString("@hello", "hello");
+    try testIsTagString("hello", null);
+    try testIsTagString("@thing.another.thing", "thing.another.thing");
+    try testIsTagString("@kebab-case", "kebab-case");
+    try std.testing.expectError(
+        Error.TagNotLowercase,
+        testIsTagString("@ohNo", null),
+    );
+}

@@ -7,6 +7,7 @@ const utils = @import("../utils.zig");
 const Tasklist = @This();
 
 pub const TOPOLOGY_FILENAME = "topology.json";
+pub const TASKLIST_DIRECTORY = "tasklists";
 
 pub const Status = enum {
     PastDue,
