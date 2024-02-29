@@ -61,18 +61,29 @@ fn allNumeric(string: []const u8) bool {
     return true;
 }
 
-fn isDate(string: []const u8) bool {
+/// Counts the occurances of `spacer` in `string` and ensures all non spacer
+/// characters are digits, else returns null. Returns `spacer` count.
+fn formattedDigitFilter(comptime spacer: u8, string: []const u8) ?usize {
+    var spacer_count: usize = 0;
     for (string) |c| {
-        if (!std.ascii.isDigit(c) and c != '-') return false;
+        if (!std.ascii.isDigit(c) and c != spacer) return null;
+        if (c == spacer) spacer_count += 1;
     }
-    return true;
+    return spacer_count;
+}
+
+fn isDate(string: []const u8) bool {
+    if (formattedDigitFilter('-', string)) |count| {
+        if (count == 2) return true;
+    }
+    return false;
 }
 
 fn isTime(string: []const u8) bool {
-    for (string) |c| {
-        if (!std.ascii.isDigit(c) and c != ':') return false;
+    if (formattedDigitFilter(':', string)) |count| {
+        if (count == 2) return true;
     }
-    return true;
+    return false;
 }
 
 fn asSelector(arg: []const u8) !Selector {
@@ -89,9 +100,9 @@ fn asSelector(arg: []const u8) !Selector {
         } };
     } else if (isDate(arg)) {
         return .{ .ByDate = try time.toDate(arg) };
+    } else {
+        return .{ .ByName = arg };
     }
-
-    return Error.UnknownSelection;
 }
 
 fn testAsSelector(arg: []const u8, comptime expected: Selector) !void {
@@ -105,9 +116,31 @@ test "asSelector" {
         .qualifier = 'k',
         .index = 123,
     } });
+    try testAsSelector(
+        "h123.",
+        .{ .ByName = "h123." },
+    );
     try testAsSelector("2023-12-31", .{
         .ByDate = try time.newDate(2023, 12, 31),
     });
+    try testAsSelector(
+        "202312-31",
+        .{ .ByName = "202312-31" },
+    );
+    try testAsSelector(
+        "hello",
+        .{ .ByName = "hello" },
+    );
+}
+
+/// Translate the qualifier character to a `Root.CollectionType` For example
+/// `t` becomes `.CollectionTasklist`
+fn qualifierToCollection(q: u8) !Root.CollectionType {
+    return switch (q) {
+        't' => .CollectionTasklist,
+        'e' => .CollectionJournal,
+        else => Error.IndexQualifierUnknown,
+    };
 }
 
 pub const Parser = struct {
@@ -122,8 +155,23 @@ pub const Parser = struct {
         return false;
     }
 
-    fn parseAsPositional(_: *Parser, _: []const u8) !bool {
-        return false;
+    fn parseAsPositional(self: *Parser, arg: []const u8) !bool {
+        const selector = try asSelector(arg);
+
+        switch (selector) {
+            .ByQualifiedIndex => |qi| {
+                self.selection.collection_type = try qualifierToCollection(
+                    qi.qualifier,
+                );
+            },
+            .ByIndex => {
+                self.selection.collection_type = .CollectionJournal;
+            },
+            else => {},
+        }
+
+        self.selection.selector = selector;
+        return true;
     }
 
     /// Parse the selection from an arg iterator. Returns `true` if the
@@ -138,11 +186,6 @@ pub const Parser = struct {
         // we are done from the previous call
         return true;
     }
-
-    /// Get the selection in its current state from the arguments parsed
-    pub fn selection(self: *const Parser) Selection {
-        return self.selection;
-    }
 };
 
 fn testParser(string: []const u8, comptime expected: Selection) !void {
@@ -156,7 +199,31 @@ fn testParser(string: []const u8, comptime expected: Selection) !void {
         _ = try parser.parseNextArg(arg);
     }
 
-    const selection = parser.selection();
-    _ = selection;
-    _ = expected;
+    const selection = parser.selection;
+
+    try std.testing.expectEqualDeep(expected, selection);
+}
+
+test "selection parser" {
+    try testParser(
+        "t4",
+        .{ .selector = .{
+            .ByQualifiedIndex = .{
+                .qualifier = 't',
+                .index = 4,
+            },
+        }, .collection_type = .CollectionTasklist },
+    );
+    try testParser(
+        "hello",
+        .{ .selector = .{
+            .ByName = "hello",
+        } },
+    );
+    try testParser(
+        "123",
+        .{ .selector = .{
+            .ByIndex = 123,
+        }, .collection_type = .CollectionJournal },
+    );
 }
