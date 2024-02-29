@@ -316,6 +316,7 @@ test "argument iteration" {
 const ExtendedHelpItem = struct {
     arg: []const u8,
     help: []const u8,
+    required: bool = false,
 };
 
 const ExtendedHelpOptions = struct {
@@ -335,14 +336,19 @@ pub fn extendedHelp(
 ) []const u8 {
     // for future use
     _ = opts;
-    @setEvalBranchQuota(5000);
+    @setEvalBranchQuota(10000);
     comptime var help: []const u8 = "";
 
     inline for (items) |item| {
+        const arg_text = if (item.required)
+            "<" ++ item.arg ++ ">"
+        else
+            "[" ++ item.arg ++ "]";
+
         help = help ++
             " " ** LEFT_PADDING ++
-            item.arg ++
-            " " ** (CENTRE_PADDING - item.arg.len);
+            arg_text ++
+            " " ** (CENTRE_PADDING - arg_text.len);
 
         help = help ++ comptimeWrap(item.help, .{
             .left_pad = LEFT_PADDING + CENTRE_PADDING,
@@ -359,15 +365,15 @@ pub fn extendedHelp(
 pub const WrappingOptions = struct {
     left_pad: usize = 0,
     continuation_indent: usize = 0,
-    column_limit: usize = 80,
+    column_limit: usize = 70,
 };
 
 /// Wrap a string over a number of lines in a comptime context
 pub fn comptimeWrap(comptime text: []const u8, comptime opts: WrappingOptions) []const u8 {
+    @setEvalBranchQuota(10000);
     comptime var out: []const u8 = "";
     comptime var line_len: usize = 0;
-    // comptime var itt = std.mem.split(u8, item.help, " ");
-    comptime var itt = std.mem.split(u8, text, " ");
+    comptime var itt = std.mem.splitAny(u8, text, " \n");
 
     // so we can reinsert the spaces correctly we do the first word first
     if (itt.next()) |first_word| {
@@ -375,7 +381,7 @@ pub fn comptimeWrap(comptime text: []const u8, comptime opts: WrappingOptions) [
         line_len += first_word.len;
     }
     // followed by all others words
-    while (itt.next()) |word| {
+    inline while (itt.next()) |word| {
         out = out ++ " ";
         line_len += word.len;
         if (line_len > opts.column_limit) {

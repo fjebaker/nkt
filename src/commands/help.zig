@@ -15,7 +15,7 @@ pub const long_help =
 
 pub const argument_help = cli.extendedHelp(&.{
     .{
-        .arg = "[command]",
+        .arg = "command",
         .help = "Subcommand to print extended help for.",
     },
 }, .{});
@@ -79,12 +79,12 @@ fn printExtendedHelp(writer: anytype, command: []const u8) !void {
             std.mem.eql(u8, field.name, command) or utils.isAlias(field, command);
 
         if (has_argument_help and field_right) {
-            const eh = @field(field.type, "argument_help");
+            const arg_help = @field(field.type, "argument_help");
             try writer.print("Extended help for '{s}':\n\n", .{field.name});
 
             const long = comptime cli.comptimeWrap(
                 @field(field.type, "long_help"),
-                .{ .column_limit = 80 },
+                .{},
             );
             try writer.writeAll(long);
             try writer.writeAll("\n\n");
@@ -97,7 +97,10 @@ fn printExtendedHelp(writer: anytype, command: []const u8) !void {
                 try writer.writeAll("\n\n");
             }
 
-            try writer.writeAll(eh);
+            if (arg_help.len > 0) {
+                try writer.writeAll("Arguments:\n\n");
+                try writer.writeAll(arg_help);
+            }
             return;
         }
 
