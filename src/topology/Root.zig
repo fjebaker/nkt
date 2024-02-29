@@ -39,6 +39,17 @@ pub const Descriptor = struct {
     modified: Time,
 };
 
+/// Struct representing the different methods for compiling and exporting
+/// notes.
+pub const TextCompiler = struct {
+    /// Name for internal use
+    name: []const u8,
+    /// Command used to compile / export the text
+    command: ?[]const []const u8 = null,
+    /// File extensions that it is applicable for
+    extensions: []const []const u8,
+};
+
 pub const CollectionType = enum {
     CollectionJournal,
     CollectionDirectory,
@@ -75,6 +86,12 @@ const Info = struct {
     // path to where we store the chains file
     chainpath: []const u8 = "chains.json",
     tagpath: []const u8 = "tags.json",
+
+    // different text compilers
+    text_compilers: []const TextCompiler = &.{
+        // include the default markdown compiler
+        .{ .name = "markdown", .extensions = &.{".md"} },
+    },
 
     tasklists: []Descriptor,
     directories: []Descriptor,
@@ -337,6 +354,15 @@ test "serialize" {
         \\    "default_journal": "diary",
         \\    "chainpath": "chains.json",
         \\    "tagpath": "tags.json",
+        \\    "text_compilers": [
+        \\        {
+        \\            "name": "markdown",
+        \\            "command": null,
+        \\            "extensions": [
+        \\                ".md"
+        \\            ]
+        \\        }
+        \\    ],
         \\    "tasklists": [],
         \\    "directories": [],
         \\    "journals": []
@@ -369,6 +395,15 @@ test "serialize" {
         \\    "default_journal": "diary",
         \\    "chainpath": "chains.json",
         \\    "tagpath": "tags.json",
+        \\    "text_compilers": [
+        \\        {
+        \\            "name": "markdown",
+        \\            "command": null,
+        \\            "extensions": [
+        \\                ".md"
+        \\            ]
+        \\        }
+        \\    ],
         \\    "tasklists": [],
         \\    "directories": [
         \\        {
