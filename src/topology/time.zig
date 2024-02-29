@@ -20,6 +20,16 @@ pub const TimeZone = struct {
         self.* = undefined;
     }
 
+    /// Initialize a UTC timezone
+    pub fn initUTC(allocator: std.mem.Allocator) !TimeZone {
+        const utc_copy = try allocator.dupe(u8, "UTC");
+        const tz = time.datetime.Timezone.create(utc_copy, 0);
+        return .{
+            .tz = tz,
+            .allocator = allocator,
+        };
+    }
+
     /// Convert a given date to a local date
     pub fn localDate(self: TimeZone, date: Date) Date {
         return date.shiftTimezone(&self.tz);
