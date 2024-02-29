@@ -4,10 +4,6 @@ const utils = @import("utils.zig");
 const farbe = @import("farbe");
 const ListIterator = utils.ListIterator;
 
-// pub const selections = @import("cli/selections.zig");
-// pub const Selection = selections.Selection;
-// pub const SelectionError = selections.SelectionError;
-
 pub const CLIErrors = error{
     BadArgument,
     CannotParseFlagAsPositional,
@@ -364,15 +360,18 @@ const ArgTypeInfo = union(enum) {
     ShortFlag: struct {
         name: []const u8,
         required: bool,
+        with_value: bool = false,
     },
     LongFlag: struct {
         name: []const u8,
         required: bool,
+        with_value: bool = false,
     },
     ShortOrLongFlag: struct {
         short: []const u8,
         long: []const u8,
         required: bool,
+        with_value: bool = false,
     },
     Positional: struct {
         name: []const u8,
@@ -396,11 +395,17 @@ const ArgTypeInfo = union(enum) {
 };
 
 fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!ArgTypeInfo {
+    var with_value: bool = false;
     // get rid of any spaces
-    const arg = if (std.mem.indexOfScalar(u8, arg_name, ' ')) |i|
-        arg_name[0..i]
-    else
-        arg_name;
+    const arg = blk: {
+        if (std.mem.indexOfScalar(u8, arg_name, ' ')) |i| {
+            // accepts a value
+            with_value = true;
+            break :blk arg_name[0..i];
+        } else {
+            break :blk arg_name;
+        }
+    };
 
     if (arg[0] == '-') {
         if (arg.len == 2 and std.ascii.isAlphanumeric(arg[1])) {
@@ -408,6 +413,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                 .ShortFlag = .{
                     .name = arg[1..],
                     .required = required,
+                    .with_value = with_value,
                 },
             };
         } else if (arg.len > 2 and arg[2] == '/') {
@@ -423,6 +429,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                         .short = short[1..],
                         .long = long[2..],
                         .required = required,
+                        .with_value = with_value,
                     },
                 };
             }
@@ -431,6 +438,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                 .LongFlag = .{
                     .name = arg[2..],
                     .required = required,
+                    .with_value = with_value,
                 },
             };
         }
@@ -469,6 +477,14 @@ test "arg name extraction" {
             .short = "k",
             .long = "kiss",
             .required = false,
+        },
+    });
+    try testArgName("-k/--kiss thing", .{
+        .ShortOrLongFlag = .{
+            .short = "k",
+            .long = "kiss",
+            .required = false,
+            .with_value = true,
         },
     });
     try std.testing.expectError(
@@ -607,9 +623,18 @@ pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: E
                         @field(self.parsed, p.getName()) = next.string;
                         return .ParsedFlag;
                     },
-                    .Positional => if (!arg.flag) {
-                        @field(self.parsed, p.getName()) = arg.string;
-                        return .ParsedPositional;
+                    inline .Positional => |pos| if (!arg.flag) {
+                        if (pos.required) {
+                            if (@field(self.parsed, pos.name).len == 0) {
+                                @field(self.parsed, pos.name) = arg.string;
+                                return .ParsedPositional;
+                            }
+                        } else {
+                            if (@field(self.parsed, pos.name) == null) {
+                                @field(self.parsed, pos.name) = arg.string;
+                                return .ParsedPositional;
+                            }
+                        }
                     },
                 }
             }
