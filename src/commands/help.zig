@@ -80,7 +80,7 @@ fn printExtendedHelp(writer: anytype, command: []const u8) !void {
 
         if (has_argument_help and field_right) {
             const eh = @field(field.type, "argument_help");
-            try writer.print("Extended help for {s}:\n\n", .{field.name});
+            try writer.print("Extended help for '{s}':\n\n", .{field.name});
 
             const long = comptime cli.comptimeWrap(
                 @field(field.type, "long_help"),
