@@ -27,7 +27,7 @@ fn errorString(err: CLIErrors) []const u8 {
 }
 
 /// Wrapper for returning errors with helpful messages printed to `stderr`
-pub fn throwError(comptime err: anyerror, comptime fmt: []const u8, args: anytype) !void {
+pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) !void {
     var stderr = std.io.getStdErr();
     var writer = stderr.writer();
 
@@ -378,7 +378,7 @@ const ArgTypeInfo = union(enum) {
         required: bool,
     },
 
-    fn getName(self: ArgTypeInfo) []const u8 {
+    fn getName(comptime self: ArgTypeInfo) []const u8 {
         return switch (self) {
             .ShortFlag => |f| f.name,
             .LongFlag => |f| f.name,
@@ -387,10 +387,42 @@ const ArgTypeInfo = union(enum) {
         };
     }
 
-    fn getRequired(self: ArgTypeInfo) bool {
+    fn getRequired(comptime self: ArgTypeInfo) bool {
         return switch (self) {
             inline else => |f| f.required,
         };
+    }
+
+    fn isWithValue(comptime self: ArgTypeInfo) bool {
+        return switch (self) {
+            .Positional => @compileError("With value is meaningless for positional"),
+            inline else => |f| f.with_value,
+        };
+    }
+
+    fn isFlag(comptime self: ArgTypeInfo) bool {
+        return switch (self) {
+            .LongFlag, .ShortFlag, .ShortOrLongFlag => true,
+            .Positional => false,
+        };
+    }
+
+    fn GetType(comptime self: ArgTypeInfo) type {
+        const T = if (self.isFlag() and !self.isWithValue())
+            bool
+        else
+            []const u8;
+
+        return if (self.getRequired()) T else ?T;
+    }
+
+    fn getDefaultValue(comptime self: ArgTypeInfo) GetType(self) {
+        if (!self.getRequired()) return null;
+        if (self.isFlag() and !self.isWithValue()) {
+            return false;
+        } else {
+            return "";
+        }
     }
 };
 
@@ -498,11 +530,11 @@ test "arg name extraction" {
 }
 
 fn makeField(
-    comptime arg_name: []const u8,
-    comptime required: bool,
+    comptime info: ArgTypeInfo,
 ) std.builtin.Type.StructField {
-    const T = if (required) []const u8 else ?[]const u8;
-    const default = if (required) "" else null;
+    const arg_name = info.getName();
+    const T = info.GetType();
+    const default = info.getDefaultValue();
     return .{
         .name = arg_name,
         .type = T,
@@ -527,22 +559,20 @@ pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: E
     // create the fields for returning the arguments
     comptime var fields: []const std.builtin.Type.StructField = &.{};
     inline for (parseable) |info| {
-        fields = fields ++ .{
-            makeField(info.getName(), info.getRequired()),
-        };
+        fields = fields ++ .{makeField(info)};
     }
-
-    const ParsedArguments = @Type(
-        .{ .Struct = .{
-            .layout = .Auto,
-            .is_tuple = false,
-            .fields = fields,
-            .decls = &.{},
-        } },
-    );
 
     return struct {
         pub const arguments: []const ArgumentDescriptor = args;
+
+        pub const ParsedArguments = @Type(
+            .{ .Struct = .{
+                .layout = .Auto,
+                .is_tuple = false,
+                .fields = fields,
+                .decls = &.{},
+            } },
+        );
 
         /// Write the help string for the arguments
         pub fn writeHelp(writer: anytype) !void {
