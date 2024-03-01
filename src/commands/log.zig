@@ -66,63 +66,35 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 }
 
 pub fn execute(
-    _: *Self,
+    self: *Self,
     _: std.mem.Allocator,
-    _: *Root,
-    _: anytype,
+    root: *Root,
+    writer: anytype,
     _: commands.Options,
 ) !void {
-    // const journal_name = self.args.journal orelse
-    //     root.info.default_journal;
+    // load the topology
+    try root.load();
 
-    // root.getJournal
+    const journal_name = self.args.journal orelse
+        root.info.default_journal;
+
+    var j = (try root.getJournal(journal_name)) orelse {
+        try cli.throwError(
+            Root.Error.NoSuchCollection,
+            "Journal '{s}' does not exist",
+            .{journal_name},
+        );
+        unreachable;
+    };
+    defer j.deinit();
+
+    const day = try j.addNewEntryFromText(self.args.text, self.tags);
+
+    try root.writeChanges();
+    try j.writeDays();
+
+    try writer.print(
+        "Written entry to '{s}' in journal '{s}'\n",
+        .{ day.name, j.descriptor.name },
+    );
 }
-
-// pub fn run(
-//     self: *Self,
-//     state: *State,
-//     out_writer: anytype,
-// ) !void {
-//     const journal_name: []const u8 = self.journal orelse "diary";
-
-//     var journal = state.getJournal(journal_name) orelse
-//         return cli.SelectionError.NoSuchCollection;
-
-//     const today_string = try utils.formatDateBuf(utils.Date.now());
-//     var entry = journal.get(&today_string) orelse
-//         try journal.Journal.newDay(&today_string);
-
-//     var contexts = try tags.parseContexts(state.allocator, self.text.?);
-//     defer contexts.deinit();
-
-//     const allowed_tags = state.getTagInfo();
-
-//     const ts = try contexts.getTags(allowed_tags);
-
-//     var ptr_to_entry = try entry.Day.add(self.text.?);
-//     try tags.addTags(
-//         journal.Journal.content.allocator(),
-//         &ptr_to_entry.tags,
-//         ts,
-//     );
-
-//     if (self.tags.items.len > 0) {
-//         const appended_tags = try tags.makeTagList(
-//             state.allocator,
-//             self.tags.items,
-//             allowed_tags,
-//         );
-//         defer state.allocator.free(appended_tags);
-//         try tags.addTags(
-//             journal.Journal.content.allocator(),
-//             &ptr_to_entry.tags,
-//             appended_tags,
-//         );
-//     }
-
-//     try state.writeChanges();
-//     try out_writer.print(
-//         "Written text to '{s}' in journal '{s}'\n",
-//         .{ entry.getName(), journal_name },
-//     );
-// }

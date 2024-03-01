@@ -1,12 +1,15 @@
 const std = @import("std");
-const Time = @import("time.zig").Time;
+const time = @import("time.zig");
+const Time = time.Time;
 const tags = @import("tags.zig");
 const Tag = tags.Tag;
 const FileSystem = @import("../FileSystem.zig");
+const Descriptor = @import("Root.zig").Descriptor;
 
 const Journal = @This();
 
 pub const TOPOLOGY_FILENAME = "topology.json";
+pub const DAY_FILE_EXTENSION = "json";
 pub const PATH_PREFIX = "journal";
 
 pub const Error = error{NoSuchDay};
@@ -24,7 +27,7 @@ pub const Entry = struct {
 
 // Only used for (de)serializing an entry list
 const EntryWrapper = struct {
-    entries: []Entry,
+    entries: []const Entry,
 };
 
 pub const Day = struct {
@@ -43,7 +46,9 @@ pub const Info = struct {
 const StagedEntries = std.StringHashMap(std.ArrayList(Entry));
 
 info: *Info,
+descriptor: Descriptor,
 allocator: std.mem.Allocator,
+tag_list: ?*tags.DescriptorList = null,
 staged_entries: ?StagedEntries = null,
 fs: ?FileSystem = null,
 mem: ?std.heap.ArenaAllocator = null,
@@ -74,15 +79,80 @@ pub fn deinit(self: *Journal) void {
     self.* = undefined;
 }
 
+fn timeToName(allocator: std.mem.Allocator, t: Time) ![]const u8 {
+    // TODO: timezone conversion?
+    const date = time.dateFromTime(t);
+    const fmtd = try time.formatDateBuf(date);
+    return try allocator.dupe(u8, &fmtd);
+}
+
 /// Add a new day to the journal. No strings are copied, so it is
 /// assumed the contents of the `day` will outlive the `Journal`.
 pub fn addNewDay(self: *Journal, day: Day) !void {
     var list = std.ArrayList(Day).fromOwnedSlice(
-        self.allocator,
+        self.getTmpAllocator(),
         self.info.days,
     );
     try list.append(day);
     self.info.days = try list.toOwnedSlice();
+}
+
+/// Get a day by name. Returns `null` if day not found.
+pub fn getDay(self: *Journal, name: []const u8) ?Day {
+    for (self.info.days) |d| {
+        if (std.mem.eql(u8, d.name, name)) {
+            return d;
+        }
+    }
+    return null;
+}
+
+/// Get a day by path. Returns `null` if day not found.
+pub fn getDayByPath(self: *Journal, name: []const u8) ?Day {
+    for (self.info.days) |d| {
+        if (std.mem.eql(u8, d.name, name)) {
+            return d;
+        }
+    }
+    return null;
+}
+
+/// Get the day with `name` or else create a new day with that name.
+pub fn getDayOrNew(self: *Journal, name: []const u8) !Day {
+    return self.getDay(name) orelse {
+        const new = try self.newDayFromName(name);
+        try self.addNewDay(new);
+        return new;
+    };
+}
+
+fn newDayFromName(self: *Journal, name: []const u8) !Day {
+    const now = time.timeNow();
+    const day = Day{
+        .name = name,
+        .path = try self.newPathFromName(name),
+        .created = now,
+        .modified = now,
+        .tags = &.{},
+    };
+
+    // then add to the staging so we don't try to open a file that doesn't exist
+    var map = self.getStagedEntries();
+    try map.put(day.path, std.ArrayList(Entry).init(self.allocator));
+    return day;
+}
+
+fn newPathFromName(self: *Journal, name: []const u8) ![]const u8 {
+    const dirname = std.fs.path.dirname(self.descriptor.path).?;
+    var alloc = self.getTmpAllocator();
+    return std.fs.path.join(
+        alloc,
+        &.{ dirname, try std.mem.join(
+            alloc,
+            ".",
+            &.{ name, DAY_FILE_EXTENSION },
+        ) },
+    );
 }
 
 fn readDayFromPath(
@@ -91,7 +161,15 @@ fn readDayFromPath(
     path: []const u8,
 ) ![]Entry {
     var alloc = self.getTmpAllocator();
-    const content = try fs.readFileAlloc(alloc, path);
+    const content = fs.readFileAlloc(alloc, path) catch |err| {
+        if (err == error.FileNotFound) {
+            std.log.default.warn(
+                "Day entry exists in journal, but no file found for: {s}",
+                .{path},
+            );
+            return &.{};
+        } else return err;
+    };
     const parsed = try std.json.parseFromSliceLeaky(
         EntryWrapper,
         alloc,
@@ -99,6 +177,21 @@ fn readDayFromPath(
         .{},
     );
     return self.allocator.dupe(Entry, parsed.entries);
+}
+
+fn writeEntriesToPath(
+    self: *Journal,
+    fs: FileSystem,
+    entries: []const Entry,
+    path: []const u8,
+) !void {
+    const string = try std.json.stringifyAlloc(
+        self.allocator,
+        EntryWrapper{ .entries = entries },
+        .{ .whitespace = .indent_4 },
+    );
+    defer self.allocator.free(string);
+    try fs.overwrite(path, string);
 }
 
 fn addDayToStage(
@@ -115,6 +208,7 @@ fn addDayToStage(
         ));
     } else {
         // else create empty list
+        std.log.default.warn("No Filesystem in Journal", .{});
         try map.put(path, std.ArrayList(Entry).init(self.allocator));
     }
 }
@@ -143,6 +237,75 @@ pub fn addNewEntryToPath(
     try ptr.append(entry);
 }
 
+/// Add an `Entry` to a given `Day`. Does not write to file until
+/// `writeChanges` is called.
+pub fn addNewEntryToDay(
+    self: *Journal,
+    day: Day,
+    entry: Entry,
+) !void {
+    try self.addNewEntryToPath(day.path, entry);
+}
+
+/// Add a new entry to the appropriate day as given by the `created` timestamp
+/// in the entry.
+pub fn addEntry(self: *Journal, entry: Entry) !Day {
+    var alloc = self.getTmpAllocator();
+    // get the day this entry belongs to
+    const day_name = try timeToName(alloc, entry.created);
+    const day = try self.getDayOrNew(day_name);
+
+    try self.addNewEntryToDay(day, entry);
+    return day;
+}
+
+/// Add a new entry with `text` with a list of additional tags. Will also parse
+/// the text for context tags and append. The additional tags should already
+/// have the `@` trimmed.
+pub fn addNewEntryFromText(
+    self: *Journal,
+    text: []const u8,
+    additional_tags: []const []const u8,
+) !Day {
+    var tl = self.tag_list orelse return tags.Error.MissingTagDescriptors;
+    var alloc = self.getTmpAllocator();
+
+    const now = time.timeNow();
+
+    // parse all the context tags and add them to the given tags
+    var inline_tags = try tags.parseInlineTags(alloc, text, now);
+    var all_tags = std.ArrayList(Tag).fromOwnedSlice(alloc, inline_tags);
+
+    for (additional_tags) |name| {
+        try all_tags.append(.{ .added = now, .name = name });
+    }
+    // TODO: assert no duplicates
+    try tl.assertValidTaglist(all_tags.items);
+
+    return try self.addEntry(.{
+        .text = text,
+        .tags = try all_tags.toOwnedSlice(),
+        .created = now,
+        .modified = now,
+    });
+}
+
+/// Write all days that have staged changes to disk
+pub fn writeDays(self: *Journal) !void {
+    var fs = self.fs orelse return error.NeedsFileSystem;
+    var map = self.staged_entries orelse {
+        std.log.default.debug("No staged entries for Journal '{s}'", .{self.descriptor.name});
+        return;
+    };
+
+    var itt = map.iterator();
+    while (itt.next()) |item| {
+        const day_path = item.key_ptr;
+        const entry_list = item.value_ptr;
+        try self.writeEntriesToPath(fs, entry_list.items, day_path.*);
+    }
+}
+
 /// Serialize into a string for writing to file.
 /// Caller owns the memory.
 pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
@@ -151,7 +314,7 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 /// Caller owns memory
-pub fn serialize(self: *Journal, allocator: std.mem.Allocator) ![]const u8 {
+pub fn serialize(self: *const Journal, allocator: std.mem.Allocator) ![]const u8 {
     return try serializeInfo(self.info.*, allocator);
 }
 

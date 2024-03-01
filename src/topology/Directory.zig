@@ -3,6 +3,7 @@ const tags = @import("tags.zig");
 const Tag = tags.Tag;
 const Time = @import("time.zig").Time;
 const FileSystem = @import("../FileSystem.zig");
+const Descriptor = @import("Root.zig").Descriptor;
 
 const Directory = @This();
 
@@ -26,12 +27,6 @@ info: *Info,
 fs: ?FileSystem = null,
 allocator: std.mem.Allocator,
 
-pub fn deinit(self: *Directory) void {
-    self.allocator.free(self.info.tags);
-    self.allocator.free(self.info.notes);
-    self.* = undefined;
-}
-
 /// Add a new day to the journal. No strings are copied, so it is
 /// assumed the contents of the `day` will outlive the `Directory`.
 pub fn addNewNote(self: *Directory, note: Note) !void {
@@ -51,7 +46,7 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 /// Caller owns memory
-pub fn serialize(self: *Directory, allocator: std.mem.Allocator) ![]const u8 {
+pub fn serialize(self: *const Directory, allocator: std.mem.Allocator) ![]const u8 {
     return try serializeInfo(self.info.*, allocator);
 }
 

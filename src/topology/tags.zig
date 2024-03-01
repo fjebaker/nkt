@@ -1,9 +1,11 @@
 const std = @import("std");
-const Time = @import("time.zig").Time;
+const time = @import("time.zig");
+const Time = time.Time;
 const utils = @import("../utils.zig");
 const colors = @import("../colors.zig");
 
 pub const Error = error{
+    InvalidTag,
     MissingTagDescriptors,
     TagNotLowercase,
 };
@@ -13,10 +15,21 @@ pub const Tag = struct {
         name: []const u8,
         created: Time,
         color: colors.Color,
+
+        /// Does the descritor describe the tag, as in, do they share the same
+        /// name?
+        pub fn isDescriptorOf(self: Descriptor, tag: Tag) bool {
+            return std.mem.eql(u8, self.name, tag.name);
+        }
     };
 
     name: []const u8,
     added: Time,
+
+    /// Test if two tags are equal or not. Only checks the name.
+    pub fn eql(self: Tag, t: Tag) bool {
+        return std.mem.eql(u8, self.name, t.name);
+    }
 };
 
 const TagDescriptorWrapper = struct {
@@ -83,13 +96,48 @@ pub const DescriptorList = struct {
         self.* = undefined;
     }
 
-    // /// Parse tags that are inline with the text such as "hello @world".
-    // /// Returns a list of tags. Caller owns the memory.
-    // pub fn parseInlineTags(self: *DescriptorList, allocator: std.mem.Allocator, text: []const u8) ![]Tag {
+    /// Asserts the tag is described by one of the tag descriptors in the
+    /// `DescriptorList`.
+    pub fn assertValidTag(self: *const DescriptorList, tag: Tag) !void {
+        for (self.tags) |d| {
+            if (d.isDescriptorOf(tag)) return;
+        }
+        return Error.InvalidTag;
+    }
 
-    // }
+    /// Like `assertValidTag` except for a slice of `Tag`s.
+    pub fn assertValidTaglist(self: *const DescriptorList, taglist: []const Tag) !void {
+        for (taglist) |tag| {
+            try self.assertValidTag(tag);
+        }
+    }
 };
 
+/// Parse tags that are inline with the text such as "hello @world".  Returns a
+/// list of tags. Caller owns the memory.  The tags do not copy strings from
+/// the input text, so the input text must outlive the tags.
+/// Does not validate the tags are valid.
+pub fn parseInlineTags(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    now: Time,
+) ![]Tag {
+    var positions = try parseInlineTagPositions(allocator, text);
+    defer allocator.free(positions);
+
+    var tags = try std.ArrayList(Tag).initCapacity(allocator, positions.len);
+    defer tags.deinit();
+
+    var name_itt = TagNameIterator{ .positions = positions, .string = text };
+    while (name_itt.next()) |name| {
+        const tag: Tag = .{ .added = now, .name = name };
+        tags.appendAssumeCapacity(tag);
+    }
+
+    return tags.toOwnedSlice();
+}
+
+/// Parse the given `content` JSON into a `DescriptorList`
 pub fn readTagDescriptors(
     allocator: std.mem.Allocator,
     content: []const u8,

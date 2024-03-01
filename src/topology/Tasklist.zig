@@ -79,7 +79,7 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 /// Caller owns memory
-pub fn serialize(self: *Tasklist, allocator: std.mem.Allocator) ![]const u8 {
+pub fn serialize(self: *const Tasklist, allocator: std.mem.Allocator) ![]const u8 {
     return try serializeInfo(self.info.*, allocator);
 }
 

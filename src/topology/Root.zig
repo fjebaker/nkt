@@ -20,6 +20,7 @@ pub const Error = error{
     DuplicateItem,
     NeedsFileSystem,
     InvalidExtension,
+    NoSuchCollection,
 };
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
@@ -536,11 +537,23 @@ fn lookupCollection(
     self: *Root,
     descr: Descriptor,
     comptime t: CollectionType,
-) t.ToType() {
+) !t.ToType() {
     const info_ptr = &@field(self.cache, t.toFieldName()).getPtr(descr.name).?.item;
+    return try self.collectionFromInfoPtr(descr, t, info_ptr);
+}
+
+fn collectionFromInfoPtr(
+    self: *Root,
+    descr: Descriptor,
+    comptime t: CollectionType,
+    info_ptr: *t.ToType().Info,
+) !t.ToType() {
+    var tag_list = try self.getTagDescriptorList();
     return switch (t) {
         .CollectionJournal => .{
             .info = info_ptr,
+            .descriptor = descr,
+            .tag_list = tag_list,
             .fs = self.fs,
             .allocator = self.allocator,
         },
@@ -566,7 +579,7 @@ fn addNewCollectionFromDescription(
         descr.name,
         .{ .item = .{}, .modified = true },
     );
-    return self.lookupCollection(descr, t);
+    return try self.lookupCollection(descr, t);
 }
 
 /// Add a new `Tasklist` to the index, and return a pointer into the cache to
@@ -605,20 +618,20 @@ pub fn getCollection(
     const InfoType = t.ToType().Info;
     var alloc = self.arena.allocator();
 
-    var info = std.json.parseFromSliceLeaky(
-        alloc,
+    var info = try std.json.parseFromSliceLeaky(
         InfoType,
+        alloc,
         info_content,
         .{ .allocate = .alloc_always },
     );
 
     // create the stash
-    @field(self.cache, t.toFieldName()).put(
+    try @field(self.cache, t.toFieldName()).put(
         descr.name,
         .{ .item = info, .modified = true },
     );
 
-    try self.lookupCollection(descr, t);
+    return try self.lookupCollection(descr, t);
 }
 
 /// Get a `Journal` by name. Returns `null` if name is invalid. `deinit` must
@@ -629,6 +642,16 @@ pub fn getJournal(self: *Root, name: []const u8) !?Journal {
 
 /// Add all of the default collections to the root
 pub fn addInitialCollections(self: *Root) !void {
+    // initialize an empty tag descriptor list
+    self.tag_descriptors = tags.DescriptorList{
+        .allocator = self.allocator,
+    };
+
+    // initialize an empty chain list
+    self.chain_list = chains.ChainList{
+        .mem = std.heap.ArenaAllocator.init(self.allocator),
+    };
+
     _ = try self.addNewCollection(
         self.info.default_directory,
         .CollectionDirectory,
@@ -646,16 +669,6 @@ pub fn addInitialCollections(self: *Root) !void {
         self.info.default_tasklist,
         .CollectionTasklist,
     );
-
-    // initialize an empty tag descriptor list
-    self.tag_descriptors = tags.DescriptorList{
-        .allocator = self.allocator,
-    };
-
-    // initialize an empty chain list
-    self.chain_list = chains.ChainList{
-        .mem = std.heap.ArenaAllocator.init(self.allocator),
-    };
 }
 
 /// Create the file system. Overwrites any existing files, only to be used for
@@ -694,25 +707,62 @@ pub fn createFilesystem(self: *Root) !void {
     }
 
     // journals
-    try self.writeDescriptors(fs, .CollectionJournal);
-    try self.writeDescriptors(fs, .CollectionDirectory);
-    try self.writeDescriptors(fs, .CollectionTasklist);
+    try self.writeAllDescriptors(fs, .CollectionJournal);
+    try self.writeAllDescriptors(fs, .CollectionDirectory);
+    try self.writeAllDescriptors(fs, .CollectionTasklist);
 }
 
-fn writeDescriptors(
+fn writeAllDescriptors(
     self: *Root,
     fs: *FileSystem,
     comptime t: CollectionType,
 ) !void {
     const descrs = @field(self.info, t.toFieldName());
     for (descrs) |descr| {
-        var item = self.lookupCollection(descr, t);
-        // make the directory
-        const dir_name = std.fs.path.dirname(descr.path).?;
-        try fs.makeDirIfNotExists(dir_name);
-        // write the contents
-        const content = try item.serialize(self.allocator);
-        defer self.allocator.free(content);
-        try fs.overwrite(descr.path, content);
+        var collection = try self.lookupCollection(descr, t);
+        try self.writeCollection(fs, descr, t, &collection);
     }
+}
+
+fn writeCollection(
+    self: *Root,
+    fs: *FileSystem,
+    descr: Descriptor,
+    comptime t: CollectionType,
+    collection: *t.ToType(),
+) !void {
+    // make the directory
+    const dir_name = std.fs.path.dirname(descr.path).?;
+    try fs.makeDirIfNotExists(dir_name);
+    // write the contents
+    const content = try collection.serialize(self.allocator);
+    defer self.allocator.free(content);
+    try fs.overwrite(descr.path, content);
+}
+
+fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: CollectionType) !void {
+    const descrs = @field(self.info, t.toFieldName());
+    const now = time.timeNow();
+    for (descrs) |*descr| {
+        // if we have chached changes, read them
+        const item = @field(self.cache, t.toFieldName()).getPtr(descr.name) orelse
+            continue;
+
+        // write the changes
+        if (item.modified) {
+            std.log.default.debug("{s} marked as modified", .{descr.path});
+            // update the modified time
+            descr.modified = now;
+            var instance = try self.collectionFromInfoPtr(descr.*, t, &item.item);
+            try self.writeCollection(fs, descr.*, t, &instance);
+        }
+    }
+}
+
+/// Write only modified collections back to the disk
+pub fn writeChanges(self: *Root) !void {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    try self.writeModifiedCollections(fs, .CollectionJournal);
 }
