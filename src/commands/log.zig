@@ -55,7 +55,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             if (tag_name) |name| {
                 try tag_list.append(name);
             } else {
-                try itt.throwBadArgument("Bad tag format");
+                try itt.throwBadArgument("tag format: tags must begin with `@`");
             }
         }
     }
