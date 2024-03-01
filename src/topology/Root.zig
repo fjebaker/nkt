@@ -222,13 +222,21 @@ fn getFileSystem(self: *Root) ?*FileSystem {
     }
 }
 
-fn readTaglist(self: *Root, fs: *FileSystem) !void {
+/// Read the tag list from file into the Root cache.
+pub fn readTaglist(self: *Root, fs: *FileSystem) !void {
     const content = try fs.readFileAlloc(self.allocator, self.info.tagpath);
     defer self.allocator.free(content);
     self.tag_descriptors = try tags.readTagDescriptors(self.allocator, content);
 }
 
-fn getTagDescriptorList(self: *Root) !*tags.DescriptorList {
+/// Get the `tags.DescriptorList` for all of the tags. Will attempt to read
+/// from disk if not already cached.
+pub fn getTagDescriptorList(self: *Root) !tags.DescriptorList {
+    var tl = try self.getTagDescriptorListPtr();
+    return tl.*;
+}
+
+fn getTagDescriptorListPtr(self: *Root) !*tags.DescriptorList {
     if (self.tag_descriptors == null) {
         if (self.getFileSystem()) |fs| {
             try self.readTaglist(fs);
@@ -282,7 +290,7 @@ fn createFileStructure(
 /// Return a list of `Tag.Descriptor` of the valid tags. If no filesystem is
 /// given, returns an empty list.
 pub fn getTags(self: *Root) ?[]const Tag.Descriptor {
-    var list = try self.getTagDescriptorList();
+    var list = try self.getTagDescriptorListPtr();
     return list.tags;
 }
 
@@ -353,7 +361,7 @@ test "add and get descriptors" {
 /// name already exists. Added tag is not copied, so must outlive the `Root`
 /// context
 pub fn addNewTag(self: *Root, tag: Tag.Descriptor) !void {
-    var list = try self.getTagDescriptorList();
+    var list = try self.getTagDescriptorListPtr();
     try list.addTagDescriptor(tag);
 }
 
@@ -548,7 +556,7 @@ fn collectionFromInfoPtr(
     comptime t: CollectionType,
     info_ptr: *t.ToType().Info,
 ) !t.ToType() {
-    var tag_list = try self.getTagDescriptorList();
+    var tag_list = try self.getTagDescriptorListPtr();
     return switch (t) {
         .CollectionJournal => .{
             .info = info_ptr,
@@ -692,7 +700,7 @@ pub fn createFilesystem(self: *Root) !void {
 
     {
         // create the tags file
-        var list = try self.getTagDescriptorList();
+        var list = try self.getTagDescriptorListPtr();
         const tag_content = try list.serialize(self.allocator);
         defer self.allocator.free(tag_content);
         try fs.overwrite(self.info.tagpath, tag_content);

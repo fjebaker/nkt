@@ -1,5 +1,9 @@
 const std = @import("std");
+const cli = @import("cli.zig");
+const Root = @import("topology/Root.zig");
+const tags = @import("topology/tags.zig");
 
+/// A helper for creating iterable slices
 pub fn ListIterator(comptime T: type) type {
     return struct {
         data: []const T,
@@ -7,6 +11,8 @@ pub fn ListIterator(comptime T: type) type {
         pub fn init(items: []const T) @This() {
             return .{ .data = items };
         }
+
+        /// Get the next item in the slice. Returns `null` if no items left.
         pub fn next(self: *@This()) ?T {
             if (self.index < self.data.len) {
                 const v = self.data[self.index];
@@ -16,6 +22,30 @@ pub fn ListIterator(comptime T: type) type {
             return null;
         }
     };
+}
+
+/// Parses all tags using `tags.parseInlineWithAdditional`, and validates the
+/// tags against the taglist in `Root`. Caller owns the memory.
+pub fn parseAndAssertValidTags(
+    allocator: std.mem.Allocator,
+    root: *Root,
+    text: []const u8,
+    additional: []const []const u8,
+) ![]tags.Tag {
+    const parsed_tags = try tags.parseInlineWithAdditional(allocator, text, additional);
+    errdefer allocator.free(parsed_tags);
+
+    var tl = try root.getTagDescriptorList();
+    if (tl.findInvalidTags(parsed_tags)) |invalid_tag| {
+        try cli.throwError(
+            error.InvalidTag,
+            "@{s} is not a known tag",
+            .{invalid_tag.name},
+        );
+        unreachable;
+    }
+
+    return parsed_tags;
 }
 
 // needs revisting below here

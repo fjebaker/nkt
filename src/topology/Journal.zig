@@ -18,7 +18,7 @@ pub const Entry = struct {
     text: []const u8,
     created: Time,
     modified: Time,
-    tags: []Tag,
+    tags: []const Tag,
 
     pub fn sortCreated(_: void, lhs: Entry, rhs: Entry) bool {
         return lhs.created < rhs.created;
@@ -265,26 +265,12 @@ pub fn addEntry(self: *Journal, entry: Entry) !Day {
 pub fn addNewEntryFromText(
     self: *Journal,
     text: []const u8,
-    additional_tags: []const []const u8,
+    entry_tags: []const Tag,
 ) !Day {
-    var tl = self.tag_list orelse return tags.Error.MissingTagDescriptors;
-    var alloc = self.getTmpAllocator();
-
     const now = time.timeNow();
-
-    // parse all the context tags and add them to the given tags
-    var inline_tags = try tags.parseInlineTags(alloc, text, now);
-    var all_tags = std.ArrayList(Tag).fromOwnedSlice(alloc, inline_tags);
-
-    for (additional_tags) |name| {
-        try all_tags.append(.{ .added = now, .name = name });
-    }
-    // TODO: assert no duplicates
-    try tl.assertValidTaglist(all_tags.items);
-
     return try self.addEntry(.{
         .text = text,
-        .tags = try all_tags.toOwnedSlice(),
+        .tags = entry_tags,
         .created = now,
         .modified = now,
     });

@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const tags = @import("../topology/tags.zig");
+const utils = @import("../utils.zig");
 
 const commands = @import("../commands.zig");
 const Root = @import("../topology/Root.zig");
@@ -67,7 +68,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
 pub fn execute(
     self: *Self,
-    _: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
     _: commands.Options,
@@ -88,7 +89,14 @@ pub fn execute(
     };
     defer j.deinit();
 
-    const day = try j.addNewEntryFromText(self.args.text, self.tags);
+    const entry_tags = try utils.parseAndAssertValidTags(
+        allocator,
+        root,
+        self.args.text,
+        self.tags,
+    );
+    defer allocator.free(entry_tags);
+    const day = try j.addNewEntryFromText(self.args.text, entry_tags);
 
     try root.writeChanges();
     try j.writeDays();

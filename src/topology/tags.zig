@@ -96,20 +96,25 @@ pub const DescriptorList = struct {
         self.* = undefined;
     }
 
-    /// Asserts the tag is described by one of the tag descriptors in the
-    /// `DescriptorList`.
-    pub fn assertValidTag(self: *const DescriptorList, tag: Tag) !void {
+    /// Check the tag is described by one of the tag descriptors in the
+    /// `DescriptorList`. Returns `true` if tag is valid.
+    pub fn isValidTag(self: *const DescriptorList, tag: Tag) bool {
         for (self.tags) |d| {
-            if (d.isDescriptorOf(tag)) return;
+            if (d.isDescriptorOf(tag)) return true;
         }
-        return Error.InvalidTag;
+        return false;
     }
 
-    /// Like `assertValidTag` except for a slice of `Tag`s.
-    pub fn assertValidTaglist(self: *const DescriptorList, taglist: []const Tag) !void {
+    /// Like `isValidTag` except for a slice of `Tag`s, returning the first
+    /// invalid tag. Returns `null` if all tags are valid.
+    pub fn findInvalidTags(self: *const DescriptorList, taglist: []const Tag) ?Tag {
+        // TODO: assert no duplicates
         for (taglist) |tag| {
-            try self.assertValidTag(tag);
+            if (!self.isValidTag(tag)) {
+                return tag;
+            }
         }
+        return null;
     }
 };
 
@@ -305,4 +310,25 @@ test "inline position parsing" {
         &.{},
         &.{},
     );
+}
+
+/// Parse both inline and additional tags. Does not validate tags. Caller owns
+/// memory.
+pub fn parseInlineWithAdditional(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    additional_tags: []const []const u8,
+) ![]Tag {
+    const now = time.timeNow();
+
+    // parse all the context tags and add them to the given tags
+    var inline_tags = try parseInlineTags(allocator, text, now);
+    var all_tags = std.ArrayList(Tag).fromOwnedSlice(allocator, inline_tags);
+    defer all_tags.deinit();
+
+    for (additional_tags) |name| {
+        try all_tags.append(.{ .added = now, .name = name });
+    }
+
+    return try all_tags.toOwnedSlice();
 }
