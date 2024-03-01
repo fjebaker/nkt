@@ -263,6 +263,17 @@ pub const ArgIterator = struct {
         );
     }
 
+    pub fn throwTooFewArguments(
+        _: *const ArgIterator,
+        missing_arg_name: []const u8,
+    ) !void {
+        try throwError(
+            CLIErrors.TooFewArguments,
+            "missing argument '{s}'",
+            .{missing_arg_name},
+        );
+    }
+
     /// Throw a general unknown argument error. To be used when it doesn't
     /// matter what the argument was, it was just unwanted.  Throw `UnknownFlag`
     /// if the last argument was a flag, else throw a `BadArgument` error.
@@ -615,7 +626,42 @@ pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: E
                     else => {},
                 }
             }
+            return self.getParsed();
+        }
+
+        /// Get the parsed argument structure and validate that all required
+        /// fields have values.
+        pub fn getParsed(self: *const Self) !ParsedArguments {
+            inline for (parseable) |p| {
+                const arg_name = comptime p.getName();
+                const arg = @field(self.parsed, arg_name);
+                if (comptime p.getRequired()) {
+                    if (arg.len == 0) {
+                        try self.itt.throwTooFewArguments(arg_name);
+                        unreachable;
+                    }
+                }
+            }
+
             return self.parsed;
+        }
+
+        /// For debug printing only. Lists all of the fields and their values
+        /// in the parsed tags structure.
+        pub fn debugPrintArgs(self: *const Self) void {
+            inline for (parseable) |p| {
+                const arg_name = comptime p.getName();
+                const arg = @field(self.parsed, arg_name);
+
+                const ins = comptime if (p.getRequired()) "" else "?";
+
+                if (comptime p.isFlag() and !p.isWithValue()) {
+                    std.debug.print("- {s}: {" ++ ins ++ "any}\n", .{ arg_name, arg });
+                } else {
+                    std.debug.print("- {s}: {" ++ ins ++ "s}\n", .{ arg_name, arg });
+                }
+            }
+            std.debug.print("\n\n", .{});
         }
 
         /// Parse the arguments from the argument iterator. This method is to
@@ -639,18 +685,30 @@ pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: E
             inline for (parseable) |p| {
                 switch (p) {
                     .LongFlag => |i| if (arg.is(null, i.name)) {
-                        const next = try self.itt.getValue();
-                        @field(self.parsed, p.getName()) = next.string;
+                        if (i.with_value) {
+                            const next = try self.itt.getValue();
+                            @field(self.parsed, p.getName()) = next.string;
+                        } else {
+                            @field(self.parsed, p.getName()) = true;
+                        }
                         return .ParsedFlag;
                     },
                     .ShortFlag => |i| if (arg.is(i.name, null)) {
-                        const next = try self.itt.getValue();
-                        @field(self.parsed, p.getName()) = next.string;
+                        if (i.with_value) {
+                            const next = try self.itt.getValue();
+                            @field(self.parsed, p.getName()) = next.string;
+                        } else {
+                            @field(self.parsed, p.getName()) = true;
+                        }
                         return .ParsedFlag;
                     },
                     .ShortOrLongFlag => |i| if (arg.is(i.short[0], i.long)) {
-                        const next = try self.itt.getValue();
-                        @field(self.parsed, p.getName()) = next.string;
+                        if (i.with_value) {
+                            const next = try self.itt.getValue();
+                            @field(self.parsed, p.getName()) = next.string;
+                        } else {
+                            @field(self.parsed, p.getName()) = true;
+                        }
                         return .ParsedFlag;
                     },
                     inline .Positional => |pos| if (!arg.flag) {

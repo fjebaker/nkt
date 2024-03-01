@@ -60,9 +60,10 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         }
     }
 
+    const args = try parser.getParsed();
     return .{
         .tags = try tag_list.toOwnedSlice(),
-        .args = parser.parsed,
+        .args = args,
     };
 }
 
