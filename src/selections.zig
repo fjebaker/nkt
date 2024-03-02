@@ -138,68 +138,106 @@ test "asSelector" {
 fn qualifierToCollection(q: u8) !Root.CollectionType {
     return switch (q) {
         't' => .CollectionTasklist,
-        'e' => .CollectionJournal,
+        'j' => .CollectionJournal,
         else => Error.IndexQualifierUnknown,
     };
 }
 
-pub const Parser = struct {
-    itt: *cli.ArgIterator,
-    selection: Selection = .{},
-
-    pub fn init(itt: *cli.ArgIterator) Parser {
-        return .{ .itt = itt };
+fn addSelector(selection: *Selection, selector: Selector) !void {
+    switch (selector) {
+        .ByQualifiedIndex => |qi| {
+            selection.collection_type = try qualifierToCollection(
+                qi.qualifier,
+            );
+        },
+        .ByIndex => {
+            // TODO: let indexes select other collection types?
+            selection.collection_type = .CollectionJournal;
+        },
+        else => {},
     }
 
-    fn parseAsFlag(_: *Parser, _: []const u8) !bool {
-        return false;
-    }
+    selection.selector = selector;
+}
 
-    fn parseAsPositional(self: *Parser, arg: []const u8) !bool {
-        const selector = try asSelector(arg);
-
-        switch (selector) {
-            .ByQualifiedIndex => |qi| {
-                self.selection.collection_type = try qualifierToCollection(
-                    qi.qualifier,
-                );
-            },
-            .ByIndex => {
-                self.selection.collection_type = .CollectionJournal;
-            },
-            else => {},
-        }
-
-        self.selection.selector = selector;
-        return true;
-    }
-
-    /// Parse the selection from an arg iterator. Returns `true` if the
-    /// selection has concretely resolved, meaning argument parsing for
-    /// selections can cease.
-    pub fn parseNextArg(self: *Parser, arg: cli.Arg) !bool {
-        if (arg.flag) {
-            return try self.parseAsFlag(arg.string);
-        } else {
-            return try self.parseAsPositional(arg.string);
-        }
-        // we are done from the previous call
-        return true;
-    }
+const InvalidCollectionFlag = struct {
+    has: Root.CollectionType,
+    was_given: Root.CollectionType,
 };
 
-fn testParser(string: []const u8, comptime expected: Selection) !void {
-    // put a test argument iterator together
-    const split_args = try cli.splitArgs(std.testing.allocator, string);
-    defer std.testing.allocator.free(split_args);
-    var itt = cli.ArgIterator.init(split_args);
+/// Returns `null` if everything is good, else describes what has gone wrong with an `InvalidCollectionFlag` instance.
+fn addFlags(
+    selection: *Selection,
+    journal: ?[]const u8,
+    directory: ?[]const u8,
+    tasklist: ?[]const u8,
+) !?InvalidCollectionFlag {
+    // do we already have a collection type
+    if (selection.collection_type) |ct| {
+        switch (ct) {
+            .CollectionJournal => {
+                if (directory != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionDirectory,
+                };
+                if (tasklist != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionTasklist,
+                };
+                selection.collection_name = journal;
+            },
+            .CollectionTasklist => {
+                if (journal != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionJournal,
+                };
+                if (directory != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionDirectory,
+                };
+                selection.collection_name = journal;
+            },
+            .CollectionDirectory => {
+                if (journal != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionJournal,
+                };
+                if (tasklist != null) return .{
+                    .has = ct,
+                    .was_given = .CollectionTasklist,
+                };
+                selection.collection_name = journal;
+            },
+        }
+    } else {
+        // make sure no two are set
+        var count: usize = 0;
+        if (journal != null) count += 1;
+        if (directory != null) count += 1;
+        if (tasklist != null) count += 1;
+        if (count > 1) return Error.AmbiguousSelection;
 
-    var parser = Parser.init(&itt);
-    while (try itt.next()) |arg| {
-        _ = try parser.parseNextArg(arg);
+        // asign the one that is set
+        if (journal) |txt| {
+            selection.collection_name = txt;
+            selection.collection_type = .CollectionJournal;
+        }
+        if (directory) |txt| {
+            selection.collection_name = txt;
+            selection.collection_type = .CollectionDirectory;
+        }
+        if (tasklist) |txt| {
+            selection.collection_name = txt;
+            selection.collection_type = .CollectionTasklist;
+        }
     }
+    return null;
+}
 
-    const selection = parser.selection;
+fn testParser(string: []const u8, comptime expected: Selection) !void {
+    var selection: Selection = .{};
+    const selector = try asSelector(string);
+    try addSelector(&selection, selector);
 
     try std.testing.expectEqualDeep(expected, selection);
 }
@@ -226,4 +264,125 @@ test "selection parser" {
             .ByIndex = 123,
         }, .collection_type = .CollectionJournal },
     );
+}
+
+fn testSelectionParsing(
+    item: []const u8,
+    journal: ?[]const u8,
+    directory: ?[]const u8,
+    tasklist: ?[]const u8,
+    comptime expected: Selection,
+) !void {
+    var selection: Selection = .{};
+    const selector = try asSelector(item);
+
+    try addSelector(&selection, selector);
+    if (try addFlags(
+        &selection,
+        journal,
+        directory,
+        tasklist,
+    )) |_| return Error.IncompatibleSelection;
+
+    try std.testing.expectEqualDeep(expected, selection);
+}
+
+test "selection parsing" {
+    try testSelectionParsing("0", null, null, null, .{
+        .selector = .{
+            .ByIndex = 0,
+        },
+        .collection_type = .CollectionJournal,
+    });
+    try testSelectionParsing("t0", null, null, null, .{
+        .selector = .{
+            .ByQualifiedIndex = .{ .index = 0, .qualifier = 't' },
+        },
+        .collection_type = .CollectionTasklist,
+    });
+    try testSelectionParsing("hello", null, "place", null, .{
+        .selector = .{
+            .ByName = "hello",
+        },
+        .collection_type = .CollectionDirectory,
+        .collection_name = "place",
+    });
+    try std.testing.expectError(
+        Error.IncompatibleSelection,
+        testSelectionParsing("0", null, "place", null, .{}),
+    );
+    try std.testing.expectError(
+        Error.AmbiguousSelection,
+        testSelectionParsing("hello", null, "place", "other", .{}),
+    );
+}
+
+fn addFlagsReportError(
+    selection: *Selection,
+    journal: ?[]const u8,
+    directory: ?[]const u8,
+    tasklist: ?[]const u8,
+) !void {
+    if (try addFlags(
+        selection,
+        journal,
+        directory,
+        tasklist,
+    )) |info| {
+        try cli.throwError(
+            Error.IncompatibleSelection,
+            "Item selected '{s}' but flag is for '{s}'.",
+            .{ @tagName(info.has), @tagName(info.was_given) },
+        );
+        unreachable;
+    }
+}
+
+/// Parse the selection from a `cli.ParsedArguments` structure that has been
+/// augmented with `selectHelp`. Will report errors to stderr.
+pub fn fromArgs(
+    comptime T: type,
+    selector_string: []const u8,
+    args: T,
+) !Selection {
+    var selection: Selection = .{};
+    const selector = try asSelector(selector_string);
+
+    try addSelector(&selection, selector);
+    try addFlagsReportError(
+        &selection,
+        args.journal,
+        args.directory,
+        args.tasklist,
+    );
+    return selection;
+}
+
+/// Add `cli.ArgumentDescriptor` for the selection methods. Provide the name
+/// and (contextual) help for the main selection, and the various flags will be
+/// automatically added. Use `fromArgs` to retrieve the selection.
+pub fn selectHelp(
+    comptime name: []const u8,
+    comptime help: []const u8,
+) []const cli.ArgumentDescriptor {
+    const args: []const cli.ArgumentDescriptor = &.{
+        .{
+            .arg = name,
+            .help = help,
+            .required = true,
+        },
+        .{
+            .arg = "--journal journal",
+            .help = help,
+        },
+        .{
+            .arg = "--directory directory",
+            .help = help,
+        },
+        .{
+            .arg = "--tasklist tasklist",
+            .help = help,
+        },
+    };
+    return args;
 }

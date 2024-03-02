@@ -1,11 +1,13 @@
 const std = @import("std");
-
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
+
+const commands = @import("../commands.zig");
+const Root = @import("../topology/Root.zig");
+
 const colors = @import("../colors.zig");
 
-const State = @import("../State.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
 const Entry = @import("../Topology.zig").Entry;
 
