@@ -104,7 +104,24 @@ pub const Item = union(enum) {
     }
 };
 
-fn retrieveFromJournal(s: Selector, journal: *Journal) !Item {
+const ResolveResult = struct {
+    item: ?Item,
+    err: ?anyerror,
+
+    fn retrieve(r: ResolveResult) !Item {
+        return r.item orelse return r.err.?;
+    }
+
+    fn throw(err: anyerror) ResolveResult {
+        return .{ .item = null, .err = err };
+    }
+
+    fn ok(item: Item) ResolveResult {
+        return .{ .item = item, .err = null };
+    }
+};
+
+fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
     const day_list = journal.info.days;
     const name: []const u8 = switch (s) {
         // TODO: translate these by days ago
@@ -115,8 +132,23 @@ fn retrieveFromJournal(s: Selector, journal: *Journal) !Item {
         .ByName => |n| n,
     };
     const day = journal.getDay(name) orelse
-        return Root.Error.NoSuchItem;
-    return .{ .Day = .{ .journal = journal.*, .day = day } };
+        return ResolveResult.throw(Root.Error.NoSuchItem);
+    return ResolveResult.ok(
+        .{ .Day = .{ .journal = journal.*, .day = day } },
+    );
+}
+
+fn retrieveFromDirectory(s: Selector, directory: *Directory) !ResolveResult {
+    const name: []const u8 = switch (s) {
+        .ByName => |n| n,
+        .ByDate => |d| &(try time.formatDateBuf(d)),
+        else => return Error.InvalidSelection,
+    };
+    const note = directory.getNote(name) orelse
+        return ResolveResult.throw(Root.Error.NoSuchItem);
+    return ResolveResult.ok(
+        .{ .Note = .{ .directory = directory.*, .note = note } },
+    );
 }
 
 /// Struct representing the selection made
@@ -129,29 +161,50 @@ pub const Selection = struct {
     /// The selector used to select the item
     selector: ?Selector = null,
 
-    fn resolve(s: Selection, root: *Root) !Item {
+    fn resolve(s: Selection, root: *Root) !ResolveResult {
+        const selector = s.selector orelse
+            return ResolveResult.throw(Error.UnknownSelection);
         if (s.collection_type) |ct| {
             switch (ct) {
                 .CollectionJournal => {
                     const name = s.collection_name orelse
                         root.info.default_journal;
-                    const selector = s.selector orelse
-                        return Error.UnknownSelection;
                     std.log.default.debug("Looking up journal '{s}'", .{name});
                     var journal = (try root.getJournal(name)) orelse
-                        return Error.UnknownSelection;
+                        return ResolveResult.throw(Error.UnknownSelection);
                     return try retrieveFromJournal(selector, &journal);
+                },
+                .CollectionDirectory => {
+                    const name = s.collection_name orelse
+                        root.info.default_directory;
+                    std.log.default.debug("Looking up directory '{s}'", .{name});
+                    var directory = (try root.getDirectory(name)) orelse
+                        return ResolveResult.throw(Error.UnknownSelection);
+                    return try retrieveFromDirectory(selector, &directory);
                 },
                 else => unreachable,
             }
         }
-        unreachable;
+
+        // try different collections and see if one resolves
+        for (&[_]Root.CollectionType{
+            .CollectionDirectory,
+            .CollectionJournal,
+            .CollectionTasklist,
+        }) |ct| {
+            var canary = s;
+            canary.collection_type = ct;
+            const r = try canary.resolve(root);
+            if (r.item) |_| return r;
+        }
+
+        return ResolveResult.throw(Error.UnknownSelection);
     }
 
     /// Resolve the selection from the `Root`. Errors are reported back to the
     /// terminal. Returns an `Item`.
     pub fn resolveReportError(s: Selection, root: *Root) !Item {
-        return s.resolve(root) catch |err| {
+        return (try s.resolve(root)).retrieve() catch |err| {
             return err;
         };
     }
@@ -176,7 +229,8 @@ fn testSelectionResolve(
         tasklist,
     )) |_| return Error.IncompatibleSelection;
 
-    const item = try selection.resolve(root);
+    const rr = try selection.resolve(root);
+    const item = try rr.retrieve();
     try std.testing.expect(item.eql(expected));
 }
 
@@ -187,8 +241,7 @@ test "resolve selections" {
 
     try root.addInitialCollections();
 
-    var j = (try root.getJournal(root.info.default_journal)) orelse
-        unreachable;
+    var j = (try root.getJournal(root.info.default_journal)).?;
     defer j.deinit();
     const day = try j.addNewEntryFromText("hello world", &.{});
     try testSelectionResolve(
@@ -198,6 +251,18 @@ test "resolve selections" {
         null,
         null,
         .{ .Day = .{ .day = day, .journal = j } },
+    );
+
+    var d = (try root.getDirectory(root.info.default_directory)).?;
+    defer d.deinit();
+    const note = try d.addNewNoteByName("stuff", .{});
+    try testSelectionResolve(
+        &root,
+        "stuff",
+        null,
+        null,
+        null,
+        .{ .Note = .{ .note = note, .directory = d } },
     );
 }
 

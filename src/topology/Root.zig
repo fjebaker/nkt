@@ -671,6 +671,12 @@ pub fn getJournal(self: *Root, name: []const u8) !?Journal {
     return self.getCollection(name, .CollectionJournal);
 }
 
+/// Get a `Directory` by name. Returns `null` if name is invalid. `deinit` must
+/// be called on the directory by the caller.
+pub fn getDirectory(self: *Root, name: []const u8) !?Directory {
+    return self.getCollection(name, .CollectionDirectory);
+}
+
 /// Add all of the default collections to the root
 pub fn addInitialCollections(self: *Root) !void {
     // initialize an empty tag descriptor list
