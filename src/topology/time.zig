@@ -31,13 +31,13 @@ pub const TimeZone = struct {
     }
 
     /// Convert a given date to a local date
-    pub fn localDate(self: TimeZone, date: Date) Date {
+    pub fn makeLocal(self: TimeZone, date: Date) Date {
         return date.shiftTimezone(&self.tz);
     }
 
     /// Get the local time now
     pub fn localTimeNow(self: TimeZone) Date {
-        return self.localDate(dateFromTime(timeNow()));
+        return self.makeLocal(dateFromTime(timeNow()));
     }
 };
 
@@ -128,4 +128,21 @@ pub fn formatDateTimeBuf(date: Date) ![19]u8 {
     @memcpy(buf[11..], &time_s);
 
     return buf;
+}
+
+/// Get the day of the week as a string. Caller owns memory.
+pub fn dayOfWeek(date: Date) ![]const u8 {
+    return date.date.weekdayName();
+}
+
+/// Get the month of the year as a string. Caller owns memory.
+pub fn monthOfYear(date: Date) ![]const u8 {
+    return date.date.monthName();
+}
+
+/// Shift back a `Time` to a `Date`.
+pub fn shiftBack(t: Time, index: usize) Date {
+    return dateFromTime(t).shiftDays(
+        -@as(i32, @intCast(index)),
+    );
 }
