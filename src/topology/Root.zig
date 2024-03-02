@@ -21,6 +21,7 @@ pub const Error = error{
     NeedsFileSystem,
     InvalidExtension,
     NoSuchCollection,
+    NoSuchItem,
 };
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
@@ -198,6 +199,14 @@ pub fn loadFromString(self: *Root, string: []const u8) !void {
         alloc,
         string,
         .{ .allocate = .alloc_always },
+    );
+    std.log.default.debug(
+        "Read {d} journals, {d} directories, {d} tasklists",
+        .{
+            self.info.journals.len,
+            self.info.directories.len,
+            self.info.tasklists.len,
+        },
     );
 }
 
@@ -546,7 +555,11 @@ fn lookupCollection(
     descr: Descriptor,
     comptime t: CollectionType,
 ) !t.ToType() {
-    const info_ptr = &@field(self.cache, t.toFieldName()).getPtr(descr.name).?.item;
+    const info_ptr = &@field(
+        self.cache,
+        t.toFieldName(),
+    ).getPtr(descr.name).?.item;
+
     return try self.collectionFromInfoPtr(descr, t, info_ptr);
 }
 
