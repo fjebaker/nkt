@@ -107,6 +107,22 @@ pub fn getDay(self: *Journal, name: []const u8) ?Day {
     return null;
 }
 
+/// Get the `Day` by index from a reference time. That is, index 0 will be the
+/// same day as the reference time, index 1 will be the day before, index n
+/// will be n days before. Will not make any timezone adjustments. Returns
+/// `null` if no `Day` at given index.
+pub fn getDayOffsetIndex(
+    self: *Journal,
+    reference: time.Time,
+    index: usize,
+) ?Day {
+    const date = time.shiftBack(reference, index);
+
+    // TODO: is this alright?
+    const name = time.formatDateBuf(date) catch return null;
+    return self.getDay(&name);
+}
+
 /// Get a day by path. Returns `null` if day not found.
 pub fn getDayByPath(self: *Journal, name: []const u8) ?Day {
     for (self.info.days) |d| {
@@ -136,7 +152,8 @@ fn newDayFromName(self: *Journal, name: []const u8) !Day {
         .tags = &.{},
     };
 
-    // then add to the staging so we don't try to open a file that doesn't exist
+    // then add to the staging so we don't try to open a file that doesn't
+    // exist
     var map = self.getStagedEntries();
     try map.put(day.path, std.ArrayList(Entry).init(self.allocator));
     return day;
@@ -153,6 +170,18 @@ fn newPathFromName(self: *Journal, name: []const u8) ![]const u8 {
             &.{ name, DAY_FILE_EXTENSION },
         ) },
     );
+}
+
+/// Read the entries of a `Day`. Does not validate the day exists.
+pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
+    // check if we have the entries staged already
+    var map = self.getStagedEntries();
+    if (map.get(day.path)) |entry_list| {
+        return entry_list.items;
+    }
+    // otherwise we read from file
+    var fs = self.fs orelse return error.NeedsFileSystem;
+    return try self.readDayFromPath(&fs, day.path);
 }
 
 fn readDayFromPath(
@@ -176,7 +205,7 @@ fn readDayFromPath(
         content,
         .{},
     );
-    return self.allocator.dupe(Entry, parsed.entries);
+    return try alloc.dupe(Entry, parsed.entries);
 }
 
 fn writeEntriesToPath(
