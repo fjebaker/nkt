@@ -631,10 +631,18 @@ pub fn getCollection(
     name: []const u8,
     comptime t: CollectionType,
 ) !?t.ToType() {
+    const descr = self.getDescriptor(name, t) orelse
+        return null;
+
+    // check the chache first
+    if (@field(self.cache, t.toFieldName()).contains(descr.name)) {
+        return try self.lookupCollection(descr, t);
+    }
+
+    // read the contents from file
     var fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
-    const descr = self.getDescriptor(name, t) orelse return null;
     const info_content = try fs.readFileAlloc(self.allocator, descr.path);
     defer self.allocator.free(info_content);
 
