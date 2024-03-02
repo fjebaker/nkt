@@ -47,7 +47,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         if (!try parser.parseArg(arg)) {
             if (arg.flag) try itt.throwUnknownFlag();
             // tag parsing
-            const tag_name = tags.isTagString(arg.string) catch |err| {
+            const tag_name = tags.getTagString(arg.string) catch |err| {
                 try cli.throwError(err, "{s}", .{arg.string});
                 unreachable;
             };

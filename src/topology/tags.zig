@@ -118,6 +118,16 @@ pub const DescriptorList = struct {
     }
 };
 
+/// Returns true if one of the tags in `mine` is present in `theirs`.
+pub fn hasUnion(mine: []const Tag, theirs: []const Tag) bool {
+    for (mine) |m| {
+        for (theirs) |t| {
+            if (m.eql(t)) return true;
+        }
+    }
+    return false;
+}
+
 /// Parse tags that are inline with the text such as "hello @world".  Returns a
 /// list of tags. Caller owns the memory.  The tags do not copy strings from
 /// the input text, so the input text must outlive the tags.
@@ -159,16 +169,16 @@ pub fn readTagDescriptors(
 
 /// name of the tag if it is, else null. Will throw a `TagNotLowercase` error
 /// if the tag is not lowercase.
-pub fn isTagString(string: []const u8) error{TagNotLowercase}!?[]const u8 {
+pub fn getTagString(string: []const u8) error{TagNotLowercase}!?[]const u8 {
     if (string[0] == '@') {
         var itt = utils.ListIterator(u8).init(string[1..]);
-        const end = try isTagStringIterated(&itt);
+        const end = try getTagStringIterated(&itt);
         return string[1..end];
     }
     return null;
 }
 
-fn isTagStringIterated(itt: *utils.ListIterator(u8)) error{TagNotLowercase}!usize {
+fn getTagStringIterated(itt: *utils.ListIterator(u8)) error{TagNotLowercase}!usize {
     while (itt.next()) |c| {
         switch (c) {
             'a'...'z', '.', '-' => {},
@@ -180,7 +190,7 @@ fn isTagStringIterated(itt: *utils.ListIterator(u8)) error{TagNotLowercase}!usiz
 }
 
 fn testIsTagString(string: []const u8, comptime name: ?[]const u8) !void {
-    const parsed = try isTagString(string);
+    const parsed = try getTagString(string);
     try std.testing.expectEqualDeep(name, parsed);
 }
 
@@ -217,7 +227,7 @@ pub fn parseInlineTagPositions(allocator: std.mem.Allocator, string: []const u8)
     while (itt.next()) |c| {
         if (c == '@') { // at the beginning of a tag
             const start = itt.index - 1;
-            const end = try isTagStringIterated(&itt);
+            const end = try getTagStringIterated(&itt);
             try positions.append(
                 .{ .start = start, .end = end - 1 },
             );
