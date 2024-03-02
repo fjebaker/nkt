@@ -356,7 +356,7 @@ pub const ExtendedHelpOptions = struct {
 pub const ArgumentError = error{MalformedName};
 
 const LEFT_PADDING = 4;
-const CENTRE_PADDING = 22;
+const CENTRE_PADDING = 26;
 const HELP_LEN = 48;
 const HELP_INDENT = 2;
 
@@ -595,7 +595,7 @@ pub fn ArgumentsHelp(comptime args: []const ArgumentDescriptor, comptime opts: E
                 } else {
                     try writer.print("[{s}]", .{arg.arg});
                 }
-                try writer.writeByteNTimes(' ', CENTRE_PADDING - arg.arg.len - 2);
+                try writer.writeByteNTimes(' ', CENTRE_PADDING -| (arg.arg.len + 2));
                 try writeWrapped(writer, arg.help, .{
                     .left_pad = LEFT_PADDING + CENTRE_PADDING,
                     .continuation_indent = HELP_INDENT,
