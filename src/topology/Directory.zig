@@ -24,6 +24,7 @@ pub const Info = struct {
 };
 
 info: *Info,
+descriptor: Descriptor,
 fs: ?FileSystem = null,
 allocator: std.mem.Allocator,
 

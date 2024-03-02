@@ -3,6 +3,7 @@ const tags = @import("tags.zig");
 const Tag = tags.Tag;
 const Time = @import("time.zig").Time;
 const utils = @import("../utils.zig");
+const Descriptor = @import("Root.zig").Descriptor;
 
 const Tasklist = @This();
 
@@ -52,6 +53,7 @@ pub const Info = struct {
 };
 
 info: *Info,
+descriptor: Descriptor,
 allocator: std.mem.Allocator,
 
 pub fn deinit(self: *Tasklist) void {

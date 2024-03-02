@@ -580,11 +580,13 @@ fn collectionFromInfoPtr(
         },
         .CollectionDirectory => .{
             .info = info_ptr,
+            .descriptor = descr,
             .fs = self.fs,
             .allocator = self.allocator,
         },
         .CollectionTasklist => .{
             .info = info_ptr,
+            .descriptor = descr,
             .allocator = self.allocator,
         },
     };
