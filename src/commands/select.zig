@@ -1,86 +1,57 @@
 const std = @import("std");
-
+const selections = @import("../selections.zig");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const State = @import("../State.zig");
-
+const commands = @import("../commands.zig");
+const Commands = commands.Commands;
+const Root = @import("../topology/Root.zig");
 const Self = @This();
 
-pub const help = "Select an item or collection";
 pub const short_help = "Select an item or collection.";
 pub const long_help =
     \\Select an item or collection
 ;
 
-pub const argument_help = cli.extendedHelp(&.{
-    .{
-        .arg = "[command]",
-        .help = "Subcommand to print extended help for.",
-    },
-}, .{});
+pub const arguments = cli.ArgumentsHelp(
+    selections.selectHelp("item", "The selection item"),
+    .{},
+);
 
-selection: cli.Selection = .{},
+selection: selections.Selection,
 
-pub fn init(
-    _: std.mem.Allocator,
-    itt: *cli.ArgIterator,
-    opts: cli.Options,
-) !Self {
-    _ = opts;
-    var self: Self = .{};
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var args = try arguments.parseAll(itt);
 
-    itt.counter = 0;
-    while (try itt.next()) |arg| {
-        // parse selection
-        if (try self.selection.parse(arg, itt)) continue;
+    const selection = try selections.fromArgs(
+        arguments.ParsedArguments,
+        args.item,
+        args,
+    );
 
-        if (arg.flag) return cli.CLIErrors.UnknownFlag;
-    }
-
-    return self;
+    return .{ .selection = selection };
 }
 
-pub fn run(
+pub fn execute(
     self: *Self,
-    state: *State,
-    out_writer: anytype,
+    _: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    _: commands.Options,
 ) !void {
-    const selected: State.MaybeItem =
-        (try self.selection.find(state)) orelse
-        return State.Error.NoSuchCollection;
-
-    if (selected.day) |item| {
-        try printSelection(out_writer, item);
-    }
-    if (selected.note) |item| {
-        try printSelection(out_writer, item);
-    }
-    if (selected.task) |item| {
-        try printSelection(out_writer, item);
-    }
+    try root.load();
+    const item = try self.selection.resolveReportError(root);
+    try handleSelection(writer, item);
 }
 
-fn printSelection(out_writer: anytype, item: State.Item) !void {
+fn handleSelection(writer: anytype, item: selections.Item) !void {
     switch (item) {
-        .Note => |note| {
-            try out_writer.print("> Note: {s}\n", .{note.note.name});
-        },
-        .Day => |day| {
-            const index = day.indexAtTime() catch |err| {
-                if (err == State.Item.DayError.NoTimeGiven) {
-                    try out_writer.print("> Day: {s}\n", .{day.day.name});
-                    return;
-                } else return err;
-            };
-
-            try out_writer.print(
-                "> Day: {s} index: {d} \n",
-                .{ day.day.name, index },
+        .Day => |d| {
+            try writer.print(
+                "Day: {s} [Journal: {s}]\n",
+                .{ d.day.name, d.journal.descriptor.name },
             );
         },
-        .Task => |task| {
-            try out_writer.print("> Task: {s}\n", .{task.task.title});
-        },
+        else => unreachable,
     }
 }

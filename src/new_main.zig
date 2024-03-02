@@ -147,6 +147,7 @@ test "end-to-end" {
     defer fs.deinit();
 
     var root: Root = Root.new(allocator);
+    defer root.deinit();
     root.fs = fs;
 
     const state = TestState{
