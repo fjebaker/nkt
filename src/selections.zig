@@ -4,6 +4,9 @@ const cli = @import("cli.zig");
 
 const time = @import("topology/time.zig");
 const Root = @import("topology/Root.zig");
+const Journal = @import("topology/Journal.zig");
+const Directory = @import("topology/Directory.zig");
+const Tasklist = @import("topology/Tasklist.zig");
 
 pub const Error = error{
     /// Selection does not uniquely select an item
@@ -43,6 +46,79 @@ pub const Selector = union(Method) {
     }
 };
 
+/// Structure representing the resolution of a `Selection`
+pub const Item = union(enum) {
+    Entry: struct {
+        journal: Journal,
+        entry: Journal.Entry,
+    },
+    Day: struct {
+        journal: Journal,
+        day: Journal.Day,
+    },
+    Note: struct {
+        directory: Directory,
+        note: Directory.Note,
+    },
+    Task: struct {
+        tasklist: Tasklist,
+        task: Tasklist.Task,
+    },
+
+    fn eql(i: Item, j: Item) bool {
+        if (std.meta.activeTag(i) != std.meta.activeTag(j))
+            return false;
+        switch (i) {
+            .Entry => |is| {
+                const js = j.Entry;
+                return std.mem.eql(u8, js.entry.text, is.entry.text);
+            },
+            .Day => |id| {
+                const jd = j.Day;
+                return std.mem.eql(u8, jd.day.name, id.day.name) and
+                    std.mem.eql(
+                    u8,
+                    id.journal.descriptor.name,
+                    id.journal.descriptor.name,
+                );
+            },
+            .Note => |in| {
+                const jn = j.Note;
+                return std.mem.eql(u8, in.note.name, jn.note.name) and
+                    std.mem.eql(
+                    u8,
+                    in.directory.descriptor.name,
+                    jn.directory.descriptor.name,
+                );
+            },
+            .Task => |it| {
+                const jt = j.Task;
+                return std.mem.eql(u8, it.task.title, jt.task.title) and
+                    std.mem.eql(
+                    u8,
+                    it.tasklist.descriptor.name,
+                    jt.tasklist.descriptor.name,
+                );
+            },
+        }
+    }
+};
+
+fn retrieveFromJournal(s: Selector, journal: *Journal) !Item {
+    const day_list = journal.info.days;
+    const name: []const u8 = switch (s) {
+        // TODO: translate these by days ago
+        .ByIndex => |i| day_list[day_list.len - i - 1].name,
+        .ByQualifiedIndex => |qi| day_list[day_list.len - qi.index - 1].name,
+
+        .ByDate => |d| &(try time.formatDateBuf(d)),
+        .ByName => |n| n,
+    };
+    const day = journal.getDay(name) orelse
+        return Root.Error.NoSuchItem;
+    return .{ .Day = .{ .journal = journal.*, .day = day } };
+}
+
 /// Struct representing the selection made
 pub const Selection = struct {
     /// The type of the collection selected
@@ -52,7 +128,78 @@ pub const Selection = struct {
 
     /// The selector used to select the item
     selector: ?Selector = null,
+
+    fn resolve(s: Selection, root: *Root) !Item {
+        if (s.collection_type) |ct| {
+            switch (ct) {
+                .CollectionJournal => {
+                    const name = s.collection_name orelse
+                        root.info.default_journal;
+                    const selector = s.selector orelse
+                        return Error.UnknownSelection;
+                    std.log.default.debug("Looking up journal '{s}'", .{name});
+                    var journal = (try root.getJournal(name)) orelse
+                        return Error.UnknownSelection;
+                    return try retrieveFromJournal(selector, &journal);
+                },
+                else => unreachable,
+            }
+        }
+        unreachable;
+    }
+
+    /// Resolve the selection from the `Root`. Errors are reported back to the
+    /// terminal. Returns an `Item`.
+    pub fn resolveReportError(s: Selection, root: *Root) !Item {
+        return s.resolve(root) catch |err| {
+            return err;
+        };
+    }
 };
+
+fn testSelectionResolve(
+    root: *Root,
+    s: []const u8,
+    journal: ?[]const u8,
+    directory: ?[]const u8,
+    tasklist: ?[]const u8,
+    expected: Item,
+) !void {
+    var selection: Selection = .{};
+    const selector = try asSelector(s);
+    try addSelector(&selection, selector);
+
+    if (try addFlags(
+        &selection,
+        journal,
+        directory,
+        tasklist,
+    )) |_| return Error.IncompatibleSelection;
+
+    const item = try selection.resolve(root);
+    try std.testing.expect(item.eql(expected));
+}
+
+test "resolve selections" {
+    var alloc = std.testing.allocator;
+    var root = Root.new(alloc);
+    defer root.deinit();
+
+    try root.addInitialCollections();
+
+    var j = (try root.getJournal(root.info.default_journal)) orelse
+        unreachable;
+    defer j.deinit();
+    const day = try j.addNewEntryFromText("hello world", &.{});
+    try testSelectionResolve(
+        &root,
+        "0",
+        null,
+        null,
+        null,
+        .{ .Day = .{ .day = day, .journal = j } },
+    );
+}
 
 fn allNumeric(string: []const u8) bool {
     for (string) |c| {
