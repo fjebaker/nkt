@@ -11,6 +11,26 @@ const Commands = commands.Commands;
 
 const help = @import("commands/help.zig");
 
+// configure logging
+pub const std_options = struct {
+    // Define logFn to override the std implementation
+    pub const logFn = loggerFn;
+};
+
+pub fn loggerFn(
+    comptime level: std.log.Level,
+    comptime _: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const prefix = "[" ++ comptime level.asText() ++ "]: ";
+    // Print the message to stderr, silently ignoring any errors
+    std.debug.getStderrMutex().lock();
+    defer std.debug.getStderrMutex().unlock();
+    const stderr = std.io.getStdErr().writer();
+    nosuspend stderr.print(prefix ++ format ++ "\n", args) catch return;
+}
+
 /// Print out useful information or help when an execution error occurs.
 fn handle_execution_error(writer: anytype, err: anyerror) !void {
     if (utils.inErrorSet(err, commands.Error)) |e| switch (e) {
