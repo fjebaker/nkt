@@ -232,16 +232,6 @@ pub fn formatDateTimeBuf(date: Date) ![19]u8 {
     return buf;
 }
 
-pub fn dayOfWeek(alloc: std.mem.Allocator, date: Date) ![]const u8 {
-    const t_date = adjustTimezone(date);
-    return alloc.dupe(u8, t_date.date.weekdayName());
-}
-
-pub fn monthOfYear(alloc: std.mem.Allocator, date: Date) ![]const u8 {
-    const t_date = adjustTimezone(date);
-    return alloc.dupe(u8, t_date.date.monthName());
-}
-
 pub fn push(
     comptime T: type,
     allocator: std.mem.Allocator,

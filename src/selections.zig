@@ -122,17 +122,26 @@ const ResolveResult = struct {
 };
 
 fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
-    const day_list = journal.info.days;
-    const name: []const u8 = switch (s) {
-        // TODO: translate these by days ago
-        .ByIndex => |i| day_list[day_list.len - i - 1].name,
-        .ByQualifiedIndex => |qi| day_list[day_list.len - qi.index - 1].name,
-
-        .ByDate => |d| &(try time.formatDateBuf(d)),
-        .ByName => |n| n,
+    const now = time.timeNow();
+    const day = switch (s) {
+        .ByQualifiedIndex, .ByIndex => b: {
+            const index = if (s == .ByIndex)
+                s.ByIndex
+            else
+                s.ByQualifiedIndex.index;
+            std.log.default.debug("Looking up by index: {d}", .{index});
+            break :b journal.getDayOffsetIndex(now, index) orelse
+                return ResolveResult.throw(Root.Error.NoSuchItem);
+        },
+        .ByDate => |d| b: {
+            const name = try time.formatDateBuf(d);
+            break :b journal.getDay(&name) orelse
+                return ResolveResult.throw(Root.Error.NoSuchItem);
+        },
+        .ByName => |name| journal.getDay(name) orelse
+            return ResolveResult.throw(Root.Error.NoSuchItem),
     };
-    const day = journal.getDay(name) orelse
-        return ResolveResult.throw(Root.Error.NoSuchItem);
+
     return ResolveResult.ok(
         .{ .Day = .{ .journal = journal.*, .day = day } },
     );
@@ -204,7 +213,24 @@ pub const Selection = struct {
     /// Resolve the selection from the `Root`. Errors are reported back to the
     /// terminal. Returns an `Item`.
     pub fn resolveReportError(s: Selection, root: *Root) !Item {
-        return (try s.resolve(root)).retrieve() catch |err| {
+        const rr = try s.resolve(root);
+        return rr.retrieve() catch |err| {
+            if (err == Error.UnknownSelection) {
+                try cli.throwError(
+                    Error.UnknownSelection,
+                    "Selection is malformed.",
+                    .{},
+                );
+                unreachable;
+            }
+            if (err == Root.Error.NoSuchItem) {
+                try cli.throwError(
+                    Root.Error.NoSuchItem,
+                    "Cannot find item.",
+                    .{},
+                );
+                unreachable;
+            }
             return err;
         };
     }
@@ -585,15 +611,15 @@ pub fn selectHelp(
         },
         .{
             .arg = "--journal journal",
-            .help = help,
+            .help = "The name of a journal to select the day or entry from. If unassigned uses default journal.",
         },
         .{
             .arg = "--directory directory",
-            .help = help,
+            .help = "The name of the directory to select a note from. If unassigned uses default directory.",
         },
         .{
             .arg = "--tasklist tasklist",
-            .help = help,
+            .help = "The name of the tasklist to select a task from. If unassigned uses default tasklist.",
         },
     };
     return args;
