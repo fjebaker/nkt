@@ -7,6 +7,7 @@ const selections = @import("../selections.zig");
 
 const commands = @import("../commands.zig");
 const Journal = @import("../topology/Journal.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
 const Root = @import("../topology/Root.zig");
 
 const colors = @import("../colors.zig");
@@ -138,6 +139,9 @@ pub fn execute(
                 opts.tz,
             );
         },
+        .Task => |*task| {
+            try self.printTask(task.task, &bprinter, opts.tz);
+        },
         .Collection => |*c| {
             switch (c.*) {
                 .journal => |*j| try self.readJournal(
@@ -147,6 +151,7 @@ pub fn execute(
                     &bprinter,
                     opts.tz,
                 ),
+                // TODO: handle this better
                 else => unreachable,
             }
         },
@@ -286,313 +291,112 @@ fn printEntries(
     return entries_written;
 }
 
-// pub fn pipeToPager(
-//     allocator: std.mem.Allocator,
-//     pager: []const []const u8,
-//     s: []const u8,
-// ) !void {
-//     var proc = std.ChildProcess.init(
-//         pager,
-//         allocator,
-//     );
+const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();
+const URGENT_FORMAT = colors.RED.bold().fixed();
+const WARN_FORMAT = colors.YELLOW.fixed();
+const DIM_FORMAT = colors.DIM.fixed();
+const COMPLETED_FORMAT = colors.GREEN.fixed();
 
-//     proc.stdin_behavior = std.ChildProcess.StdIo.Pipe;
-//     proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
-//     proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+fn printTask(
+    _: *Self,
+    t: Tasklist.Task,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !void {
+    const status = t.getStatus(time.timeNow());
 
-//     try proc.spawn();
-//     _ = try proc.stdin.?.write(s);
-//     proc.stdin.?.close();
-//     proc.stdin = null;
-//     _ = try proc.wait();
-// }
+    const due_s = if (t.due) |due|
+        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(due)))
+    else
+        "no date set";
 
-// pub fn run(
-//     self: *Self,
-//     state: *State,
-//     out_writer: anytype,
-// ) !void {
-//     if (self.pager) {
-//         var buf = std.ArrayList(u8).init(state.allocator);
-//         defer buf.deinit();
-//         try read(self, state, buf.writer());
-//         try pipeToPager(state.allocator, state.topology.pager, buf.items);
-//     } else {
-//         try read(self, state, out_writer);
-//     }
-// }
+    const completed_s = if (t.done) |compl|
+        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(compl)))
+    else
+        "not completed";
 
-// fn read(
-//     self: *Self,
-//     state: *State,
-//     out_writer: anytype,
-// ) !void {
-//     const N = if (self.all) null else self.number;
-//     var printer = BlockPrinter.init(
-//         state.allocator,
-//         .{ .max_lines = N, .pretty = self.pretty.? },
-//     );
-//     defer printer.deinit();
+    try printer.addBlock("", .{});
 
-//     const tag_infos = state.getTagInfo();
-//     const selected_tags = if (self.selected_tags) |names|
-//         try tags.makeTagList(
-//             state.allocator,
-//             names,
-//             tag_infos,
-//         )
-//     else
-//         null;
-//     defer if (selected_tags) |st| state.allocator.free(st);
+    try printer.addFormatted(
+        .Item,
+        "Task" ++ " " ** 11 ++ ":   {s}\n\n",
+        .{t.title},
+        .{ .fmt = HEADING_FORMAT },
+    );
 
-//     if (self.selection.item != null) {
-//         const selected: State.MaybeItem =
-//             (try self.selection.find(state)) orelse
-//             return NoSuchCollection;
+    try addInfoLine(
+        printer,
+        "Created",
+        "|",
+        "  {s}\n",
+        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
+        null,
+    );
+    try addInfoLine(
+        printer,
+        "Modified",
+        "|",
+        "  {s}\n",
+        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
+        null,
+    );
+    try addInfoLine(
+        printer,
+        "Due",
+        "|",
+        "  {s}\n",
+        .{due_s},
+        switch (status) {
+            .PastDue => URGENT_FORMAT,
+            .NearlyDue => WARN_FORMAT,
+            else => DIM_FORMAT,
+        },
+    );
+    try addInfoLine(
+        printer,
+        "Importance",
+        "|",
+        "{s}\n",
+        .{switch (t.importance) {
+            .Low => "  Low",
+            .High => "* High",
+            .Urgent => "! Urgent",
+        }},
+        switch (t.importance) {
+            .High => WARN_FORMAT,
+            .Low => DIM_FORMAT,
+            .Urgent => URGENT_FORMAT,
+        },
+    );
+    try addInfoLine(
+        printer,
+        "Completed",
+        "|",
+        "  {s}\n",
+        .{completed_s},
+        switch (status) {
+            .Done => COMPLETED_FORMAT,
+            else => DIM_FORMAT,
+        },
+    );
 
-//         if (selected.note) |note| {
-//             try readNote(note, &printer);
-//         }
-//         if (selected.day) |day| {
-//             printer.addTagInfo(state.getTagInfo());
-//             try self.readDay(day, selected_tags, state, &printer);
-//         }
-//         if (selected.task) |task| {
-//             printer.format_printer.opts.max_lines = null;
-//             printer.addTagInfo(tag_infos);
-//             try self.readTask(task, &printer);
-//         }
-//     } else if (self.selection.collection) |w| switch (w.container) {
-//         // if no selection, but a collection
-//         .Journal => {
-//             const journal = state.getJournal(w.name) orelse
-//                 return NoSuchCollection;
-//             try self.readJournal(journal, selected_tags, state, &printer);
-//         },
-//         else => unreachable, // todo
-//     } else {
-//         // default behaviour
-//         const journal = state.getJournal("diary").?;
-//         printer.addTagInfo(tag_infos);
-//         try self.readJournal(journal, selected_tags, state, &printer);
-//     }
+    if (t.details) |details| {
+        try printer.addToCurrent("\nDetails:\n\n", .{ .fmt = HEADING_FORMAT });
+        try printer.addToCurrent(details, .{});
+        try printer.addToCurrent("\n", .{});
+    }
+}
 
-//     try printer.drain(out_writer);
-// }
-
-// pub fn readNote(
-//     note: State.Item,
-//     printer: *BlockPrinter,
-// ) !void {
-//     const content = try note.Note.read();
-//     try printer.addBlock("", .{});
-//     _ = try printer.addToCurrent(content, .{});
-// }
-
-// pub fn readJournal(
-//     self: *Self,
-//     journal: *State.Collection,
-//     selected_tags: ?[]const tags.Tag,
-//     state: *State,
-//     printer: *BlockPrinter,
-// ) !void {
-//     const alloc = printer.format_printer.mem.allocator();
-//     var day_list = try journal.getAll(alloc);
-
-//     if (day_list.len == 0) {
-//         try printer.addBlock("-- Empty --\n", .{});
-//         return;
-//     }
-
-//     journal.sort(day_list, .Created);
-//     std.mem.reverse(State.Item, day_list);
-
-//     var line_count: usize = 0;
-//     const last = for (0.., day_list) |i, *day| {
-//         const entries = try journal.Journal.readEntries(day.Day.day);
-//         line_count += entries.len;
-//         if (!printer.couldFit(line_count)) {
-//             break i;
-//         }
-//     } else day_list.len -| 1;
-
-//     printer.reverse();
-//     for (day_list[0 .. last + 1]) |day| {
-//         try self.readDay(day, selected_tags, state, printer);
-//         if (!printer.couldFit(1)) break;
-//     }
-//     printer.reverse();
-// }
-
-// fn addItems(
-//     _: *Self,
-//     entries: []Entry,
-//     comptime format: enum { FullTime, ClockTime },
-//     state: *State,
-//     printer: *BlockPrinter,
-// ) !void {
-//     const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
-//     const tag_infos = state.getTagInfo();
-
-//     // the previously printed entry
-//     var previous: ?Entry = null;
-
-//     for (entries[offset..]) |entry| {
-//         // if there is more than an hour between two entries, print a newline
-//         // to separate clearer
-//         if (previous) |prev| {
-//             const diff = if (prev.created < entry.created)
-//                 entry.created - prev.created
-//             else
-//                 prev.created - entry.created;
-//             if (diff > std.time.ms_per_hour) {
-//                 try printer.addToCurrent("\n", .{ .is_counted = false });
-//             }
-//         }
-//         const date = utils.dateFromMs(entry.created);
-//         switch (format) {
-//             .ClockTime => {
-//                 const time_of_day = try utils.formatTimeBuf(date);
-//                 try printer.addFormatted(
-//                     .Item,
-//                     "{s} | {s}",
-//                     .{ time_of_day, entry.item },
-//                     .{},
-//                 );
-//             },
-//             .FullTime => {
-//                 const full_time = try utils.formatDateTimeBuf(date);
-//                 try printer.addFormatted(
-//                     .Item,
-//                     "{s} | {s}",
-//                     .{ full_time, entry.item },
-//                     .{},
-//                 );
-//             },
-//         }
-
-//         if (entry.tags.len > 0) {
-//             try printer.addToCurrent(" ", .{ .is_counted = false });
-//         }
-//         for (entry.tags) |tag| {
-//             try printer.addToCurrent("@", .{
-//                 .fmt = try tags.getTagFormat(
-//                     printer.format_printer.mem.allocator(),
-//                     tag_infos,
-//                     tag.name,
-//                 ),
-//                 .is_counted = false,
-//             });
-//         }
-
-//         try printer.addToCurrent("\n", .{ .is_counted = false });
-//         previous = entry;
-//     }
-// }
-
-// const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();
-// const URGENT_FORMAT = colors.RED.bold().fixed();
-// const WARN_FORMAT = colors.YELLOW.fixed();
-// const DIM_FORMAT = colors.DIM.fixed();
-// const COMPLETED_FORMAT = colors.GREEN.fixed();
-
-// fn readTask(
-//     _: *Self,
-//     task: State.Item,
-//     printer: *BlockPrinter,
-// ) !void {
-//     const t = task.Task.task;
-//     const status = t.status(utils.Date.now());
-
-//     const due_s = if (t.due) |due|
-//         &try utils.formatDateTimeBuf(utils.dateFromMs(due))
-//     else
-//         "no date set";
-
-//     const completed_s = if (t.completed) |compl|
-//         &try utils.formatDateTimeBuf(utils.dateFromMs(compl))
-//     else
-//         "not completed";
-
-//     try printer.addBlock("", .{});
-
-//     try printer.addFormatted(
-//         .Item,
-//         "Task" ++ " " ** 11 ++ ":   {s}\n\n",
-//         .{t.title},
-//         .{ .fmt = HEADING_FORMAT },
-//     );
-
-//     try addInfoLine(
-//         printer,
-//         "Created",
-//         "|",
-//         "  {s}\n",
-//         .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
-//         null,
-//     );
-//     try addInfoLine(
-//         printer,
-//         "Modified",
-//         "|",
-//         "  {s}\n",
-//         .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
-//         null,
-//     );
-//     try addInfoLine(
-//         printer,
-//         "Due",
-//         "|",
-//         "  {s}\n",
-//         .{due_s},
-//         switch (status) {
-//             .PastDue => URGENT_FORMAT,
-//             .NearlyDue => WARN_FORMAT,
-//             else => DIM_FORMAT,
-//         },
-//     );
-//     try addInfoLine(
-//         printer,
-//         "Importance",
-//         "|",
-//         "{s}\n",
-//         .{switch (t.importance) {
-//             .low => "  Low",
-//             .high => "* High",
-//             .urgent => "! Urgent",
-//         }},
-//         switch (t.importance) {
-//             .high => WARN_FORMAT,
-//             .low => DIM_FORMAT,
-//             .urgent => URGENT_FORMAT,
-//         },
-//     );
-//     try addInfoLine(
-//         printer,
-//         "Completed",
-//         "|",
-//         "  {s}\n",
-//         .{completed_s},
-//         switch (status) {
-//             .Done => COMPLETED_FORMAT,
-//             else => DIM_FORMAT,
-//         },
-//     );
-//     try printer.addToCurrent("\nDetails:\n\n", .{ .fmt = HEADING_FORMAT });
-//     try printer.addToCurrent(t.details, .{});
-//     try printer.addToCurrent("\n", .{});
-// }
-
-// fn addInfoLine(
-//     printer: *BlockPrinter,
-//     comptime key: []const u8,
-//     comptime delim: []const u8,
-//     comptime value_fmt: []const u8,
-//     args: anytype,
-//     fmt: ?colors.Farbe,
-// ) !void {
-//     const padd = 15 - key.len;
-//     try printer.addToCurrent(key, .{});
-//     try printer.addToCurrent(" " ** padd ++ delim ++ " ", .{});
-//     try printer.addFormatted(.Item, value_fmt, args, .{ .fmt = fmt });
-// }
+fn addInfoLine(
+    printer: *BlockPrinter,
+    comptime key: []const u8,
+    comptime delim: []const u8,
+    comptime value_fmt: []const u8,
+    args: anytype,
+    fmt: ?colors.Farbe,
+) !void {
+    const padd = 15 - key.len;
+    try printer.addToCurrent(key, .{});
+    try printer.addToCurrent(" " ** padd ++ delim ++ " ", .{});
+    try printer.addFormatted(.Item, value_fmt, args, .{ .fmt = fmt });
+}
