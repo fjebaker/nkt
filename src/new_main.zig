@@ -11,6 +11,14 @@ const Commands = commands.Commands;
 
 const help = @import("commands/help.zig");
 
+test "main" {
+    _ = Root;
+    _ = cli;
+    _ = selections;
+    _ = commands;
+    _ = time;
+}
+
 // configure logging
 pub const std_options = struct {
     // Define logFn to override the std implementation
@@ -116,12 +124,6 @@ pub fn nkt_main(
     commands.execute(allocator, &arg_iterator, &root, out_fd, tz) catch |err| {
         try handle_execution_error(out_fd.writer(), err);
     };
-}
-
-test "main" {
-    _ = Root;
-    _ = cli;
-    _ = selections;
 }
 
 const TestState = struct {

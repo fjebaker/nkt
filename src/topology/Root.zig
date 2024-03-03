@@ -76,7 +76,7 @@ pub const CollectionType = enum {
         return switch (t) {
             .CollectionDirectory => Directory.TOPOLOGY_FILENAME,
             .CollectionJournal => Journal.TOPOLOGY_FILENAME,
-            .CollectionTasklist => Tasklist.TOPOLOGY_FILENAME,
+            .CollectionTasklist => unreachable,
         };
     }
 
@@ -519,7 +519,18 @@ fn newPathFrom(
             ".",
             &.{ Journal.PATH_PREFIX, name },
         ),
-        .CollectionTasklist => Tasklist.TASKLIST_DIRECTORY,
+        .CollectionTasklist => {
+            const filename = try std.mem.join(
+                alloc,
+                ".",
+                &.{ name, Tasklist.TASKLIST_EXTENSION },
+            );
+
+            return try std.fs.path.join(
+                alloc,
+                &.{ Tasklist.TASKLIST_DIRECTORY, filename },
+            );
+        },
     };
 
     return try std.fs.path.join(
@@ -677,6 +688,12 @@ pub fn getDirectory(self: *Root, name: []const u8) !?Directory {
     return self.getCollection(name, .CollectionDirectory);
 }
 
+/// Get a `Tasklist` by name. Returns `null` if name is invalid. `deinit` must
+/// be called on the journal by the caller.
+pub fn getTasklist(self: *Root, name: []const u8) !?Tasklist {
+    return self.getCollection(name, .CollectionTasklist);
+}
+
 /// Add all of the default collections to the root
 pub fn addInitialCollections(self: *Root) !void {
     // initialize an empty tag descriptor list
@@ -802,4 +819,6 @@ pub fn writeChanges(self: *Root) !void {
         return Error.NeedsFileSystem;
 
     try self.writeModifiedCollections(fs, .CollectionJournal);
+    try self.writeModifiedCollections(fs, .CollectionTasklist);
+    try self.writeModifiedCollections(fs, .CollectionDirectory);
 }

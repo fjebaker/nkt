@@ -181,14 +181,6 @@ pub fn toDate(string: []const u8) !Date {
     return newDate(year, month, day);
 }
 
-pub fn toTime(string: []const u8) !Time {
-    if (string.len < 8) return DateError.DateStringTooShort;
-    const hour = try std.fmt.parseInt(u8, string[0..2], 10);
-    const minute = try std.fmt.parseInt(u8, string[3..5], 10);
-    const seconds = try std.fmt.parseInt(u8, string[6..8], 10);
-    return .{ .hour = hour, .minute = minute, .second = seconds };
-}
-
 pub fn areSameDay(d1: Date, d2: Date) bool {
     return d1.years == d2.years and d1.months == d2.months and d1.days == d2.days;
 }

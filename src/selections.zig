@@ -299,31 +299,6 @@ fn allNumeric(string: []const u8) bool {
     return true;
 }
 
-/// Counts the occurances of `spacer` in `string` and ensures all non spacer
-/// characters are digits, else returns null. Returns `spacer` count.
-fn formattedDigitFilter(comptime spacer: u8, string: []const u8) ?usize {
-    var spacer_count: usize = 0;
-    for (string) |c| {
-        if (!std.ascii.isDigit(c) and c != spacer) return null;
-        if (c == spacer) spacer_count += 1;
-    }
-    return spacer_count;
-}
-
-fn isDate(string: []const u8) bool {
-    if (formattedDigitFilter('-', string)) |count| {
-        if (count == 2) return true;
-    }
-    return false;
-}
-
-fn isTime(string: []const u8) bool {
-    if (formattedDigitFilter(':', string)) |count| {
-        if (count == 2) return true;
-    }
-    return false;
-}
-
 fn asSelector(arg: []const u8) !Selector {
     // are we an index
     if (allNumeric(arg)) {
@@ -336,7 +311,7 @@ fn asSelector(arg: []const u8) !Selector {
             .qualifier = arg[0],
             .index = try std.fmt.parseInt(usize, arg[1..], 10),
         } };
-    } else if (isDate(arg)) {
+    } else if (time.isDate(arg)) {
         return .{ .ByDate = try time.toDate(arg) };
     } else {
         return .{ .ByName = arg };

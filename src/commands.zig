@@ -31,7 +31,7 @@ pub const Commands = union(enum) {
     read: @import("commands/read.zig"),
     // remove: @import("commands/remove.zig"),
     // rename: @import("commands/rename.zig"),
-    // task: @import("commands/task.zig"),
+    task: @import("commands/task.zig"),
     select: @import("commands/select.zig"),
     // set: @import("commands/set.zig"),
     // summary: @import("commands/summary.zig"),
