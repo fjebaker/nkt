@@ -29,7 +29,7 @@ pub fn ListIterator(comptime T: type) type {
 pub fn parseAndAssertValidTags(
     allocator: std.mem.Allocator,
     root: *Root,
-    text: []const u8,
+    text: ?[]const u8,
     additional: []const []const u8,
 ) ![]tags.Tag {
     const parsed_tags = try tags.parseInlineWithAdditional(allocator, text, additional);

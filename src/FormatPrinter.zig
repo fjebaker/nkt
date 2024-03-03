@@ -53,7 +53,8 @@ pub fn add(fp: *FormatPrinter, rich: RichText) !void {
 const PRE_COLOR = colors.ComptimeFarbe.init().bgRgb(48, 48, 48).fgRgb(236, 106, 101);
 const URI_COLOR = colors.ComptimeFarbe.init().fgRgb(58, 133, 134).underlined();
 
-fn getTagFormat(
+/// Get the `Farbe` attributed to a given tag from the list of tag descriptors.
+pub fn getTagFormat(
     allocator: std.mem.Allocator,
     tag_descriptors: []const tags.Tag.Descriptor,
     tag_name: []const u8,

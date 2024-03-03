@@ -571,18 +571,23 @@ pub fn fromArgs(
     return selection;
 }
 
+pub const SelectHelpOptions = struct {
+    required: bool = true,
+};
+
 /// Add `cli.ArgumentDescriptor` for the selection methods. Provide the name
 /// and (contextual) help for the main selection, and the various flags will be
 /// automatically added. Use `fromArgs` to retrieve the selection.
 pub fn selectHelp(
     comptime name: []const u8,
     comptime help: []const u8,
+    comptime opts: SelectHelpOptions,
 ) []const cli.ArgumentDescriptor {
     const args: []const cli.ArgumentDescriptor = &.{
         .{
             .arg = name,
             .help = help,
-            .required = true,
+            .required = opts.required,
         },
         .{
             .arg = "--journal journal",

@@ -181,6 +181,8 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
     }
     // otherwise we read from file
     var fs = self.fs orelse return error.NeedsFileSystem;
+
+    // TODO: sort the entries by time
     return try self.readDayFromPath(&fs, day.path);
 }
 

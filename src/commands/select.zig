@@ -14,7 +14,11 @@ pub const long_help =
 ;
 
 pub const arguments = cli.ArgumentsHelp(
-    selections.selectHelp("item", "The selection item"),
+    selections.selectHelp(
+        "item",
+        "The selection item",
+        .{},
+    ),
     .{},
 );
 

@@ -9,6 +9,8 @@ const FileSystem = @import("FileSystem.zig");
 const commands = @import("commands.zig");
 const Commands = commands.Commands;
 
+const color = @import("colors.zig");
+
 const help = @import("commands/help.zig");
 
 test "main" {
@@ -35,8 +37,15 @@ pub fn loggerFn(
     // Print the message to stderr, silently ignoring any errors
     std.debug.getStderrMutex().lock();
     defer std.debug.getStderrMutex().unlock();
-    const stderr = std.io.getStdErr().writer();
-    nosuspend stderr.print(prefix ++ format ++ "\n", args) catch return;
+    const stderr = std.io.getStdErr();
+    const writer = stderr.writer();
+
+    if (stderr.isTty()) {
+        const c = color.ComptimeFarbe.init().dim();
+        nosuspend c.write(writer, prefix ++ format ++ "\n", args) catch return;
+    } else {
+        nosuspend writer.print(prefix ++ format ++ "\n", args) catch return;
+    }
 }
 
 /// Print out useful information or help when an execution error occurs.

@@ -326,13 +326,16 @@ test "inline position parsing" {
 /// memory.
 pub fn parseInlineWithAdditional(
     allocator: std.mem.Allocator,
-    text: []const u8,
+    text: ?[]const u8,
     additional_tags: []const []const u8,
 ) ![]Tag {
     const now = time.timeNow();
 
     // parse all the context tags and add them to the given tags
-    var inline_tags = try parseInlineTags(allocator, text, now);
+    var inline_tags: []Tag = if (text) |txt|
+        try parseInlineTags(allocator, txt, now)
+    else
+        &.{};
     var all_tags = std.ArrayList(Tag).fromOwnedSlice(allocator, inline_tags);
     defer all_tags.deinit();
 

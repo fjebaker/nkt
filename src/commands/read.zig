@@ -11,6 +11,7 @@ const Root = @import("../topology/Root.zig");
 
 const colors = @import("../colors.zig");
 
+const FormatPrinter = @import("../FormatPrinter.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
 
 const Self = @This();
@@ -23,6 +24,7 @@ pub const long_help = short_help;
 pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
     "item",
     "Selected item (see `help select` for the formatting",
+    .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
     .{
@@ -77,7 +79,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try parser.getParsed();
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,
-        args.item,
+        args.item orelse "0", // default selection
         args,
     );
     return .{
@@ -100,13 +102,15 @@ pub fn execute(
     const selected_tags = try utils.parseAndAssertValidTags(
         allocator,
         root,
-        self.args.item,
+        null,
         self.tags,
     );
     defer allocator.free(selected_tags);
 
     var bprinter = BlockPrinter.init(allocator, .{});
     defer bprinter.deinit();
+
+    var tdl = try root.getTagDescriptorList();
 
     switch (item) {
         .Day => |*day| {
@@ -115,6 +119,7 @@ pub fn execute(
                 &day.journal,
                 day.day,
                 selected_tags,
+                tdl.tags,
                 &bprinter,
                 opts.tz,
             );
@@ -132,6 +137,7 @@ pub fn readDay(
     j: *Journal,
     day: Journal.Day,
     selected_tags: []const tags.Tag,
+    tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
     tz: time.TimeZone,
 ) !void {
@@ -141,6 +147,8 @@ pub fn readDay(
     const entries = try j.getEntries(day);
     // no print if there are no entries for this day
     if (entries.len == 0) return;
+
+    const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
 
     const local_date = tz.makeLocal(
         time.dateFromTime(day.created),
@@ -154,17 +162,22 @@ pub fn readDay(
             try time.dayOfWeek(local_date),
             try time.monthOfYear(local_date),
         },
-        .{},
+        .{ .is_counted = false },
     );
 
     var previous: ?Journal.Entry = null;
     _ = previous;
-    for (entries) |entry| {
+    for (entries[offset..]) |entry| {
         const entry_date = tz.makeLocal(
             time.dateFromTime(entry.created),
         );
 
-        const formated = try time.formatTimeBuf(entry_date);
+        const long_date = self.args.date orelse false;
+        const formated: []const u8 = if (!long_date)
+            &try time.formatTimeBuf(entry_date)
+        else
+            &try time.formatDateTimeBuf(entry_date);
+
         try printer.addFormatted(
             .Item,
             "{s} | {s}",
@@ -172,76 +185,23 @@ pub fn readDay(
             .{},
         );
 
+        if (entry.tags.len > 0) {
+            try printer.addToCurrent(" ", .{ .is_counted = false });
+            for (entry.tags) |tag| {
+                try printer.addToCurrent("@", .{
+                    .fmt = try FormatPrinter.getTagFormat(
+                        printer.format_printer.mem.allocator(),
+                        tag_descriptors,
+                        tag.name,
+                    ),
+                    .is_counted = false,
+                });
+            }
+        }
+
         try printer.addToCurrent("\n", .{ .is_counted = false });
     }
-
-    _ = self;
 }
-
-// selection: cli.Selection = .{},
-// number: usize = 20,
-// all: bool = false,
-// full_date: bool = false,
-// pager: bool = false,
-// pretty: ?bool = null,
-// selected_tags: ?[][]const u8 = null,
-
-// const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
-
-// pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
-//     var self: Self = .{};
-//     var tag_list = std.ArrayList([]const u8).init(alloc);
-//     defer tag_list.deinit();
-
-//     itt.rewind();
-//     const prog_name = (try itt.next()).?.string;
-//     if (std.mem.eql(u8, prog_name, "rp")) self.pager = true;
-
-//     itt.counter = 0;
-//     while (try itt.next()) |arg| {
-//         // handle other options
-//         if (arg.flag) {
-//             if (arg.is('n', "limit")) {
-//                 const value = try itt.getValue();
-//                 self.number = try value.as(usize);
-//             } else if (arg.is('a', "all")) {
-//                 self.all = true;
-//             } else if (arg.is(null, "no-pretty")) {
-//                 if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-//                 self.pretty = false;
-//             } else if (arg.is(null, "pretty")) {
-//                 if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-//                 self.pretty = true;
-//             } else if (arg.is('p', "pager")) {
-//                 self.pager = true;
-//             } else if (arg.is(null, "date")) {
-//                 self.full_date = true;
-//             } else {
-//                 return cli.CLIErrors.UnknownFlag;
-//             }
-//         } else {
-//             if (arg.string[0] == '@') {
-//                 try tag_list.append(arg.string[1..]);
-//                 continue;
-//             }
-//         }
-//         // parse selection
-//         if (try self.selection.parse(arg, itt)) continue;
-//     }
-
-//     // don't pretty if to pager or being piped
-//     self.pretty = self.pretty orelse
-//         if (self.pager) false else !opts.piped;
-
-//     // update the tags field if any were passed
-//     if (tag_list.items.len > 0) {
-//         self.selected_tags = try tag_list.toOwnedSlice();
-//     }
-
-//     return self;
-// }
-
-// const NoSuchCollection = State.Error.NoSuchCollection;
 
 // pub fn pipeToPager(
 //     allocator: std.mem.Allocator,
