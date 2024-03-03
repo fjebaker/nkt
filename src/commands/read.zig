@@ -20,26 +20,6 @@ pub const alias = [_][]const u8{ "r", "rp" };
 pub const short_help = "Read notes, task details, and journals.";
 pub const long_help = short_help;
 
-// \\Print the contents of a journal or note to stdout
-// \\  nkt read
-// \\     <what>                what to print: name of a journal, or a note
-// \\                             entry. if choice is ambiguous, will print both,
-// \\                             else specify with the `--journal` or `--dir`
-// \\                             flags
-// \\     [@tags]               show only those entries that have been tagged with
-// \\                             chosen tags.
-// \\
-// ++ cli.Selection.COLLECTION_FLAG_HELP ++
-// \\     -n/--limit int        maximum number of entries to display (default: 25)
-// \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
-// \\     -a/--all              display all items (overwrites `--limit`)
-// \\     --pretty/--nopretty   force pretty or no pretty printing
-// \\     -p/--page             read via pager
-// \\
-// \\The alias `rp` is a short hand for `read --page`.
-// \\
-// ;
-
 pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
     "item",
     "Selected item (see `help select` for the formatting",

@@ -116,7 +116,7 @@ fn printExtendedHelp(
 }
 
 pub fn printHelp(writer: anytype) !void {
-    try writer.writeAll("Help:\n");
+    try writer.writeAll("Quick command reference:\n");
 
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
