@@ -108,7 +108,7 @@ pub fn addNewTask(self: *Tasklist, task: Task) !void {
 
     // update the index map if we have one
     if (self.index_map) |_| {
-        _ = try self.makeIndexMap(time.timeNow());
+        _ = try self.makeIndexMap();
     }
 }
 
@@ -120,18 +120,23 @@ pub fn getTask(self: *Tasklist, title: []const u8) ?Task {
     return null;
 }
 
+/// Get task by index. Returns `null` if no task found.
+pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
+    const map = try self.makeIndexMap();
+    if (index >= map.len) return null;
+    return self.info.tasks[map[index]];
+}
+
 /// Make an index map sorted by due date, only relevant for active tasks.
-pub fn makeIndexMap(
-    self: *Tasklist,
-    relative: time.Time,
-) ![]const usize {
+pub fn makeIndexMap(self: *Tasklist) ![]const usize {
     // sort the tasks
     std.sort.insertion(Task, self.info.tasks, {}, Task.dueLessThan);
+    const now = time.timeNow();
 
     var list = std.ArrayList(usize).init(self.getTmpAllocator());
     defer list.deinit();
     for (self.info.tasks, 0..) |t, i| {
-        switch (t.getStatus(relative)) {
+        switch (t.getStatus(now)) {
             .NearlyDue, .PastDue, .NoStatus => {
                 try list.append(i);
             },

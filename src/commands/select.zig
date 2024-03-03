@@ -44,16 +44,23 @@ pub fn execute(
     _: commands.Options,
 ) !void {
     try root.load();
-    const item = try self.selection.resolveReportError(root);
+    var item = try self.selection.resolveReportError(root);
+    defer item.deinit();
     try handleSelection(writer, item);
 }
 
 fn handleSelection(writer: anytype, item: selections.Item) !void {
     switch (item) {
-        .Day => |d| {
+        .Day => |*d| {
             try writer.print(
                 "Day: {s} [Journal: {s}]\n",
                 .{ d.day.name, d.journal.descriptor.name },
+            );
+        },
+        .Task => |t| {
+            try writer.print(
+                "Task: {s} [Tasklist: {s}]\n",
+                .{ t.task.title, t.tasklist.descriptor.name },
             );
         },
         else => unreachable,

@@ -16,6 +16,8 @@ const BlockPrinter = @import("../BlockPrinter.zig");
 
 const Self = @This();
 
+pub const DEFAULT_LINE_COUNT = 20;
+
 pub const alias = [_][]const u8{ "r", "rp" };
 
 pub const short_help = "Read notes, task details, and journals.";
@@ -23,7 +25,7 @@ pub const long_help = short_help;
 
 pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
     "item",
-    "Selected item (see `help select` for the formatting",
+    "Selected item (see `help select` for the formatting). If not argument is provided, defaults to reading the last `--limit` entries of the default journal.",
     .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
@@ -79,7 +81,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try parser.getParsed();
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,
-        args.item orelse "0", // default selection
+        args.item,
         args,
     );
     return .{
@@ -98,7 +100,18 @@ pub fn execute(
 ) !void {
     try root.load();
 
+    // if nothing is selected, we default
+    if (self.selection.selector == null and
+        self.selection.collection_type == null and
+        self.selection.collection_name == null)
+    {
+        self.selection.collection_type = .CollectionJournal;
+        self.selection.collection_name = root.info.default_journal;
+    }
+
     var item = try self.selection.resolveReportError(root);
+    defer item.deinit();
+
     const selected_tags = try utils.parseAndAssertValidTags(
         allocator,
         root,
@@ -107,15 +120,16 @@ pub fn execute(
     );
     defer allocator.free(selected_tags);
 
-    var bprinter = BlockPrinter.init(allocator, .{});
+    const N = try extractLineLimit(self.args);
+
+    var bprinter = BlockPrinter.init(allocator, .{ .max_lines = N });
     defer bprinter.deinit();
 
     var tdl = try root.getTagDescriptorList();
 
     switch (item) {
         .Day => |*day| {
-            defer day.journal.deinit();
-            try self.readDay(
+            _ = try self.readDay(
                 &day.journal,
                 day.day,
                 selected_tags,
@@ -123,6 +137,18 @@ pub fn execute(
                 &bprinter,
                 opts.tz,
             );
+        },
+        .Collection => |*c| {
+            switch (c.*) {
+                .journal => |*j| try self.readJournal(
+                    j,
+                    selected_tags,
+                    tdl.tags,
+                    &bprinter,
+                    opts.tz,
+                ),
+                else => unreachable,
+            }
         },
         inline else => |k| {
             std.debug.print(">> {any}\n", .{k});
@@ -132,7 +158,42 @@ pub fn execute(
     try bprinter.drain(writer);
 }
 
-pub fn readDay(
+fn extractLineLimit(args: arguments.ParsedArguments) !?usize {
+    if (args.all orelse false) return null;
+    if (args.limit) |str| {
+        return try std.fmt.parseInt(usize, str, 10);
+    }
+    return DEFAULT_LINE_COUNT;
+}
+
+fn readJournal(
+    self: *Self,
+    j: *Journal,
+    selected_tags: []const tags.Tag,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !void {
+    const now = time.timeNow();
+    var line_count: usize = 0;
+    for (0..j.info.days.len) |i| {
+        const day = j.getDayOffsetIndex(now, i) orelse continue;
+        line_count += try self.readDay(
+            j,
+            day,
+            selected_tags,
+            tag_descriptors,
+            printer,
+            tz,
+        );
+
+        if (printer.format_printer.opts.max_lines) |N| {
+            if (line_count >= N) break;
+        }
+    }
+}
+
+fn readDay(
     self: *Self,
     j: *Journal,
     day: Journal.Day,
@@ -140,16 +201,32 @@ pub fn readDay(
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
     tz: time.TimeZone,
-) !void {
-    _ = selected_tags;
-
+) !usize {
     // read the entries of that day
     const entries = try j.getEntries(day);
     // no print if there are no entries for this day
-    if (entries.len == 0) return;
+    if (entries.len == 0) return 0;
 
-    const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
+    // TODO: filter the entries by tags
+    _ = selected_tags;
 
+    return try self.printEntries(
+        day,
+        entries,
+        tag_descriptors,
+        printer,
+        tz,
+    );
+}
+
+fn printEntries(
+    self: *const Self,
+    day: Journal.Day,
+    entries: []const Journal.Entry,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !usize {
     const local_date = tz.makeLocal(
         time.dateFromTime(day.created),
     );
@@ -165,6 +242,9 @@ pub fn readDay(
         .{ .is_counted = false },
     );
 
+    const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
+
+    var entries_written: usize = 0;
     var previous: ?Journal.Entry = null;
     _ = previous;
     for (entries[offset..]) |entry| {
@@ -184,6 +264,7 @@ pub fn readDay(
             .{ formated, entry.text },
             .{},
         );
+        entries_written += 1;
 
         if (entry.tags.len > 0) {
             try printer.addToCurrent(" ", .{ .is_counted = false });
@@ -201,6 +282,8 @@ pub fn readDay(
 
         try printer.addToCurrent("\n", .{ .is_counted = false });
     }
+
+    return entries_written;
 }
 
 // pub fn pipeToPager(

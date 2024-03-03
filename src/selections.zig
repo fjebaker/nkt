@@ -64,6 +64,49 @@ pub const Item = union(enum) {
         tasklist: Tasklist,
         task: Tasklist.Task,
     },
+    Collection: union(enum) {
+        directory: Directory,
+        journal: Journal,
+        tasklist: Tasklist,
+        // TODO: chains, etc.
+
+        /// Call the relevant destructor irrelevant of active field.
+        pub fn deinit(self: *@This()) void {
+            switch (self.*) {
+                inline else => |*i| i.deinit(),
+            }
+            self.* = undefined;
+        }
+
+        fn eql(i: @This(), j: @This()) bool {
+            if (std.meta.activeTag(i) != std.meta.activeTag(j))
+                return false;
+
+            switch (i) {
+                inline else => |ic| {
+                    switch (j) {
+                        inline else => |jc| return std.mem.eql(
+                            u8,
+                            ic.descriptor.path,
+                            jc.descriptor.path,
+                        ),
+                    }
+                },
+            }
+        }
+    },
+
+    /// Call the relevant destructor irrelevant of active field.
+    pub fn deinit(self: *Item) void {
+        switch (self.*) {
+            .Entry => |*i| i.journal.deinit(),
+            .Day => |*i| i.journal.deinit(),
+            .Note => |*i| i.directory.deinit(),
+            .Task => |*i| i.tasklist.deinit(),
+            .Collection => |*i| i.deinit(),
+        }
+        self.* = undefined;
+    }
 
     fn eql(i: Item, j: Item) bool {
         if (std.meta.activeTag(i) != std.meta.activeTag(j))
@@ -99,6 +142,10 @@ pub const Item = union(enum) {
                     it.tasklist.descriptor.name,
                     jt.tasklist.descriptor.name,
                 );
+            },
+            .Collection => |ic| {
+                const jc = j.Collection;
+                return ic.eql(jc);
             },
         }
     }
@@ -160,6 +207,26 @@ fn retrieveFromDirectory(s: Selector, directory: *Directory) !ResolveResult {
     );
 }
 
+fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
+    const task: ?Tasklist.Task = switch (s) {
+        .ByName => |n| tasklist.getTask(n),
+        .ByIndex, .ByQualifiedIndex => b: {
+            const index = if (s == .ByIndex)
+                s.ByIndex
+            else
+                s.ByQualifiedIndex.index;
+
+            break :b try tasklist.getTaskByIndex(index);
+        },
+        .ByDate => return Error.InvalidSelection,
+    };
+    const t = task orelse
+        return ResolveResult.throw(Root.Error.NoSuchItem);
+    return ResolveResult.ok(
+        .{ .Task = .{ .tasklist = tasklist.*, .task = t } },
+    );
+}
+
 /// Struct representing the selection made
 pub const Selection = struct {
     /// The type of the collection selected
@@ -170,9 +237,39 @@ pub const Selection = struct {
     /// The selector used to select the item
     selector: ?Selector = null,
 
+    fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
+        const name = s.collection_name orelse
+            return ResolveResult.throw(Error.AmbiguousSelection);
+        if (s.collection_type) |ct| switch (ct) {
+            .CollectionJournal => {
+                const j = (try root.getJournal(name)) orelse
+                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+                return ResolveResult.ok(
+                    .{ .Collection = .{ .journal = j } },
+                );
+            },
+            .CollectionDirectory => {
+                const d = (try root.getDirectory(name)) orelse
+                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+                return ResolveResult.ok(
+                    .{ .Collection = .{ .directory = d } },
+                );
+            },
+            .CollectionTasklist => {
+                const t = (try root.getTasklist(name)) orelse
+                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+                return ResolveResult.ok(
+                    .{ .Collection = .{ .tasklist = t } },
+                );
+            },
+        };
+        return ResolveResult.throw(Error.UnknownSelection);
+    }
+
     fn resolve(s: Selection, root: *Root) !ResolveResult {
         const selector = s.selector orelse
-            return ResolveResult.throw(Error.UnknownSelection);
+            return try s.resolveCollection(root);
+
         if (s.collection_type) |ct| {
             switch (ct) {
                 .CollectionJournal => {
@@ -191,7 +288,15 @@ pub const Selection = struct {
                         return ResolveResult.throw(Error.UnknownSelection);
                     return try retrieveFromDirectory(selector, &directory);
                 },
-                else => unreachable,
+                .CollectionTasklist => {
+                    const name = s.collection_name orelse
+                        root.info.default_tasklist;
+                    std.log.default.debug("Looking up tasklist '{s}'", .{name});
+
+                    var tasklist = (try root.getTasklist(name)) orelse
+                        return ResolveResult.throw(Error.UnknownSelection);
+                    return try retrieveFromTasklist(selector, &tasklist);
+                },
             }
         }
 
@@ -215,9 +320,17 @@ pub const Selection = struct {
     pub fn resolveReportError(s: Selection, root: *Root) !Item {
         const rr = try s.resolve(root);
         return rr.retrieve() catch |err| {
+            if (err == Error.AmbiguousSelection) {
+                try cli.throwError(
+                    err,
+                    "Selection is not concrete enough to resolve to an item",
+                    .{},
+                );
+                unreachable;
+            }
             if (err == Error.UnknownSelection) {
                 try cli.throwError(
-                    Error.UnknownSelection,
+                    err,
                     "Selection is malformed.",
                     .{},
                 );
@@ -225,7 +338,7 @@ pub const Selection = struct {
             }
             if (err == Root.Error.NoSuchItem) {
                 try cli.throwError(
-                    Root.Error.NoSuchItem,
+                    err,
                     "Cannot find item.",
                     .{},
                 );
@@ -238,15 +351,17 @@ pub const Selection = struct {
 
 fn testSelectionResolve(
     root: *Root,
-    s: []const u8,
+    s: ?[]const u8,
     journal: ?[]const u8,
     directory: ?[]const u8,
     tasklist: ?[]const u8,
     expected: Item,
 ) !void {
     var selection: Selection = .{};
-    const selector = try asSelector(s);
-    try addSelector(&selection, selector);
+    if (s) |str| {
+        const selector = try asSelector(str);
+        try addSelector(&selection, selector);
+    }
 
     if (try addFlags(
         &selection,
@@ -278,6 +393,25 @@ test "resolve selections" {
         null,
         .{ .Day = .{ .day = day, .journal = j } },
     );
+    try testSelectionResolve(
+        &root,
+        null,
+        root.info.default_journal,
+        null,
+        null,
+        .{ .Collection = .{ .journal = j } },
+    );
+    try std.testing.expectError(
+        Error.IncompatibleSelection,
+        testSelectionResolve(
+            &root,
+            "0",
+            null,
+            root.info.default_directory,
+            null,
+            .{ .Collection = .{ .journal = j } },
+        ),
+    );
 
     var d = (try root.getDirectory(root.info.default_directory)).?;
     defer d.deinit();
@@ -289,6 +423,14 @@ test "resolve selections" {
         null,
         null,
         .{ .Note = .{ .note = note, .directory = d } },
+    );
+    try testSelectionResolve(
+        &root,
+        null,
+        null,
+        root.info.default_directory,
+        null,
+        .{ .Collection = .{ .directory = d } },
     );
 }
 
@@ -555,13 +697,16 @@ fn addFlagsReportError(
 /// augmented with `selectHelp`. Will report errors to stderr.
 pub fn fromArgs(
     comptime T: type,
-    selector_string: []const u8,
+    selector_string: ?[]const u8,
     args: T,
 ) !Selection {
     var selection: Selection = .{};
-    const selector = try asSelector(selector_string);
 
-    try addSelector(&selection, selector);
+    if (selector_string) |ss| {
+        const selector = try asSelector(ss);
+        try addSelector(&selection, selector);
+    }
+
     try addFlagsReportError(
         &selection,
         args.journal,
