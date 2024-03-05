@@ -16,9 +16,13 @@ pub const long_help = short_help;
 
 pub const arguments = cli.ArgumentsHelp(&.{
     .{
-        .arg = "title",
-        .help = "Short name or description of the task",
+        .arg = "outcome",
+        .help = "Outcome of the task",
         .required = true,
+    },
+    .{
+        .arg = "action",
+        .help = "(Next) Action that needs to be taken.",
     },
     .{
         .arg = "--tasklist tasklist",
@@ -66,12 +70,18 @@ pub fn execute(
         );
         unreachable;
     };
-
     defer tl.deinit();
 
+    const hash = Tasklist.hash(.{
+        .outcome = self.args.outcome,
+        .action = self.args.action,
+    });
+
     const new_task: Tasklist.Task = .{
-        .title = self.args.title,
+        .outcome = self.args.outcome,
+        .action = self.args.action,
         .details = self.args.details,
+        .hash = hash,
         .created = now,
         .modified = now,
         .due = try parseDue(now, self.args.due),
@@ -79,7 +89,17 @@ pub fn execute(
         .tags = &.{},
     };
 
-    try tl.addNewTask(new_task);
+    tl.addNewTask(new_task) catch |err| {
+        if (err == Tasklist.Error.DuplicateTask) {
+            try cli.throwError(
+                err,
+                "Task with same hash already exists: {x}",
+                .{new_task.hash},
+            );
+            unreachable;
+        }
+        return err;
+    };
     try root.writeChanges();
 }
 

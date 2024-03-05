@@ -60,7 +60,7 @@ fn handleSelection(writer: anytype, item: selections.Item) !void {
         .Task => |t| {
             try writer.print(
                 "Task: {s} [Tasklist: {s}]\n",
-                .{ t.task.title, t.tasklist.descriptor.name },
+                .{ t.task.outcome, t.tasklist.descriptor.name },
             );
         },
         else => unreachable,

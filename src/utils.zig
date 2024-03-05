@@ -3,6 +3,53 @@ const cli = @import("cli.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
+pub const Error = error{
+    HashTooLong,
+    InvalidHash,
+};
+
+/// Returns true if all characters in `string` return `true` in `f`.
+pub fn allAre(comptime f: fn (u8) bool, string: []const u8) bool {
+    for (string) |c| {
+        if (!f(c)) return false;
+    }
+    return true;
+}
+
+/// Check if all characters are numeric
+pub fn allNumeric(string: []const u8) bool {
+    return allAre(std.ascii.isDigit, string);
+}
+
+/// Check if all characters are alpha numeric
+pub fn allAlphanumeric(string: []const u8) bool {
+    return allAre(std.ascii.isAlphanumeric, string);
+}
+
+/// Get the abbreviated hash of a key, selecting `len` bytes
+pub fn getMiniHash(key: u64, len: u6) u64 {
+    const shift = (16 - len) * 4;
+    return key >> shift;
+}
+
+test "mini hashes" {
+    try std.testing.expectEqual(getMiniHash(0xabc123abc1231111, 3), 0xabc);
+}
+
+/// Create a u64 hash of a type.
+pub fn hash(comptime T: type, key: T) u64 {
+    if (T == []const u8) {
+        return std.hash.Wyhash.hash(0, key);
+    }
+    if (comptime std.meta.trait.hasUniqueRepresentation(T)) {
+        return std.hash.Wyhash.hash(0, std.mem.asBytes(&key));
+    } else {
+        var hasher = std.hash.Wyhash.init(0);
+        std.hash.autoHashStrat(&hasher, key, .Deep);
+        return hasher.final();
+    }
+}
+
 /// Get the type of a tag struct in a union
 pub fn TagType(comptime T: type, comptime name: []const u8) type {
     const fields = @typeInfo(T).Union.fields;

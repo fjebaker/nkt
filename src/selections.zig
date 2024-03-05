@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const utils = @import("utils.zig");
 const cli = @import("cli.zig");
 
 const time = @import("topology/time.zig");
@@ -29,7 +30,13 @@ pub const Error = error{
     UnspecifiedCollection,
 };
 
-pub const Method = enum { ByIndex, ByQualifiedIndex, ByDate, ByName };
+pub const Method = enum {
+    ByIndex,
+    ByQualifiedIndex,
+    ByDate,
+    ByName,
+    ByHash,
+};
 
 pub const Selector = union(Method) {
     ByIndex: usize,
@@ -39,6 +46,7 @@ pub const Selector = union(Method) {
     },
     ByDate: time.Date,
     ByName: []const u8,
+    ByHash: u64,
 
     pub fn today() Method {
         const date = time.Date.now();
@@ -136,7 +144,7 @@ pub const Item = union(enum) {
             },
             .Task => |it| {
                 const jt = j.Task;
-                return std.mem.eql(u8, it.task.title, jt.task.title) and
+                return std.mem.eql(u8, it.task.outcome, jt.task.outcome) and
                     std.mem.eql(
                     u8,
                     it.tasklist.descriptor.name,
@@ -187,6 +195,7 @@ fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
         },
         .ByName => |name| journal.getDay(name) orelse
             return ResolveResult.throw(Root.Error.NoSuchItem),
+        .ByHash => return ResolveResult.throw(Error.InvalidSelection),
     };
 
     return ResolveResult.ok(
@@ -196,6 +205,7 @@ fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
 
 fn retrieveFromDirectory(s: Selector, directory: *Directory) !ResolveResult {
     const name: []const u8 = switch (s) {
+        .ByHash => return ResolveResult.throw(Error.InvalidSelection),
         .ByName => |n| n,
         .ByDate => |d| &(try time.formatDateBuf(d)),
         else => return Error.InvalidSelection,
@@ -209,7 +219,7 @@ fn retrieveFromDirectory(s: Selector, directory: *Directory) !ResolveResult {
 
 fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
     const task: ?Tasklist.Task = switch (s) {
-        .ByName => |n| tasklist.getTask(n),
+        .ByName => |n| try tasklist.getTask(n),
         .ByIndex, .ByQualifiedIndex => b: {
             const index = if (s == .ByIndex)
                 s.ByIndex
@@ -219,6 +229,12 @@ fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
             break :b try tasklist.getTaskByIndex(index);
         },
         .ByDate => return Error.InvalidSelection,
+        .ByHash => |h| switch (@clz(h)) {
+            0 => tasklist.getTaskByHash(h),
+            1...63 => tasklist.getTaskByMiniHash(h) catch |e|
+                return ResolveResult.throw(e),
+            else => return ResolveResult.throw(utils.Error.HashTooLong),
+        },
     };
     const t = task orelse
         return ResolveResult.throw(Root.Error.NoSuchItem);
@@ -270,6 +286,8 @@ pub const Selection = struct {
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
+        std.log.default.debug("Selector: {s}", .{@tagName(selector)});
+
         if (s.collection_type) |ct| {
             switch (ct) {
                 .CollectionJournal => {
@@ -309,7 +327,22 @@ pub const Selection = struct {
             var canary = s;
             canary.collection_type = ct;
             const r = try canary.resolve(root);
-            if (r.item) |_| return r;
+            if (r.err) |err| {
+                switch (err) {
+                    Error.UnknownSelection,
+                    Error.InvalidSelection,
+                    Root.Error.NoSuchItem,
+                    => {
+                        std.log.default.debug("Resolve returned {!}", .{err});
+                    },
+                    else => {
+                        return ResolveResult.throw(err);
+                    },
+                }
+            }
+            if (r.item) |_| {
+                return r;
+            }
         }
 
         return ResolveResult.throw(Error.UnknownSelection);
@@ -434,20 +467,20 @@ test "resolve selections" {
     );
 }
 
-fn allNumeric(string: []const u8) bool {
-    for (string) |c| {
-        if (!std.ascii.isDigit(c)) return false;
-    }
-    return true;
-}
-
 fn asSelector(arg: []const u8) !Selector {
     // are we an index
-    if (allNumeric(arg)) {
+    if (utils.allNumeric(arg)) {
         return .{ .ByIndex = try std.fmt.parseInt(usize, arg, 10) };
     } else if (arg.len > 1 and
+        arg[0] == '/' and
+        utils.allAlphanumeric(arg[1..]))
+    {
+        return .{
+            .ByHash = try std.fmt.parseInt(u64, arg[1..], 16),
+        };
+    } else if (arg.len > 1 and
         std.ascii.isAlphabetic(arg[0]) and
-        allNumeric(arg[1..]))
+        utils.allNumeric(arg[1..]))
     {
         return .{ .ByQualifiedIndex = .{
             .qualifier = arg[0],
@@ -485,6 +518,10 @@ test "asSelector" {
     try testAsSelector(
         "hello",
         .{ .ByName = "hello" },
+    );
+    try testAsSelector(
+        "/123ab",
+        .{ .ByHash = 0x123ab },
     );
 }
 

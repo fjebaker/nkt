@@ -35,15 +35,17 @@ pub const Importance = enum {
 };
 
 pub const Task = struct {
-    title: []const u8,
-    details: ?[]const u8,
+    outcome: []const u8,
+    action: ?[]const u8 = null,
+    details: ?[]const u8 = null,
+    hash: u64,
     created: Time,
     modified: Time,
     due: ?Time = null,
     done: ?Time = null,
     archived: ?Time = null,
-    importance: Importance,
-    tags: []Tag,
+    importance: Importance = .Low,
+    tags: []Tag = &.{},
 
     /// Get the `Status` of the task relative to some `Time`.
     pub fn getStatus(t: Task, relative: time.Time) Status {
@@ -75,7 +77,7 @@ pub const Task = struct {
             return true;
         }
         if (right.due) |_| return false;
-        return std.ascii.lessThanIgnoreCase(left.title, right.title);
+        return std.ascii.lessThanIgnoreCase(left.outcome, right.outcome);
     }
 };
 
@@ -104,9 +106,9 @@ pub fn deinit(self: *Tasklist) void {
 
 /// Add a new task to the current task list No strings are copied, so it is
 /// assumed the contents of the `task` will outlive the `Tasklist`. Asserts no
-/// task by the same title exists.
+/// task by the same outcome exists.
 pub fn addNewTask(self: *Tasklist, task: Task) !void {
-    if (self.getTask(task.title)) |_|
+    if (self.getTaskByHash(task.hash)) |_|
         return Error.DuplicateTask;
 
     var list = std.ArrayList(Task).fromOwnedSlice(
@@ -122,12 +124,79 @@ pub fn addNewTask(self: *Tasklist, task: Task) !void {
     }
 }
 
-/// Get task by title. Returns `null` if no task found.
-pub fn getTask(self: *Tasklist, title: []const u8) ?Task {
+/// Get task by outcome. Returns `null` if no task found. If there are multiple matches, will return an `AmbiguousSelection` error.
+pub fn getTask(self: *Tasklist, outcome: []const u8) !?Task {
+    var selected: ?Task = null;
     for (self.info.tasks) |task| {
-        if (std.mem.eql(u8, title, task.title)) return task;
+        if (std.mem.eql(u8, outcome, task.outcome)) {
+            if (selected != null) return error.AmbiguousSelection;
+            selected = task;
+        }
+    }
+    return selected;
+}
+
+/// Get task by hash. Returns `null` if no task found.
+pub fn getTaskByHash(self: *Tasklist, h: u64) ?Task {
+    for (self.info.tasks) |task| {
+        if (task.hash == h) return task;
     }
     return null;
+}
+
+/// Get task by mini hash. Returns `null` if no task found or
+/// `error.AmbiguousSelection` if multiple tasks matched.
+pub fn getTaskByMiniHash(self: *Tasklist, h: u64) !?Task {
+    const shift: u6 = @intCast(@clz(h));
+
+    var selected: ?Task = null;
+    for (self.info.tasks) |task| {
+        if (task.hash >> shift == h) {
+            if (selected != null) return error.AmbiguousSelection;
+            selected = task;
+        }
+    }
+    return selected;
+}
+
+test "get by mini hash" {
+    var tasks = [_]Task{
+        .{
+            .outcome = "test outcome",
+            .hash = 0xabc123abc1231111,
+            .created = 0,
+            .modified = 0,
+        },
+        .{
+            .outcome = "test outcome",
+            .hash = 0xabd123abc1231111,
+            .created = 0,
+            .modified = 0,
+        },
+    };
+    var info: Info = .{
+        .tags = &.{},
+        .tasks = &tasks,
+    };
+    var tl: Tasklist = .{
+        .allocator = std.testing.allocator,
+        .descriptor = .{
+            .name = "test_list",
+            .path = "test_list",
+            .created = 0,
+            .modified = 0,
+        },
+        .info = &info,
+    };
+
+    try std.testing.expectEqualDeep(
+        tasks[0],
+        tl.getTaskByHash(0xabc123abc1231111).?,
+    );
+    try std.testing.expectEqualDeep(
+        tasks[0],
+        (try tl.getTaskByMiniHash(0xabc12)).?,
+    );
 }
 
 /// Get task by index. Returns `null` if no task found.
@@ -141,8 +210,7 @@ pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
 /// `index_map[i]` corresponds to the `t{i}` task, and returns the index of the
 /// task in the `info.tasks` slice.
 pub fn makeIndexMap(self: *Tasklist) ![]const usize {
-    // sort the tasks
-    std.sort.insertion(Task, self.info.tasks, {}, Task.dueLessThan);
+    self.sortTasks();
     const now = time.timeNow();
 
     var list = std.ArrayList(usize).init(self.getTmpAllocator());
@@ -178,4 +246,45 @@ fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
         info,
         .{ .whitespace = .indent_4 },
     );
+}
+
+/// Information that is used to compute the hash of the task
+pub const HashInfo = struct {
+    outcome: []const u8,
+    action: ?[]const u8 = null,
+};
+
+/// Create a hash for a task to act as a unique identifier
+pub fn hash(info: HashInfo) u64 {
+    return utils.hash(HashInfo, info);
+}
+
+/// Sorts the tasks in canonical order, that is, by due date then
+/// alphabetically in reverse order (soonest due last).
+pub fn sortTasks(self: *Tasklist) void {
+    std.sort.insertion(Task, self.info.tasks, {}, sortCanonical);
+    std.mem.reverse(Task, self.info.tasks);
+}
+
+fn sortDue(_: void, lhs: Task, rhs: Task) bool {
+    const lhs_due = lhs.due;
+    const rhs_due = rhs.due;
+    if (lhs_due == null and rhs_due == null) return true;
+    if (lhs_due == null) return false;
+    if (rhs_due == null) return true;
+    return lhs_due.? < rhs_due.?;
+}
+
+fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
+    const both_same =
+        (lhs.due == null and rhs.due == null) or
+        (lhs.due != null and rhs.due != null);
+
+    if (both_same and lhs.due == rhs.due) {
+        // if they are both due at the same time, we sort lexographically
+        return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
+    }
+
+    const due = sortDue({}, lhs, rhs);
+    return due;
 }

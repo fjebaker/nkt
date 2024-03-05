@@ -108,7 +108,7 @@ fn migrate_0_2_0(
         const tasks = try Topology_0_2_0.parseTasks(allocator, content);
         for (tasks) |t| {
             try tasklist.addNewTask(.{
-                .title = t.title,
+                .outcome = t.outcome,
                 .details = t.details,
                 .created = t.created,
                 .modified = t.modified,

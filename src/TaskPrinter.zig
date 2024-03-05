@@ -1,5 +1,6 @@
 const std = @import("std");
 const colors = @import("colors.zig");
+const utils = @import("utils.zig");
 const Farbe = colors.Farbe;
 
 const time = @import("topology/time.zig");
@@ -25,6 +26,7 @@ const FormattedTask = struct {
 const PrintOptions = struct {
     tz: time.TimeZone,
     pretty: bool = false,
+    full_hash: bool = false,
     tag_descriptors: ?[]const tags.Tag.Descriptor = null,
 };
 
@@ -126,17 +128,17 @@ pub fn add(self: *Self, task: Task, index: ?usize) !void {
 
 const Padding = struct {
     due: usize,
-    title: usize,
+    outcome: usize,
 };
 
 fn columnWidth(self: *const Self) Padding {
     var due_width: usize = 0;
-    var title_width: usize = 0;
+    var outcome_width: usize = 0;
     for (self.entries.items) |item| {
         due_width = @max(strLen(item.due), due_width);
-        title_width = @max(strLen(item.task.title), title_width);
+        outcome_width = @max(strLen(item.task.outcome), outcome_width);
     }
-    return .{ .due = due_width, .title = title_width };
+    return .{ .due = due_width, .outcome = outcome_width };
 }
 
 fn strLen(s: []const u8) usize {
@@ -161,7 +163,7 @@ pub fn drain(
 
     try fp.addText("\n", .{});
     for (self.entries.items) |item| {
-        try printTask(&fp, item, col_widths, details);
+        try printTask(&fp, item, col_widths, details, self.opts.full_hash);
         try fp.addText("\n", .{});
     }
     try fp.addText("\n", .{});
@@ -174,6 +176,7 @@ fn printTask(
     entry: FormattedTask,
     padding: Padding,
     details: bool,
+    full_hash: bool,
 ) !void {
     var allocator = fp.mem.allocator();
 
@@ -212,6 +215,22 @@ fn printTask(
 
     try fp.addText(" | ", .{});
 
+    if (full_hash) {
+        try fp.addFmtText(
+            "/{x}",
+            .{entry.task.hash},
+            .{ .fmt = colors.DIM.fixed() },
+        );
+    } else {
+        try fp.addFmtText(
+            "/{x}",
+            .{@as(u20, @intCast(utils.getMiniHash(entry.task.hash, 5)))},
+            .{ .fmt = colors.DIM.fixed() },
+        );
+    }
+
+    try fp.addText(" | ", .{});
+
     const importance: []const u8 = switch (entry.task.importance) {
         .High => "*",
         .Urgent => "!",
@@ -225,9 +244,16 @@ fn printTask(
 
     try fp.addFmtText(
         "{s} {s}",
-        .{ importance, entry.task.title },
+        .{ importance, entry.task.outcome },
         .{ .fmt = if (importance_color) |c| c.fixed() else null },
     );
+    if (entry.task.action) |act| {
+        try fp.addFmtText(
+            " - {s}",
+            .{act},
+            .{ .fmt = colors.DIM.fixed() },
+        );
+    }
 
     const has_details = if (entry.task.details) |d| d.len > 0 else false;
 

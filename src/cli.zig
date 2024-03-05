@@ -360,13 +360,6 @@ const CENTRE_PADDING = 26;
 const HELP_LEN = 48;
 const HELP_INDENT = 2;
 
-fn allAlphanumeric(s: []const u8) bool {
-    for (s) |c| {
-        if (!std.ascii.isAlphanumeric(c)) return false;
-    }
-    return true;
-}
-
 const ArgTypeInfo = union(enum) {
     ShortFlag: struct {
         name: []const u8,
@@ -464,8 +457,8 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
             const long = arg[3..];
             if (long[0] == '-' and
                 long[1] == '-' and
-                allAlphanumeric(long[2..]) and
-                allAlphanumeric(short[1..]))
+                utils.allAlphanumeric(long[2..]) and
+                utils.allAlphanumeric(short[1..]))
             {
                 return .{
                     .ShortOrLongFlag = .{
@@ -476,7 +469,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                     },
                 };
             }
-        } else if (arg[1] == '-' and allAlphanumeric(arg[2..])) {
+        } else if (arg[1] == '-' and utils.allAlphanumeric(arg[2..])) {
             return .{
                 .LongFlag = .{
                     .name = arg[2..],
@@ -485,7 +478,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                 },
             };
         }
-    } else if (allAlphanumeric(arg)) {
+    } else if (utils.allAlphanumeric(arg)) {
         // positional
         return .{
             .Positional = .{

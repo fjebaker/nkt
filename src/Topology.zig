@@ -86,7 +86,7 @@ pub const Journal = Description;
 pub const Task = struct {
     pub const Status = enum { PastDue, NearlyDue, NoStatus, Done, Archived };
     pub const Importance = enum { low, high, urgent };
-    title: []const u8,
+    outcome: []const u8,
     details: []const u8,
     created: u64,
     modified: u64,

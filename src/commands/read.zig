@@ -322,7 +322,7 @@ fn printTask(
     try printer.addFormatted(
         .Item,
         "Task" ++ " " ** 11 ++ ":   {s}\n\n",
-        .{t.title},
+        .{t.outcome},
         .{ .fmt = HEADING_FORMAT },
     );
 

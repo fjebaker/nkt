@@ -45,6 +45,10 @@ pub const arguments = cli.ArgumentsHelp(&.{
         .help = "Name of the tasklist to list.",
     },
     .{
+        .arg = "--hash",
+        .help = "Display the full hashes instead of abbreviations.",
+    },
+    .{
         .arg = "--done",
         .help = "If a tasklist is selected, enables listing tasks marked as 'done'",
     },
@@ -65,6 +69,7 @@ const ListSelection = union(enum) {
     Tasklist: struct {
         name: []const u8,
         done: bool,
+        hash: bool,
         archived: bool,
     },
     Collections: void,
@@ -117,10 +122,11 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     }
     if (args.tasklist) |tasklist| {
         // make sure none of the incompatible fields are selected
-        try ensureOnly(args, &.{ "done", "archived" }, "tasklist");
+        try ensureOnly(args, &.{ "done", "archived", "hash" }, "tasklist");
         return .{ .Tasklist = .{
             .name = tasklist,
             .done = args.done orelse false,
+            .hash = args.hash orelse false,
             .archived = args.archived orelse false,
         } };
     }
@@ -216,13 +222,9 @@ fn listTasklist(
     };
     defer tasklist.deinit();
 
-    // TODO: apply sorting: must be done before index map is built, and must be
-    // done inplace
-
-    // c.sort(tasks, self.ordering orelse .Due);
-    // std.mem.reverse(State.Item, tasks);
-
+    // TODO: apply sorting: get user selection
     const index_map = try tasklist.makeIndexMap();
+
     try listTasks(
         allocator,
         tl,
@@ -250,6 +252,7 @@ fn listTasks(
         .{
             .pretty = true,
             .tag_descriptors = tag_descriptors.tags,
+            .full_hash = tl.hash,
             .tz = opts.tz,
         },
     );
@@ -261,7 +264,7 @@ fn listTasks(
             if (getTaskIndex(index_map, index)) |ind| {
                 if (ind == i) {
                     index += 1;
-                    break :b index;
+                    break :b index - 1;
                 }
             }
             break :b null;

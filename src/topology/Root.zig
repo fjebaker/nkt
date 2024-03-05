@@ -13,6 +13,10 @@ const FileSystem = @import("../FileSystem.zig");
 
 const Root = @This();
 
+test "other topologies" {
+    _ = Tasklist;
+}
+
 /// The filename of the root topology file
 pub const ROOT_FILEPATH = "topology.json";
 

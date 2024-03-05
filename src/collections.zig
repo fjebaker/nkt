@@ -299,16 +299,16 @@ const Tasklist = struct {
         details: []const u8 = "",
     };
 
-    pub fn addTask(self: *Tasklist, title: []const u8, options: TaskOptions) !*Task {
+    pub fn addTask(self: *Tasklist, outcome: []const u8, options: TaskOptions) !*Task {
         _ = try self.readTasks();
 
         var alloc = self.mem.allocator();
         const now = utils.now();
-        const owned_title = try alloc.dupe(u8, title);
+        const owned_outcome = try alloc.dupe(u8, outcome);
         const owned_details = try alloc.dupe(u8, options.details);
 
         const new_task: Task = .{
-            .title = owned_title,
+            .outcome = owned_outcome,
             .details = owned_details,
             .created = now,
             .modified = now,
@@ -350,7 +350,7 @@ const Tasklist = struct {
         for (tasks) |task| {
             if (task.done) continue;
             if (task.archived != null) continue;
-            try index.put(counter, task.title);
+            try index.put(counter, task.outcome);
             counter += 1;
         }
 
@@ -358,11 +358,11 @@ const Tasklist = struct {
     }
 
     pub fn getIndex(t: *Tasklist, index: usize) ?Item {
-        const title = t.index.?.get(index) orelse
+        const outcome = t.index.?.get(index) orelse
             return null;
 
         const task = for (t.tasks.?) |*task| {
-            if (std.mem.eql(u8, title, task.title)) break task;
+            if (std.mem.eql(u8, outcome, task.outcome)) break task;
         } else unreachable;
 
         return .{ .Task = .{ .tasklist = t, .task = task } };
@@ -399,7 +399,7 @@ const Tasklist = struct {
             (lhs.due == null and rhs.due == null) or (lhs.due != null and rhs.due != null);
         if (both_same and lhs.due == rhs.due) {
             // if they are both due at the same time, we sort lexographically
-            return std.ascii.lessThanIgnoreCase(lhs.title, rhs.title);
+            return std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
         }
         return due;
     }
@@ -567,7 +567,7 @@ pub const Item = union(ItemType) {
             .Task => |t| {
                 var tasks = &t.tasklist.tasks.?;
                 const index = for (0.., tasks.*) |j, p| {
-                    if (std.mem.eql(u8, p.title, t.task.title)) break j;
+                    if (std.mem.eql(u8, p.outcome, t.task.outcome)) break j;
                 } else unreachable;
                 utils.moveToEnd(Topology.Task, tasks.*, index);
                 tasks.len -= 1;
@@ -605,7 +605,7 @@ pub const Item = union(ItemType) {
 
                 try d.journal.fs.move(old_path, d.day.path);
             },
-            .Task => |t| t.task.title = new_name,
+            .Task => |t| t.task.outcome = new_name,
         }
     }
 
@@ -636,7 +636,7 @@ pub const Item = union(ItemType) {
         return switch (item) {
             .Note => |n| n.note.name,
             .Day => |d| d.day.name,
-            .Task => |t| t.task.title,
+            .Task => |t| t.task.outcome,
         };
     }
 
@@ -759,7 +759,7 @@ pub const Collection = union(Type) {
 
     pub fn get(c: *Collection, name: []const u8) ?Item {
         const index = switch (c.*) {
-            .Tasklist => c.getIndexByProperty(.Tasklist, "title", name),
+            .Tasklist => c.getIndexByProperty(.Tasklist, "outcome", name),
             .Journal => c.getIndexByProperty(.Journal, "name", name),
             .Directory => c.getIndexByProperty(.Directory, "name", name),
         };
