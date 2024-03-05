@@ -1,18 +1,20 @@
 const std = @import("std");
-const utils = @import("utils.zig");
 const colors = @import("colors.zig");
 const Farbe = colors.Farbe;
 
+const time = @import("topology/time.zig");
+const tags = @import("topology/tags.zig");
+const Tasklist = @import("topology/Tasklist.zig");
+const Task = Tasklist.Task;
+
 const FormatPrinter = @import("FormatPrinter.zig");
 
-const TaskPrinter = @import("TaskPrinter.zig");
-const Task = @import("Topology.zig").Task;
+const Self = @This();
 
-const tags = @import("tags.zig");
+const Status = Tasklist.Status;
 
-const Status = Task.Status;
-
-const FormattedEntry = struct {
+/// Store information relevant to the task
+const FormattedTask = struct {
     due: []const u8,
     pretty_date: ?[]const u8,
     task: Task,
@@ -20,45 +22,52 @@ const FormattedEntry = struct {
     index: ?usize,
 };
 
-entries: std.ArrayList(FormattedEntry),
-mem: std.heap.ArenaAllocator,
-now: utils.Date,
-pretty: bool,
-taginfo: ?[]const tags.TagInfo = null,
+const PrintOptions = struct {
+    tz: time.TimeZone,
+    pretty: bool = false,
+    tag_descriptors: ?[]const tags.Tag.Descriptor = null,
+};
 
-pub fn init(alloc: std.mem.Allocator, pretty: bool) TaskPrinter {
+entries: std.ArrayList(FormattedTask),
+mem: std.heap.ArenaAllocator,
+now: time.Time,
+opts: PrintOptions,
+
+pub fn init(alloc: std.mem.Allocator, opts: PrintOptions) Self {
     const mem = std.heap.ArenaAllocator.init(alloc);
-    const list = std.ArrayList(FormattedEntry).init(alloc);
+    const list = std.ArrayList(FormattedTask).init(alloc);
     return .{
         .entries = list,
         .mem = mem,
-        .now = utils.Date.now(),
-        .pretty = pretty,
+        .now = time.timeNow(),
+        .opts = opts,
     };
 }
 
-pub fn deinit(self: *TaskPrinter) void {
+pub fn deinit(self: *Self) void {
     self.mem.deinit();
     self.entries.deinit();
     self.* = undefined;
 }
 
 fn formatDueDate(
-    self: *const TaskPrinter,
+    self: *const Self,
     alloc: std.mem.Allocator,
-    due_milis: ?u64,
+    due_time: ?u64,
 ) ![]const u8 {
-    const due = if (due_milis) |dm|
-        utils.Date.fromTimestamp(@intCast(dm))
+    const due = if (due_time) |t|
+        time.dateFromTime(t)
     else
         return "";
 
-    const overdue = due.lt(self.now);
+    const now = time.dateFromTime(self.now);
+
+    const overdue = due.lt(now);
 
     const delta = if (overdue)
-        self.now.sub(due)
+        now.sub(due)
     else
-        due.sub(self.now);
+        due.sub(now);
 
     const SECONDS_IN_HOUR = 60 * 60;
 
@@ -75,29 +84,39 @@ fn formatDueDate(
     );
 }
 
-pub fn add(self: *TaskPrinter, task: Task, index: ?usize) !void {
+fn formatTime(tz: time.TimeZone, t: time.Time) ![]const u8 {
+    const local = tz.makeLocal(time.dateFromTime(t));
+    return &try time.formatDateTimeBuf(local);
+}
+
+fn formatTimeAlloc(
+    allocator: std.mem.Allocator,
+    tz: time.TimeZone,
+    t: time.Time,
+) ![]const u8 {
+    return try allocator.dupe(
+        u8,
+        try formatTime(tz, t),
+    );
+}
+
+pub fn add(self: *Self, task: Task, index: ?usize) !void {
     var alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
 
     // make date pretty
     const pretty_date: ?[]const u8 =
-        if (task.completed) |cmpl|
-        try alloc.dupe(
-            u8,
-            &try utils.formatDateBuf(utils.dateFromMs(cmpl)),
-        )
+        if (task.done) |cmpl|
+        try formatTimeAlloc(alloc, self.opts.tz, cmpl)
     else if (task.archived) |arch|
-        try alloc.dupe(
-            u8,
-            &try utils.formatDateBuf(utils.dateFromMs(arch)),
-        )
+        try formatTimeAlloc(alloc, self.opts.tz, arch)
     else
         null;
 
     try self.entries.append(
         .{
             .due = due,
-            .status = task.status(self.now),
+            .status = task.getStatus(self.now),
             .pretty_date = pretty_date,
             .task = task,
             .index = index,
@@ -110,7 +129,7 @@ const Padding = struct {
     title: usize,
 };
 
-fn columnWidth(self: *const TaskPrinter) Padding {
+fn columnWidth(self: *const Self) Padding {
     var due_width: usize = 0;
     var title_width: usize = 0;
     for (self.entries.items) |item| {
@@ -125,18 +144,18 @@ fn strLen(s: []const u8) usize {
 }
 
 pub fn drain(
-    self: *TaskPrinter,
+    self: *Self,
     writer: anytype,
-    tag_infos: ?[]const tags.TagInfo,
     details: bool,
 ) !void {
     var fp = FormatPrinter.init(
         self.mem.child_allocator,
-        .{ .pretty = self.pretty },
+        .{
+            .pretty = self.opts.pretty,
+            .tag_descriptors = self.opts.tag_descriptors,
+        },
     );
     defer fp.deinit();
-
-    fp.tag_infos = tag_infos;
 
     const col_widths = self.columnWidth();
 
@@ -152,7 +171,7 @@ pub fn drain(
 
 fn printTask(
     fp: *FormatPrinter,
-    entry: FormattedEntry,
+    entry: FormattedTask,
     padding: Padding,
     details: bool,
 ) !void {
@@ -194,13 +213,13 @@ fn printTask(
     try fp.addText(" | ", .{});
 
     const importance: []const u8 = switch (entry.task.importance) {
-        .high => "*",
-        .urgent => "!",
+        .High => "*",
+        .Urgent => "!",
         else => " ",
     };
     const importance_color = switch (entry.task.importance) {
-        .high => colors.YELLOW,
-        .urgent => colors.RED.bold(),
+        .High => colors.YELLOW,
+        .Urgent => colors.RED.bold(),
         else => null,
     };
 
@@ -210,7 +229,7 @@ fn printTask(
         .{ .fmt = if (importance_color) |c| c.fixed() else null },
     );
 
-    const has_details = entry.task.details.len > 0;
+    const has_details = if (entry.task.details) |d| d.len > 0 else false;
 
     const text_pad: usize = p: {
         if (!details and has_details) {

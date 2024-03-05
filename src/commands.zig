@@ -25,7 +25,7 @@ pub const Commands = union(enum) {
     help: @import("commands/help.zig"),
     // import: @import("commands/import.zig"),
     init: @import("commands/init.zig"),
-    // list: @import("commands/list.zig"),
+    list: @import("commands/list.zig"),
     log: @import("commands/log.zig"),
     // new: @import("commands/new.zig"),
     read: @import("commands/read.zig"),

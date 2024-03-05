@@ -23,17 +23,19 @@ command: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
+
     if (args.command) |cmd| {
-        if (!isValidCommand(cmd)) {
+        const command = toValidCommand(cmd) orelse {
             try cli.throwError(
                 cli.CLIErrors.BadArgument,
                 "help: no such command: '{s}'",
                 .{cmd},
             );
-        }
+            unreachable;
+        };
+        return .{ .command = command };
     }
-
-    return .{ .command = args.command };
+    return .{ .command = null };
 }
 
 pub fn execute(
@@ -50,13 +52,15 @@ pub fn execute(
     }
 }
 
-fn isValidCommand(command: []const u8) bool {
+fn toValidCommand(command: []const u8) ?[]const u8 {
     // assert the argument is valid
     const info = @typeInfo(Commands).Union;
     inline for (info.fields) |field| {
-        if (std.mem.eql(u8, field.name, command)) return true;
+        const is_field = std.mem.eql(u8, command, field.name);
+        const is_alias = utils.isAlias(field, command);
+        if (is_field or is_alias) return field.name;
     }
-    return false;
+    return null;
 }
 
 fn printExtendedHelp(

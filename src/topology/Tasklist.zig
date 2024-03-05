@@ -48,8 +48,8 @@ pub const Task = struct {
     /// Get the `Status` of the task relative to some `Time`.
     pub fn getStatus(t: Task, relative: time.Time) Status {
         const now = time.dateFromTime(relative);
-        if (t.done) |_| return .Done;
         if (t.archived != null) return .Archived;
+        if (t.done) |_| return .Done;
         const due = if (t.due) |dm|
             utils.Date.fromTimestamp(@intCast(dm))
         else
@@ -57,6 +57,16 @@ pub const Task = struct {
         if (now.gt(due)) return .PastDue;
         if (due.sub(now).days < 1) return .NearlyDue;
         return .NoStatus;
+    }
+
+    /// Return true if the task is completed
+    pub fn isDone(t: Task) bool {
+        return t.done != null;
+    }
+
+    /// Return true if the task is archived
+    pub fn isArchived(t: Task) bool {
+        return t.archived != null;
     }
 
     fn dueLessThan(_: void, left: Task, right: Task) bool {
@@ -127,7 +137,9 @@ pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
     return self.info.tasks[map[index]];
 }
 
-/// Make an index map sorted by due date, only relevant for active tasks.
+/// Make an index map sorted by due date, only relevant for active tasks. The
+/// `index_map[i]` corresponds to the `t{i}` task, and returns the index of the
+/// task in the `info.tasks` slice.
 pub fn makeIndexMap(self: *Tasklist) ![]const usize {
     // sort the tasks
     std.sort.insertion(Task, self.info.tasks, {}, Task.dueLessThan);

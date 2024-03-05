@@ -3,6 +3,15 @@ const cli = @import("cli.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
+/// Get the type of a tag struct in a union
+pub fn TagType(comptime T: type, comptime name: []const u8) type {
+    const fields = @typeInfo(T).Union.fields;
+    inline for (fields) |f| {
+        if (std.mem.eql(u8, f.name, name)) return f.type;
+    }
+    @compileError("No field named " ++ name);
+}
+
 /// A helper for creating iterable slices
 pub fn ListIterator(comptime T: type) type {
     return struct {

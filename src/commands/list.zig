@@ -1,312 +1,382 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
+const selections = @import("../selections.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Journal = @import("../topology/Journal.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
+const Root = @import("../topology/Root.zig");
+
 const TaskPrinter = @import("../TaskPrinter.zig");
-const FormatPrinter = @import("../FormatPrinter.zig");
 
 const Self = @This();
 
-pub const ListError = error{CannotListJournal};
-
 pub const alias = [_][]const u8{"ls"};
 
-pub const help = "List notes in various ways.";
-pub const extended_help =
-    \\List notes in various ways to the terminal.
-    \\  nkt list
-    \\     <what>                list the notes in a directory, journal, or tasks. this option may
-    \\                             also be `all` to list everything. To list all tasklists use
-    \\                             `tasks` (default: all)
-    \\     -n/--limit int        maximum number of entries to list (default: 25)
-    \\     --all                 list all entries (ignores `--limit`)
-    \\     --modified            sort by last modified (default)
-    \\     --created             sort by date created
-    \\     --alphabetical        sort by date created
-    \\     --pretty/--nopretty   pretty format the output, or don't (default
-    \\                           is to pretty format)
-    \\
-    \\When the `<what>` is a task list, the additional options are
-    \\     --due                 list in order of when something is due (default)
-    \\     --importance          list in order of importance
-    \\     --done                list also those tasks marked as done
-    \\     --archived            list also archived tasks
-    \\     --details             also print details of the tasks
-    \\
-;
+pub const short_help = "List collections and other information in various ways.";
+pub const long_help = short_help;
 
-selection: []const u8 = "",
-ordering: ?State.Ordering = null,
-number: usize = 25,
-all: bool = false,
-pretty: ?bool = null,
-done: bool = false,
-archived: bool = false,
-details: bool = false,
+const MUTUAL_FIELDS: []const []const u8 = &.{
+    "sort",
+};
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
-    var self: Self = .{};
+pub const arguments = cli.ArgumentsHelp(&.{
+    .{
+        .arg = "--sort how",
+        .help = "How to sort the item lists. Possible values are 'modified' or 'created'",
+    },
+    .{
+        .arg = "--directory name",
+        .help = "Name of the directory to list.",
+    },
+    .{
+        .arg = "note",
+        .help = "When directory is selected, can be used to subselect hiearchies",
+    },
+    .{
+        .arg = "--journal name",
+        .help = "Name of the journal to list.",
+    },
+    .{
+        .arg = "--tasklist name",
+        .help = "Name of the tasklist to list.",
+    },
+    .{
+        .arg = "--done",
+        .help = "If a tasklist is selected, enables listing tasks marked as 'done'",
+    },
+    .{
+        .arg = "--archived",
+        .help = "If a tasklist is selected, enables listing tasks marked as 'archived'",
+    },
+}, .{});
 
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (arg.is('n', "limit")) {
-                const value = try itt.getValue();
-                self.number = try value.as(usize);
-            } else if (arg.is(null, "all")) {
-                self.all = true;
-            } else if (arg.is(null, "modified")) {
-                self.ordering = .Modified;
-            } else if (arg.is(null, "alphabetical")) {
-                self.ordering = .Alphabetical;
-            } else if (arg.is(null, "done")) {
-                self.done = true;
-            } else if (arg.is(null, "archived")) {
-                self.archived = true;
-            } else if (arg.is(null, "created")) {
-                self.ordering = .Created;
-            } else if (arg.is(null, "nopretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = false;
-            } else if (arg.is(null, "pretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = true;
-            } else if (arg.is(null, "details")) {
-                self.details = true;
-            } else {
-                return cli.CLIErrors.UnknownFlag;
+const ListSelection = union(enum) {
+    Directory: struct {
+        note: ?[]const u8,
+        name: []const u8,
+    },
+    Journal: struct {
+        name: []const u8,
+    },
+    Tasklist: struct {
+        name: []const u8,
+        done: bool,
+        archived: bool,
+    },
+    Collections: void,
+};
+
+selection: ListSelection,
+
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    const args = try arguments.parseAll(itt);
+    return .{
+        .selection = try processArguments(args),
+    };
+}
+
+pub fn execute(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try root.load();
+
+    switch (self.selection) {
+        .Collections => try listCollections(root, writer, opts),
+        .Directory => |i| try listDirectory(i, root, writer, opts),
+        .Journal => |i| try listJournal(i, root, writer, opts),
+        .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
+    }
+}
+
+fn processArguments(args: arguments.ParsedArguments) !ListSelection {
+    var count: usize = 0;
+    if (args.journal != null) count += 1;
+    if (args.directory != null) count += 1;
+    if (args.tasklist != null) count += 1;
+    if (count > 1) {
+        try cli.throwError(
+            error.AmbiguousSelection,
+            "Can only list a single collection.",
+            .{},
+        );
+        unreachable;
+    }
+
+    if (args.journal) |journal| {
+        // make sure none of the incompatible fields are selected
+        try ensureOnly(args, &.{}, "journal");
+        return .{ .Journal = .{ .name = journal } };
+    }
+    if (args.tasklist) |tasklist| {
+        // make sure none of the incompatible fields are selected
+        try ensureOnly(args, &.{ "done", "archived" }, "tasklist");
+        return .{ .Tasklist = .{
+            .name = tasklist,
+            .done = args.done orelse false,
+            .archived = args.archived orelse false,
+        } };
+    }
+    if (args.directory) |directory| {
+        // make sure none of the incompatible fields are selected
+        try ensureOnly(args, &.{"note"}, "directory");
+        return .{ .Directory = .{
+            .name = directory,
+            .note = args.note,
+        } };
+    }
+
+    try ensureOnly(args, &.{}, "collections");
+
+    return .{ .Collections = {} };
+}
+
+/// Ensures that only the fields in `fields` and MUTUAL_FIELDS are not null.
+fn ensureOnly(
+    args: arguments.ParsedArguments,
+    comptime fields: []const []const u8,
+    collection_type: []const u8,
+) !void {
+    const allowed: []const []const u8 =
+        MUTUAL_FIELDS ++ fields ++ .{collection_type};
+
+    inline for (@typeInfo(arguments.ParsedArguments).Struct.fields) |f| {
+        for (allowed) |name| {
+            if (std.mem.eql(u8, name, f.name)) {
+                break;
             }
         } else {
-            if (self.selection.len == 0) {
-                self.selection = arg.string;
-            } else return cli.CLIErrors.TooManyArguments;
+            if (@field(args, f.name) != null) {
+                try cli.throwError(
+                    error.AmbiguousSelection,
+                    "Cannot provide '{s}' argument when selecting '{s}'",
+                    .{ f.name, collection_type },
+                );
+                unreachable;
+            }
         }
     }
-
-    if (self.selection.len == 0) self.selection = "all";
-
-    // don't pretty format by default if not tty
-    self.pretty = self.pretty orelse !opts.piped;
-
-    return self;
 }
 
-pub fn listNames(
-    cnames: State.CollectionNameList,
-    what: State.CollectionType,
+fn listCollections(
+    root: *Root,
     writer: anytype,
-    opts: struct { oneline: bool = false },
+    opts: commands.Options,
 ) !void {
-    if (!opts.oneline) {
-        switch (what) {
-            .Directory => try writer.print("Directories:\n", .{}),
-            .Journal => try writer.print("Journals:\n", .{}),
-            .Tasklist => try writer.print("Tasklists:\n", .{}),
-        }
-    }
-
-    for (cnames.items) |name| {
-        if (name.collection != what) continue;
-        if (opts.oneline) {
-            try writer.print("{s} ", .{name.name});
-        } else {
-            try writer.print(" - {s}\n", .{name.name});
-        }
-    }
-
-    _ = try writer.writeAll("\n");
+    try writer.writeAll("Directories:\n");
+    try printDescriptors(writer, root.info.directories);
+    try writer.writeAll("\nJournals:\n");
+    try printDescriptors(writer, root.info.journals);
+    try writer.writeAll("\nTasklists:\n");
+    try printDescriptors(writer, root.info.tasklists);
+    try writer.writeAll("\n");
+    _ = opts;
 }
 
-const Task = @import("../Topology.zig").Task;
+fn printDescriptors(writer: anytype, descrs: []const Root.Descriptor) !void {
+    for (descrs) |descr| {
+        try writer.print("- {s}\n", .{descr.name});
+    }
+}
+
+fn listJournal(
+    j: utils.TagType(ListSelection, "Journal"),
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try writer.writeAll("TODO: not implemented yet\n");
+    _ = j;
+    _ = root;
+    _ = opts;
+}
+
+fn listTasklist(
+    allocator: std.mem.Allocator,
+    tl: utils.TagType(ListSelection, "Tasklist"),
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    var maybe_tl = try root.getTasklist(tl.name);
+    var tasklist = maybe_tl orelse {
+        try cli.throwError(
+            Root.Error.NoSuchCollection,
+            "No directory named '{s}'",
+            .{tl.name},
+        );
+        unreachable;
+    };
+    defer tasklist.deinit();
+
+    // TODO: apply sorting: must be done before index map is built, and must be
+    // done inplace
+
+    // c.sort(tasks, self.ordering orelse .Due);
+    // std.mem.reverse(State.Item, tasks);
+
+    const index_map = try tasklist.makeIndexMap();
+    try listTasks(
+        allocator,
+        tl,
+        tasklist.info.tasks,
+        index_map,
+        root,
+        writer,
+        opts,
+    );
+}
+
 fn listTasks(
-    self: *Self,
-    alloc: std.mem.Allocator,
-    state: *State,
-    c: *State.Collection,
+    allocator: std.mem.Allocator,
+    tl: utils.TagType(ListSelection, "Tasklist"),
+    tasks: []const Tasklist.Task,
+    index_map: []const usize,
+    root: *Root,
     writer: anytype,
+    opts: commands.Options,
 ) !void {
-    // need to read tasklist from file
-    try c.readAll();
-    const tasks = try c.getAll(alloc);
-    defer alloc.free(tasks);
+    const tag_descriptors = try root.getTagDescriptorList();
 
-    c.sort(tasks, self.ordering orelse .Due);
-    std.mem.reverse(State.Item, tasks);
-
-    var printer = TaskPrinter.init(alloc, self.pretty.?);
+    var printer = TaskPrinter.init(
+        allocator,
+        .{
+            .pretty = true,
+            .tag_descriptors = tag_descriptors.tags,
+            .tz = opts.tz,
+        },
+    );
     defer printer.deinit();
 
-    printer.taginfo = state.getTagInfo();
-
-    var lookup = try c.Tasklist.invertIndexMap(alloc);
-    defer lookup.deinit();
-
-    for (tasks) |task| {
-        if (!self.done and task.Task.isDone()) {
-            continue;
-        }
-        if (!self.archived and task.Task.isArchived()) {
-            continue;
-        }
-        const index = lookup.get(task.Task.task.title);
-        try printer.add(task.Task.task.*, index);
-    }
-
-    try printer.drain(writer, state.getTagInfo(), self.details);
-}
-
-fn is(s: []const u8, other: []const u8) bool {
-    return std.mem.eql(u8, s, other);
-}
-
-pub fn run(
-    self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    var cnames = try state.getCollectionNames(state.allocator);
-    defer cnames.deinit();
-
-    if (is(self.selection, "all")) {
-        try listNames(cnames, .Directory, out_writer, .{});
-        try listNames(cnames, .Journal, out_writer, .{});
-        try listNames(cnames, .Tasklist, out_writer, .{});
-        try listChains(try state.getChains(), out_writer);
-    } else if (is(self.selection, "dir") or is(self.selection, "directories")) {
-        try listNames(cnames, .Directory, out_writer, .{});
-    } else if (is(self.selection, "journals")) {
-        try listNames(cnames, .Journal, out_writer, .{});
-    } else if (is(self.selection, "tasklists")) {
-        try listNames(cnames, .Tasklist, out_writer, .{});
-    } else if (is(self.selection, "tasks")) {
-        const tls = state.getTasklists();
-        for (tls) |*c| {
-            try out_writer.print("Tasks in tasklist '{s}':\n", .{c.getName()});
-            try self.listTasks(state.allocator, state, c, out_writer);
-        }
-    } else if (is(self.selection, "tags")) {
-        try self.listTags(state.allocator, state.getTagInfo(), out_writer);
-    } else if (is(self.selection, "chains")) {
-        try listChains(try state.getChains(), out_writer);
-    } else {
-        const choice = utils.Hierarchy.init(self.selection);
-        const collection: State.MaybeCollection = state.getCollectionByName(choice.root) orelse
-            return State.Error.NoSuchCollection;
-
-        if (collection.directory) |c| {
-            try out_writer.print("Notes in directory '{s}':\n", .{c.getName()});
-            try listDirectory(
-                state.allocator,
-                c,
-                self.ordering orelse .Alphabetical,
-                out_writer,
-                choice.child(),
-            );
-        } else {
-            if (choice.child() != null) {
-                return utils.Hierarchy.Error.InvalidHierarchy;
+    var index: usize = 0;
+    for (tasks, 0..) |task, i| {
+        const t_index = b: {
+            if (getTaskIndex(index_map, index)) |ind| {
+                if (ind == i) {
+                    index += 1;
+                    break :b index;
+                }
             }
+            break :b null;
+        };
+
+        if (!tl.done and task.isDone()) {
+            continue;
         }
-        if (collection.journal) |c| {
-            try out_writer.print("Entries in journal '{s}':\n", .{c.getName()});
-            try self.listCollection(
-                state.allocator,
-                c,
-                self.ordering orelse .Modified,
-                out_writer,
-            );
+        if (!tl.archived and task.isArchived()) {
+            continue;
         }
-        if (collection.tasklist) |c| {
-            try out_writer.print("Tasks in tasklist '{s}':\n", .{c.getName()});
-            try self.listTasks(state.allocator, state, c, out_writer);
-        }
+        try printer.add(task, t_index);
     }
+
+    try printer.drain(writer, false);
 }
 
-fn listChains(chains: []State.Chain, writer: anytype) !void {
-    try writer.writeAll("Chains:\n");
-    for (chains) |chain| {
-        try writer.print(" - {s}\n", .{chain.name});
-    }
-
-    try writer.writeAll("\n");
+fn getTaskIndex(index_map: []const usize, i: usize) ?usize {
+    if (i >= index_map.len) return null;
+    return index_map[i];
 }
 
 fn listDirectory(
-    alloc: std.mem.Allocator,
-    c: *State.Collection,
-    order: State.Ordering,
+    d: utils.TagType(ListSelection, "Directory"),
+    root: *Root,
     writer: anytype,
-    h: ?utils.Hierarchy,
+    opts: commands.Options,
 ) !void {
-    const items = try c.getAll(alloc);
-    defer alloc.free(items);
-    c.sort(items, order);
-
-    const padding = p: {
-        var longest: usize = 0;
-        for (items) |item| {
-            longest = @max(longest, item.getName().len);
-        }
-        break :p longest;
+    var maybe_dir = try root.getDirectory(d.name);
+    var dir = maybe_dir orelse {
+        try cli.throwError(
+            Root.Error.NoSuchCollection,
+            "No directory named '{s}'",
+            .{d.name},
+        );
+        unreachable;
     };
+    defer dir.deinit();
 
-    for (items) |item| {
-        const name = item.getName();
-        if (h) |hier| {
-            if (!std.mem.startsWith(u8, name, hier.root))
-                continue;
-        }
-
-        const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
-            std.debug.print("ERR: {s}\n", .{item.getPath()});
-            return err;
-        };
-        const date = utils.dateFromMs(item.Note.note.modified);
-        const fmt_date = try utils.formatDateTimeBuf(date);
-
-        try writer.print(" - {d: >7}  {s}", .{ size.size, name });
-        try writer.writeByteNTimes(' ', padding - name.len + 2);
-        try writer.print("{s}\n", .{fmt_date});
+    if (dir.info.notes.len == 0) {
+        try writer.writeAll(" -- Directory Empty -- \n");
     }
+
+    // TODO: sorting
+
+    for (dir.info.notes) |note| {
+        try writer.print("- {s}\n", .{note.name});
+    }
+    _ = opts;
 }
 
-fn listCollection(
-    _: *const Self,
-    alloc: std.mem.Allocator,
-    c: *State.Collection,
-    order: State.Ordering,
-    writer: anytype,
-) !void {
-    if (c.* == .Tasklist) unreachable;
-    if (c.* == .Directory) unreachable;
+// fn listChains(chains: []State.Chain, writer: anytype) !void {
+//     try writer.writeAll("Chains:\n");
+//     for (chains) |chain| {
+//         try writer.print(" - {s}\n", .{chain.name});
+//     }
 
-    const items = try c.getAll(alloc);
-    defer alloc.free(items);
-    c.sort(items, order);
+//     try writer.writeAll("\n");
+// }
 
-    for (items) |item| {
-        try writer.print(" - {s}\n", .{item.getName()});
-    }
-}
+// fn listDirectory(
+//     alloc: std.mem.Allocator,
+//     c: *State.Collection,
+//     order: State.Ordering,
+//     writer: anytype,
+//     h: ?utils.Hierarchy,
+// ) !void {
+//     const items = try c.getAll(alloc);
+//     defer alloc.free(items);
+//     c.sort(items, order);
 
-fn listTags(
-    self: *const Self,
-    alloc: std.mem.Allocator,
-    infos: []const tags.TagInfo,
-    out_writer: anytype,
-) !void {
-    var printer = FormatPrinter.init(alloc, .{ .pretty = self.pretty.? });
-    defer printer.deinit();
+//     const padding = p: {
+//         var longest: usize = 0;
+//         for (items) |item| {
+//             longest = @max(longest, item.getName().len);
+//         }
+//         break :p longest;
+//     };
 
-    printer.tag_infos = infos;
+//     for (items) |item| {
+//         const name = item.getName();
+//         if (h) |hier| {
+//             if (!std.mem.startsWith(u8, name, hier.root))
+//                 continue;
+//         }
 
-    try printer.addText("Tags:\n", .{});
-    for (infos) |info| {
-        try printer.addFmtText(" - @{s}\n", .{info.name}, .{});
-    }
-    try printer.addText("\n", .{});
+//         const size = c.Directory.fs.dir.statFile(item.getPath()) catch |err| {
+//             std.debug.print("ERR: {s}\n", .{item.getPath()});
+//             return err;
+//         };
+//         const date = utils.dateFromMs(item.Note.note.modified);
+//         const fmt_date = try utils.formatDateTimeBuf(date);
 
-    try printer.drain(out_writer);
-}
+//         try writer.print(" - {d: >7}  {s}", .{ size.size, name });
+//         try writer.writeByteNTimes(' ', padding - name.len + 2);
+//         try writer.print("{s}\n", .{fmt_date});
+//     }
+// }
+
+// fn listTags(
+//     self: *const Self,
+//     alloc: std.mem.Allocator,
+//     infos: []const tags.TagInfo,
+//     out_writer: anytype,
+// ) !void {
+//     var printer = FormatPrinter.init(alloc, .{ .pretty = self.pretty.? });
+//     defer printer.deinit();
+
+//     printer.tag_infos = infos;
+
+//     try printer.addText("Tags:\n", .{});
+//     for (infos) |info| {
+//         try printer.addFmtText(" - @{s}\n", .{info.name}, .{});
+//     }
+//     try printer.addText("\n", .{});
+
+//     try printer.drain(out_writer);
+// }

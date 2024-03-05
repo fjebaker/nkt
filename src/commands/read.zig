@@ -122,11 +122,13 @@ pub fn execute(
     defer allocator.free(selected_tags);
 
     const N = try extractLineLimit(self.args);
-
-    var bprinter = BlockPrinter.init(allocator, .{ .max_lines = N });
-    defer bprinter.deinit();
-
     var tdl = try root.getTagDescriptorList();
+
+    var bprinter = BlockPrinter.init(allocator, .{
+        .max_lines = N,
+        .tag_descriptors = tdl.tags,
+    });
+    defer bprinter.deinit();
 
     switch (item) {
         .Day => |*day| {
