@@ -155,7 +155,10 @@ fn newDayFromName(self: *Journal, name: []const u8) !Day {
     // then add to the staging so we don't try to open a file that doesn't
     // exist
     var map = self.getStagedEntries();
-    try map.put(day.path, std.ArrayList(Entry).init(self.allocator));
+    try map.put(
+        day.path,
+        std.ArrayList(Entry).init(self.getTmpAllocator()),
+    );
     return day;
 }
 
@@ -182,8 +185,14 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
     // otherwise we read from file
     var fs = self.fs orelse return error.NeedsFileSystem;
 
-    // TODO: sort the entries by time
-    return try self.readDayFromPath(&fs, day.path);
+    var entries = try self.readDayFromPath(&fs, day.path);
+
+    // add to the chache
+    try map.put(day.path, std.ArrayList(Entry).fromOwnedSlice(
+        self.getTmpAllocator(),
+        entries,
+    ));
+    return entries;
 }
 
 fn readDayFromPath(
@@ -230,17 +239,18 @@ fn addDayToStage(
     map: *StagedEntries,
     path: []const u8,
 ) !void {
+    var alloc = self.getTmpAllocator();
     if (self.fs) |*fs| {
         // read entries and init owned list
         var entries = try self.readDayFromPath(fs, path);
         try map.put(path, std.ArrayList(Entry).fromOwnedSlice(
-            self.allocator,
+            alloc,
             entries,
         ));
     } else {
         // else create empty list
         std.log.default.warn("No Filesystem in Journal", .{});
-        try map.put(path, std.ArrayList(Entry).init(self.allocator));
+        try map.put(path, std.ArrayList(Entry).init(alloc));
     }
 }
 

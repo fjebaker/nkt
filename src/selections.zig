@@ -58,6 +58,7 @@ pub const Selector = union(Method) {
 pub const Item = union(enum) {
     Entry: struct {
         journal: Journal,
+        day: Journal.Day,
         entry: Journal.Entry,
     },
     Day: struct {
@@ -176,7 +177,7 @@ const ResolveResult = struct {
     }
 };
 
-fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
+fn retrieveFromJournal(s: Selector, journal: *Journal, entry_time: ?[]const u8) !ResolveResult {
     const now = time.timeNow();
     const day = switch (s) {
         .ByQualifiedIndex, .ByIndex => b: {
@@ -197,6 +198,24 @@ fn retrieveFromJournal(s: Selector, journal: *Journal) !ResolveResult {
             return ResolveResult.throw(Root.Error.NoSuchItem),
         .ByHash => return ResolveResult.throw(Error.InvalidSelection),
     };
+
+    if (entry_time) |t| {
+        const entries = try journal.getEntries(day);
+        for (entries) |entry| {
+            // TODO: this should ideally be a numerical not string compare
+            const tf = try time.formatTimeBuf(
+                time.dateFromTime(entry.created),
+            );
+            if (std.mem.eql(u8, &tf, t)) {
+                return ResolveResult.ok(.{ .Entry = .{
+                    .journal = journal.*,
+                    .day = day,
+                    .entry = entry,
+                } });
+            }
+        }
+        return ResolveResult.throw(Root.Error.NoSuchItem);
+    }
 
     return ResolveResult.ok(
         .{ .Day = .{ .journal = journal.*, .day = day } },
@@ -253,6 +272,10 @@ pub const Selection = struct {
     /// The selector used to select the item
     selector: ?Selector = null,
 
+    modifiers: struct {
+        entry_time: ?[]const u8 = null,
+    } = .{},
+
     fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
         const name = s.collection_name orelse
             return ResolveResult.throw(Error.AmbiguousSelection);
@@ -296,7 +319,11 @@ pub const Selection = struct {
                     std.log.default.debug("Looking up journal '{s}'", .{name});
                     var journal = (try root.getJournal(name)) orelse
                         return ResolveResult.throw(Error.UnknownSelection);
-                    return try retrieveFromJournal(selector, &journal);
+                    return try retrieveFromJournal(
+                        selector,
+                        &journal,
+                        s.modifiers.entry_time,
+                    );
                 },
                 .CollectionDirectory => {
                     const name = s.collection_name orelse
@@ -730,6 +757,36 @@ fn addFlagsReportError(
     }
 }
 
+fn addModifiersReportError(
+    selection: *Selection,
+    entry_time: ?[]const u8,
+) !void {
+    if (entry_time) |t| {
+        // assert we are selecting a journal or null
+        if (selection.collection_type) |ct| {
+            if (ct != .CollectionJournal) {
+                try cli.throwError(
+                    Error.IncompatibleSelection,
+                    "Cannot select a time for collection type '{s}'",
+                    .{@tagName(ct)},
+                );
+                unreachable;
+            }
+        }
+
+        // assert the format of the time is okay
+        if (!time.isTime(t)) {
+            try cli.throwError(
+                cli.CLIErrors.BadArgument,
+                "Time is invalid format: '{s}' (needs to be 'HH:MM:SS')",
+                .{t},
+            );
+            unreachable;
+        }
+        selection.modifiers.entry_time = t;
+    }
+}
+
 /// Parse the selection from a `cli.ParsedArguments` structure that has been
 /// augmented with `selectHelp`. Will report errors to stderr.
 pub fn fromArgs(
@@ -749,6 +806,11 @@ pub fn fromArgs(
         args.journal,
         args.directory,
         args.tasklist,
+    );
+
+    try addModifiersReportError(
+        &selection,
+        args.time,
     );
     return selection;
 }
@@ -774,6 +836,10 @@ pub fn selectHelp(
         .{
             .arg = "--journal journal",
             .help = "The name of a journal to select the day or entry from. If unassigned uses default journal.",
+        },
+        .{
+            .arg = "--time HH:MM:SS",
+            .help = "Augments a given selection with a given time, used for selecting e.g. individual entries.",
         },
         .{
             .arg = "--directory directory",

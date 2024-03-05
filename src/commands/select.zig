@@ -17,7 +17,7 @@ pub const arguments = cli.ArgumentsHelp(
     selections.selectHelp(
         "item",
         "The selection item",
-        .{},
+        .{ .required = false },
     ),
     .{},
 );
@@ -51,10 +51,17 @@ pub fn execute(
 
 fn handleSelection(writer: anytype, item: selections.Item) !void {
     switch (item) {
-        .Day => |*d| {
+        .Day => |d| {
             try writer.print(
                 "Day: {s} [Journal: {s}]\n",
                 .{ d.day.name, d.journal.descriptor.name },
+            );
+        },
+        .Entry => |e| {
+            // TODO: get the day name too
+            try writer.print(
+                "Entry: '{s}' [Journal: {s}]\n",
+                .{ e.entry.text, e.journal.descriptor.name },
             );
         },
         .Task => |t| {
@@ -63,6 +70,31 @@ fn handleSelection(writer: anytype, item: selections.Item) !void {
                 .{ t.task.outcome, t.tasklist.descriptor.name },
             );
         },
-        else => unreachable,
+        .Note => |n| {
+            try writer.print(
+                "Note: {s} [Directory: {s}]\n",
+                .{ n.note.name, n.directory.descriptor.name },
+            );
+        },
+        .Collection => |c| switch (c) {
+            .directory => |d| {
+                try writer.print(
+                    "Collection: {s} [type: directory]\n",
+                    .{d.descriptor.name},
+                );
+            },
+            .journal => |j| {
+                try writer.print(
+                    "Collection: {s} [type: journal]\n",
+                    .{j.descriptor.name},
+                );
+            },
+            .tasklist => |t| {
+                try writer.print(
+                    "Collection: {s} [type: tasklist]\n",
+                    .{t.descriptor.name},
+                );
+            },
+        },
     }
 }
