@@ -11,7 +11,11 @@ const Tasklist = @This();
 pub const TASKLIST_DIRECTORY = "tasklists";
 pub const TASKLIST_EXTENSION = "json";
 
-pub const Error = error{ DuplicateTask, UnknownImportance };
+pub const Error = error{
+    DuplicateTask,
+    UnknownImportance,
+    NoSuchTask,
+};
 
 pub const Status = enum {
     PastDue,
@@ -203,6 +207,30 @@ test "get by mini hash" {
         tasks[0],
         (try tl.getTaskByMiniHash(0xabc12)).?,
     );
+    try std.testing.expectEqualDeep(
+        tasks[2],
+        (try tl.getTaskByMiniHash(0x7416f)).?,
+    );
+}
+
+/// Remove a task from the tasklist.
+pub fn removeTask(self: *Tasklist, task: Task) !void {
+    var list = std.ArrayList(Task).fromOwnedSlice(
+        self.getTmpAllocator(),
+        self.info.tasks,
+    );
+
+    const index = b: {
+        for (list.items, 0..) |t, i| {
+            if (t.hash == task.hash) {
+                break :b i;
+            }
+        }
+        return Error.NoSuchTask;
+    };
+
+    _ = list.orderedRemove(index);
+    self.info.tasks = try list.toOwnedSlice();
 }
 
 /// Get task by index. Returns `null` if no task found.

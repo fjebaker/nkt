@@ -12,7 +12,7 @@ pub const TOPOLOGY_FILENAME = "topology.json";
 pub const DAY_FILE_EXTENSION = "json";
 pub const PATH_PREFIX = "journal";
 
-pub const Error = error{NoSuchDay};
+pub const Error = error{ NoSuchDay, NoSuchEntry };
 
 pub const Entry = struct {
     text: []const u8,
@@ -69,10 +69,6 @@ fn getTmpAllocator(self: *Journal) std.mem.Allocator {
 
 pub fn deinit(self: *Journal) void {
     if (self.staged_entries) |*se| {
-        var itt = se.iterator();
-        while (itt.next()) |entry| {
-            entry.value_ptr.deinit();
-        }
         se.deinit();
     }
     if (self.mem) |*mem| mem.deinit();
@@ -173,6 +169,56 @@ fn newPathFromName(self: *Journal, name: []const u8) ![]const u8 {
             &.{ name, DAY_FILE_EXTENSION },
         ) },
     );
+}
+
+/// Remove an entry from a day.
+pub fn removeEntryFromDay(self: *Journal, day: Day, entry: Entry) !void {
+    var map = self.getStagedEntries();
+    var list = map.getPtr(day.path) orelse return Error.NoSuchDay;
+    // need to get the index of the entry in the list
+    const index = b: {
+        for (list.items, 0..) |e, i| {
+            if (e.created == entry.created) {
+                break :b i;
+            }
+        }
+        return Error.NoSuchEntry;
+    };
+
+    _ = list.orderedRemove(index);
+}
+
+/// Remove an entire day from the journal. Also attempts to delete files if a
+/// filesystem is given.
+pub fn removeDay(self: *Journal, day: Day) !void {
+    var list = std.ArrayList(Day).fromOwnedSlice(
+        self.getTmpAllocator(),
+        self.info.days,
+    );
+
+    const index = b: {
+        for (list.items, 0..) |d, i| {
+            if (d.created == day.created) {
+                break :b i;
+            }
+        }
+        return Error.NoSuchDay;
+    };
+
+    _ = list.orderedRemove(index);
+    self.info.days = try list.toOwnedSlice();
+
+    var map = self.getStagedEntries();
+    if (map.contains(day.path)) {
+        _ = map.remove(day.path);
+    }
+
+    // try and remove associated file
+    var fs = self.fs orelse {
+        std.log.default.debug("Cannot remove day file as no file system", .{});
+        return;
+    };
+    try fs.removeFile(day.path);
 }
 
 /// Read the entries of a `Day`. Does not validate the day exists.
