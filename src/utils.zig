@@ -8,6 +8,32 @@ pub const Error = error{
     InvalidHash,
 };
 
+/// Ensures that only the fields in `fields` are not null.
+pub fn ensureOnly(
+    comptime T: type,
+    args: T,
+    comptime fields: []const []const u8,
+    collection_type: []const u8,
+) !void {
+    const allowed: []const []const u8 = fields ++ .{collection_type};
+    inline for (@typeInfo(T).Struct.fields) |f| {
+        for (allowed) |name| {
+            if (std.mem.eql(u8, name, f.name)) {
+                break;
+            }
+        } else {
+            if (@field(args, f.name) != null) {
+                try cli.throwError(
+                    error.AmbiguousSelection,
+                    "Cannot provide '{s}' argument when selecting '{s}'",
+                    .{ f.name, collection_type },
+                );
+                unreachable;
+            }
+        }
+    }
+}
+
 /// Returns true if all characters in `string` return `true` in `f`.
 pub fn allAre(comptime f: fn (u8) bool, string: []const u8) bool {
     for (string) |c| {

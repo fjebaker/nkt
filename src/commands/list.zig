@@ -117,12 +117,22 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
 
     if (args.journal) |journal| {
         // make sure none of the incompatible fields are selected
-        try ensureOnly(args, &.{}, "journal");
+        try utils.ensureOnly(
+            arguments.ParsedArguments,
+            args,
+            MUTUAL_FIELDS,
+            "journal",
+        );
         return .{ .Journal = .{ .name = journal } };
     }
     if (args.tasklist) |tasklist| {
         // make sure none of the incompatible fields are selected
-        try ensureOnly(args, &.{ "done", "archived", "hash" }, "tasklist");
+        try utils.ensureOnly(
+            arguments.ParsedArguments,
+            args,
+            (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash" }),
+            "tasklist",
+        );
         return .{ .Tasklist = .{
             .name = tasklist,
             .done = args.done orelse false,
@@ -132,43 +142,26 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     }
     if (args.directory) |directory| {
         // make sure none of the incompatible fields are selected
-        try ensureOnly(args, &.{"note"}, "directory");
+        try utils.ensureOnly(
+            arguments.ParsedArguments,
+            args,
+            (MUTUAL_FIELDS ++ [_][]const u8{"note"}),
+            "directory",
+        );
         return .{ .Directory = .{
             .name = directory,
             .note = args.note,
         } };
     }
 
-    try ensureOnly(args, &.{}, "collections");
+    try utils.ensureOnly(
+        arguments.ParsedArguments,
+        args,
+        MUTUAL_FIELDS,
+        "collections",
+    );
 
     return .{ .Collections = {} };
-}
-
-/// Ensures that only the fields in `fields` and MUTUAL_FIELDS are not null.
-fn ensureOnly(
-    args: arguments.ParsedArguments,
-    comptime fields: []const []const u8,
-    collection_type: []const u8,
-) !void {
-    const allowed: []const []const u8 =
-        MUTUAL_FIELDS ++ fields ++ .{collection_type};
-
-    inline for (@typeInfo(arguments.ParsedArguments).Struct.fields) |f| {
-        for (allowed) |name| {
-            if (std.mem.eql(u8, name, f.name)) {
-                break;
-            }
-        } else {
-            if (@field(args, f.name) != null) {
-                try cli.throwError(
-                    error.AmbiguousSelection,
-                    "Cannot provide '{s}' argument when selecting '{s}'",
-                    .{ f.name, collection_type },
-                );
-                unreachable;
-            }
-        }
-    }
 }
 
 fn listCollections(
