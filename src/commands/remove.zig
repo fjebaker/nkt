@@ -52,7 +52,6 @@ pub fn execute(
     var writer = std.io.getStdOut().writer();
 
     switch (item) {
-        .Collection => {},
         .Entry => |*e| {
             if (try prompt(
                 allocator,
@@ -89,7 +88,9 @@ pub fn execute(
                 try writer.writeAll("Entry removed.\n");
             }
         },
+        // TODO: implement these
         .Note => {},
+        .Collection => {},
     }
 }
 
