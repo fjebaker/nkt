@@ -147,7 +147,7 @@ pub fn getTaskByHash(self: *Tasklist, h: u64) ?Task {
 /// Get task by mini hash. Returns `null` if no task found or
 /// `error.AmbiguousSelection` if multiple tasks matched.
 pub fn getTaskByMiniHash(self: *Tasklist, h: u64) !?Task {
-    const shift: u6 = @intCast(@clz(h));
+    const shift: u6 = @intCast(@divFloor(@clz(h), 4) * 4);
 
     var selected: ?Task = null;
     for (self.info.tasks) |task| {
@@ -170,6 +170,12 @@ test "get by mini hash" {
         .{
             .outcome = "test outcome",
             .hash = 0xabd123abc1231111,
+            .created = 0,
+            .modified = 0,
+        },
+        .{
+            .outcome = "test outcome",
+            .hash = 0x7416f4391c40056a,
             .created = 0,
             .modified = 0,
         },
