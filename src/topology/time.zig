@@ -10,6 +10,7 @@ pub const Time = u64;
 
 pub const Timestamp = time.datetime.Time;
 pub const Date = time.datetime.Datetime;
+pub const Weekday = time.datetime.Weekday;
 
 pub const TimeZone = struct {
     tz: time.datetime.Timezone,
@@ -67,6 +68,17 @@ pub fn getTimeZone(allocator: std.mem.Allocator) !TimeZone {
 /// Get the time now as `Time`
 pub fn timeNow() Time {
     return @intCast(std.time.milliTimestamp());
+}
+
+/// Get the end of the day `Date` from a `Date`. This is the equivalent to
+/// 23:59:59.
+pub fn endOfDay(day: Date) Date {
+    const second_to_day_end = std.time.s_per_day - @as(
+        i64,
+        @intFromFloat(day.time.toSeconds()),
+    );
+    const day_end = day.shiftSeconds(second_to_day_end - 1);
+    return day_end;
 }
 
 /// Turn a `Time` into a `Date`
@@ -283,8 +295,6 @@ pub const Colloquial = struct {
         } else return error.BadArgument;
     }
 
-    const Weekday = time.datetime.Weekday;
-
     fn asWeekday(arg: []const u8) ?Weekday {
         inline for (1..8) |i| {
             const weekday: Weekday = @enumFromInt(i);
@@ -339,7 +349,7 @@ pub const Colloquial = struct {
     }
 };
 
-fn testWeekday(now: Colloquial.Weekday, arg: []const u8, diff: i32) !void {
+fn testWeekday(now: Weekday, arg: []const u8, diff: i32) !void {
     const delta = Colloquial.daysDifferent(now, arg);
     try std.testing.expectEqual(delta, diff);
 }

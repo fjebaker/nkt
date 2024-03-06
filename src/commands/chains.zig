@@ -1,58 +1,110 @@
 const std = @import("std");
-
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
+const selections = @import("../selections.zig");
 const colors = @import("../colors.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Root = @import("../topology/Root.zig");
+
 const BlockPrinter = @import("../BlockPrinter.zig");
-const Entry = @import("../Topology.zig").Entry;
+
+const chains = @import("../topology/chains.zig");
+
+const Chain = chains.Chain;
+const Weekday = time.Weekday;
+
+const COMPLETED_FORMAT = colors.GREEN.fixed();
+const WEEKEND_FORMAT = colors.YELLOW.fixed();
 
 const Self = @This();
 
 pub const alias = [_][]const u8{"chain"};
 
-pub const help = "Interact and print chains.";
+pub const short_help = "View and interact with habitual chains.";
+pub const long_help = short_help;
 
-pretty: ?bool = null,
-num_days: usize = 30,
-chain_name: ?[]const u8 = null,
+pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{
+    .{
+        .arg = "--days num",
+        .help = "Number of days to display (default: 30).",
+    },
+}, .{});
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
-    var self: Self = .{};
+num_days: usize,
 
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (arg.is('n', "num")) {
-                self.num_days = try arg.as(usize);
-            } else if (arg.is(null, "no-pretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = false;
-            } else if (arg.is(null, "pretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = true;
-            } else {
-                return cli.CLIErrors.UnknownFlag;
-            }
-        } else {
-            if (self.chain_name != null) return cli.CLIErrors.TooManyArguments;
-            self.chain_name = arg.string;
-        }
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    const args = try arguments.parseAll(itt);
+    const num_days =
+        if (args.days) |str|
+    b: {
+        break :b std.fmt.parseInt(usize, str, 10) catch {
+            try cli.throwError(
+                cli.CLIErrors.BadArgument,
+                "Cannot parse days to integer: '{s}'",
+                .{str},
+            );
+            unreachable;
+        };
+    } else 30;
+
+    return .{ .num_days = num_days };
+}
+pub fn execute(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try root.load();
+    const today = utils.dateFromMs(utils.now());
+
+    const all_chains = try root.getChains();
+    if (all_chains.len == 0) {
+        try writer.writeAll(" -- No chains -- \n");
+        return;
     }
 
-    self.pretty = self.pretty orelse !opts.piped;
-    return self;
-}
+    const padding = calculatePadding(all_chains);
 
-const Chain = State.Chain;
-const Weekday = utils.time.datetime.Weekday;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const first_items = try prepareChain(
+        alloc,
+        today,
+        self.num_days,
+        all_chains[0],
+        opts.tz,
+    );
+
+    try writer.writeAll("\n");
+    // TODO: fix pretty printing toggles
+    try printHeadings(writer, padding, first_items, true);
+    for (all_chains) |chain| {
+        var items = try prepareChain(
+            alloc,
+            today,
+            self.num_days,
+            chain,
+            opts.tz,
+        );
+        try printChain(writer, padding, chain.name, items, true);
+    }
+    try writer.writeAll("\n");
+}
 
 const Day = struct {
     weekday: Weekday,
     completed: bool,
 
-    pub fn init(date: utils.Date) Day {
-        const weekday = date.date.dayOfWeek();
+    pub fn init(date: time.Date, tz: time.TimeZone) Day {
+        const local_time = tz.makeLocal(date);
+        const weekday = local_time.date.dayOfWeek();
         return .{
             .weekday = weekday,
             .completed = false,
@@ -62,16 +114,17 @@ const Day = struct {
 
 fn prepareChain(
     allocator: std.mem.Allocator,
-    today: utils.Date,
+    today: time.Date,
     days_hence: usize,
     chain: Chain,
+    tz: time.TimeZone,
 ) ![]Day {
     const day_end = utils.endOfDay(today);
 
     // populate day slots
     var days = try allocator.alloc(Day, days_hence);
     for (days, 0..) |*day, i| {
-        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))));
+        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))), tz);
     }
 
     var itt = utils.ReverseIterator(u64).init(chain.completed);
@@ -88,9 +141,6 @@ fn prepareChain(
     std.mem.reverse(Day, days);
     return days;
 }
-
-const COMPLETED_FORMAT = colors.GREEN.fixed();
-const WEEKEND_FORMAT = colors.YELLOW.fixed();
 
 pub fn printHeadings(writer: anytype, padding: usize, days: []const Day, pretty: bool) !void {
     try writer.writeByteNTimes(' ', padding + 3);
@@ -167,50 +217,9 @@ pub fn printChain(
     try writer.writeAll("\n");
 }
 
-pub fn run(
-    self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    const today = utils.dateFromMs(utils.now());
-
-    if (self.chain_name) |name| {
-        const chain = try state.getChainByName(name) orelse
-            return cli.SelectionError.NoSuchCollection;
-
-        var items = try prepareChain(state.allocator, today, self.num_days, chain.*);
-        defer state.allocator.free(items);
-
-        const padding = calculatePadding(&[_]State.Chain{chain.*});
-
-        try out_writer.writeAll("\n");
-        try printHeadings(out_writer, padding, items, self.pretty.?);
-        try printChain(out_writer, padding, chain.name, items, self.pretty.?);
-        try out_writer.writeAll("\n");
-    } else {
-        const chains = try state.getChains();
-
-        const padding = calculatePadding(chains);
-
-        var arena = std.heap.ArenaAllocator.init(state.allocator);
-        defer arena.deinit();
-        const alloc = arena.allocator();
-
-        const first_items = try prepareChain(alloc, today, self.num_days, chains[0]);
-
-        try out_writer.writeAll("\n");
-        try printHeadings(out_writer, padding, first_items, self.pretty.?);
-        for (chains) |chain| {
-            var items = try prepareChain(alloc, today, self.num_days, chain);
-            try printChain(out_writer, padding, chain.name, items, self.pretty.?);
-        }
-        try out_writer.writeAll("\n");
-    }
-}
-
-fn calculatePadding(chains: []const State.Chain) usize {
+fn calculatePadding(all_chains: []const chains.Chain) usize {
     var padding: usize = 0;
-    for (chains) |chain| {
+    for (all_chains) |chain| {
         padding = @max(padding, chain.name.len);
     }
     return padding;

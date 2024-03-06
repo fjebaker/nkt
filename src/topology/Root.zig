@@ -300,6 +300,12 @@ fn createFileStructure(
     try fs.overwrite(descr.path, str);
 }
 
+/// Returns a slice with all currently loaded chains.
+pub fn getChains(self: *Root) ![]const chains.Chain {
+    var chainlist = try self.getChainList();
+    return chainlist.chains;
+}
+
 /// Return a list of `Tag.Descriptor` of the valid tags. If no filesystem is
 /// given, returns an empty list.
 pub fn getTags(self: *Root) ?[]const Tag.Descriptor {

@@ -19,7 +19,7 @@ pub const Options = struct {
 
 pub const Commands = union(enum) {
     config: @import("commands/config.zig"),
-    // chains: @import("commands/chains.zig"),
+    chains: @import("commands/chains.zig"),
     // edit: @import("commands/edit.zig"),
     // find: @import("commands/find.zig"),
     help: @import("commands/help.zig"),
