@@ -93,7 +93,7 @@ pub const Info = struct {
 info: *Info,
 descriptor: Descriptor,
 allocator: std.mem.Allocator,
-index_map: ?[]const usize = null,
+index_map: ?[]?usize = null,
 mem: ?std.heap.ArenaAllocator = null,
 
 fn getTmpAllocator(self: *Tasklist) std.mem.Allocator {
@@ -104,6 +104,7 @@ fn getTmpAllocator(self: *Tasklist) std.mem.Allocator {
 }
 
 pub fn deinit(self: *Tasklist) void {
+    if (self.index_map) |im| self.allocator.free(im);
     if (self.mem) |*mem| mem.deinit();
     self.* = undefined;
 }
@@ -231,34 +232,51 @@ pub fn removeTask(self: *Tasklist, task: Task) !void {
 
     _ = list.orderedRemove(index);
     self.info.tasks = try list.toOwnedSlice();
+    // remake the index map to reflect updates
+    _ = try self.makeIndexMap();
 }
 
 /// Get task by index. Returns `null` if no task found.
 pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
     const map = try self.makeIndexMap();
-    if (index >= map.len) return null;
-    return self.info.tasks[map[index]];
+    var i = std.mem.indexOfScalar(?usize, map, index) orelse
+        return null;
+    return self.info.tasks[i];
 }
 
 /// Make an index map sorted by due date, only relevant for active tasks. The
-/// `index_map[i]` corresponds to the `t{i}` task, and returns the index of the
-/// task in the `info.tasks` slice.
-pub fn makeIndexMap(self: *Tasklist) ![]const usize {
+/// `index_map[i] == j` is the `t{j}` task, where `i` is the index mapping to
+/// the tasklist.
+pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
     self.sortTasks();
     const now = time.timeNow();
 
-    var list = std.ArrayList(usize).init(self.getTmpAllocator());
-    defer list.deinit();
-    for (self.info.tasks, 0..) |t, i| {
+    var alloc = self.allocator;
+    var index_map = b: {
+        if (self.index_map) |im| {
+            if (im.len == self.info.tasks.len) {
+                break :b self.index_map.?;
+            }
+            alloc.free(im);
+        }
+        break :b try alloc.alloc(?usize, self.info.tasks.len);
+    };
+
+    var index: usize = 0;
+    for (self.info.tasks, index_map) |t, *i| {
         switch (t.getStatus(now)) {
             .NearlyDue, .PastDue, .NoStatus => {
-                try list.append(i);
+                i.* = index;
+                index += 1;
             },
-            else => {},
+            else => {
+                i.* = null;
+            },
         }
     }
 
-    self.index_map = try list.toOwnedSlice();
+    std.mem.reverse(?usize, index_map);
+    self.index_map = index_map;
     return self.index_map.?;
 }
 

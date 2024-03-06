@@ -240,7 +240,7 @@ fn listTasks(
     allocator: std.mem.Allocator,
     tl: utils.TagType(ListSelection, "Tasklist"),
     tasks: []const Tasklist.Task,
-    index_map: []const usize,
+    index_map: []const ?usize,
     root: *Root,
     writer: anytype,
     opts: commands.Options,
@@ -258,18 +258,7 @@ fn listTasks(
     );
     defer printer.deinit();
 
-    var index: usize = 0;
-    for (tasks, 0..) |task, i| {
-        const t_index = b: {
-            if (getTaskIndex(index_map, index)) |ind| {
-                if (ind == i) {
-                    index += 1;
-                    break :b index - 1;
-                }
-            }
-            break :b null;
-        };
-
+    for (tasks, index_map) |task, t_index| {
         if (!tl.done and task.isDone()) {
             continue;
         }
@@ -280,11 +269,6 @@ fn listTasks(
     }
 
     try printer.drain(writer, false);
-}
-
-fn getTaskIndex(index_map: []const usize, i: usize) ?usize {
-    if (i >= index_map.len) return null;
-    return index_map[i];
 }
 
 fn listDirectory(
