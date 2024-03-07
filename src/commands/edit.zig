@@ -76,14 +76,22 @@ pub fn execute(
     self: *Self,
     allocator: std.mem.Allocator,
     root: *Root,
-    _: anytype,
+    writer: anytype,
     opts: commands.Options,
 ) !void {
     try root.load();
-    try editElseMaybeCreate(self.selection, allocator, root, opts, self.opts);
+    try editElseMaybeCreate(
+        writer,
+        self.selection,
+        allocator,
+        root,
+        opts,
+        self.opts,
+    );
 }
 
 fn editElseMaybeCreate(
+    writer: anytype,
     selection: selections.Selection,
     allocator: std.mem.Allocator,
     root: *Root,
@@ -97,6 +105,35 @@ fn editElseMaybeCreate(
         switch (item.*) {
             .Note => |*n| {
                 try editNote(allocator, root, n.note, &n.directory);
+            },
+            .Task => |*t| {
+                var editor = try Editor.init(allocator);
+                defer editor.deinit();
+
+                // todo: might lead to topology getting out of sync
+                const new_details = try editor.editTemporaryContent(
+                    allocator,
+                    t.task.details orelse "",
+                );
+                defer allocator.free(new_details);
+
+                if (std.mem.eql(u8, new_details, t.task.details orelse "")) {
+                    std.log.default.debug("No changes to task made", .{});
+                    return;
+                }
+
+                var ptr = t.tasklist.getTaskByHashPtr(t.task.hash).?;
+                ptr.details = new_details;
+                ptr.modified = time.timeNow();
+
+                root.markModified(t.tasklist.descriptor, .CollectionTasklist);
+
+                try root.writeChanges();
+
+                try writer.print(
+                    "Task details for '{s}' in '{s}' updated\n",
+                    .{ ptr.outcome, t.tasklist.descriptor.name },
+                );
             },
             .Day => |*d| {
                 // assert corresponding notes directory exists
@@ -122,6 +159,7 @@ fn editElseMaybeCreate(
 
                 // recursively call
                 try editElseMaybeCreate(
+                    writer,
                     sub_selection,
                     allocator,
                     root,

@@ -96,7 +96,8 @@ allocator: std.mem.Allocator,
 index_map: ?[]?usize = null,
 mem: ?std.heap.ArenaAllocator = null,
 
-fn getTmpAllocator(self: *Tasklist) std.mem.Allocator {
+/// Get a temporary allocator that has the same lifetime as the tasklist.
+pub fn getTmpAllocator(self: *Tasklist) std.mem.Allocator {
     if (self.mem == null) {
         self.mem = std.heap.ArenaAllocator.init(self.allocator);
     }
@@ -143,7 +144,13 @@ pub fn getTask(self: *Tasklist, outcome: []const u8) !?Task {
 
 /// Get task by hash. Returns `null` if no task found.
 pub fn getTaskByHash(self: *Tasklist, h: u64) ?Task {
-    for (self.info.tasks) |task| {
+    const ptr = self.getTaskByHashPtr(h) orelse return null;
+    return ptr.*;
+}
+
+/// Get a pointer to a task by hash. Returns `null` if no task found.
+pub fn getTaskByHashPtr(self: *Tasklist, h: u64) ?*Task {
+    for (self.info.tasks) |*task| {
         if (task.hash == h) return task;
     }
     return null;
