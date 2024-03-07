@@ -116,7 +116,9 @@ pub fn getNote(self: *const Directory, name: []const u8) ?Note {
     return note_ptr.*;
 }
 
-fn getNotePtr(self: *const Directory, name: []const u8) ?*Note {
+/// Get pointer to the note by name. Returns `null` if no such note is in the
+/// directory.
+pub fn getNotePtr(self: *const Directory, name: []const u8) ?*Note {
     for (self.info.notes) |*n| {
         if (std.mem.eql(u8, n.name, name)) return n;
     }
@@ -141,6 +143,31 @@ pub fn updateNote(self: *Directory, name: []const u8, new: Note) !Note {
     var note_ptr = self.getNotePtr(name) orelse return Error.NoSuchNote;
     note_ptr.* = new;
     return note_ptr.*;
+}
+
+/// Rename and move files associated with the Note at `old_name` to `new_name`.
+pub fn rename(
+    self: *Directory,
+    old_name: []const u8,
+    new_name: []const u8,
+) !Note {
+    var fs = self.fs orelse return error.NeedsFileSystem;
+
+    var ptr = self.getNotePtr(old_name) orelse
+        return Error.NoSuchNote;
+
+    const old_path = ptr.path;
+    const new_path = try self.newPathFromName(
+        new_name,
+        std.fs.path.extension(old_path),
+    );
+
+    ptr.name = new_name;
+    ptr.path = new_path;
+    ptr.modified = time.timeNow();
+
+    try fs.move(old_path, new_path);
+    return ptr.*;
 }
 
 /// Update the modified time of a note

@@ -824,12 +824,14 @@ fn addModifiersReportError(
     }
 }
 
-/// Parse the selection from a `cli.ParsedArguments` structure that has been
-/// augmented with `selectHelp`. Will report errors to stderr.
-pub fn fromArgs(
+fn fromArgsFields(
     comptime T: type,
     selector_string: ?[]const u8,
     args: T,
+    comptime journal_field: []const u8,
+    comptime directory_field: []const u8,
+    comptime tasklist_field: []const u8,
+    comptime time_field: []const u8,
 ) !Selection {
     var selection: Selection = .{};
 
@@ -840,20 +842,57 @@ pub fn fromArgs(
 
     try addFlagsReportError(
         &selection,
-        args.journal,
-        args.directory,
-        args.tasklist,
+        @field(args, journal_field),
+        @field(args, directory_field),
+        @field(args, tasklist_field),
     );
 
     try addModifiersReportError(
         &selection,
-        args.time,
+        @field(args, time_field),
     );
     return selection;
 }
 
+/// Parse the selection from a `cli.ParsedArguments` structure that has been
+/// augmented with `selectHelp`. Will report errors to stderr.
+pub fn fromArgs(
+    comptime T: type,
+    selector_string: ?[]const u8,
+    args: T,
+) !Selection {
+    return fromArgsFields(
+        T,
+        selector_string,
+        args,
+        "journal",
+        "directory",
+        "tasklist",
+        "time",
+    );
+}
+
+/// Like `fromArgs` but with the flags prefixed with a given string.
+pub fn fromArgsPrefixed(
+    comptime T: type,
+    selector_string: ?[]const u8,
+    args: T,
+    comptime prefix: []const u8,
+) !Selection {
+    return fromArgsFields(
+        T,
+        selector_string,
+        args,
+        prefix ++ "journal",
+        prefix ++ "directory",
+        prefix ++ "tasklist",
+        prefix ++ "time",
+    );
+}
+
 pub const SelectHelpOptions = struct {
     required: bool = true,
+    flag_prefix: []const u8 = "",
 };
 
 /// Add `cli.ArgumentDescriptor` for the selection methods. Provide the name
@@ -871,19 +910,19 @@ pub fn selectHelp(
             .required = opts.required,
         },
         .{
-            .arg = "--journal journal",
+            .arg = "--" ++ opts.flag_prefix ++ "journal journal",
             .help = "The name of a journal to select the day or entry from. If unassigned uses default journal.",
         },
         .{
-            .arg = "--time HH:MM:SS",
+            .arg = "--" ++ opts.flag_prefix ++ "time HH:MM:SS",
             .help = "Augments a given selection with a given time, used for selecting e.g. individual entries.",
         },
         .{
-            .arg = "--directory directory",
+            .arg = "--" ++ opts.flag_prefix ++ "directory directory",
             .help = "The name of the directory to select a note from. If unassigned uses default directory.",
         },
         .{
-            .arg = "--tasklist tasklist",
+            .arg = "--" ++ opts.flag_prefix ++ "tasklist tasklist",
             .help = "The name of the tasklist to select a task from. If unassigned uses default tasklist.",
         },
     };

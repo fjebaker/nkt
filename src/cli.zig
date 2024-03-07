@@ -457,8 +457,8 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
             const long = arg[3..];
             if (long[0] == '-' and
                 long[1] == '-' and
-                utils.allAlphanumeric(long[2..]) and
-                utils.allAlphanumeric(short[1..]))
+                utils.allAlphanumericOrMinus(long[2..]) and
+                utils.allAlphanumericOrMinus(short[1..]))
             {
                 return .{
                     .ShortOrLongFlag = .{
@@ -469,7 +469,7 @@ fn getArgTypeInfo(arg_name: []const u8, required: bool) error{MalformedName}!Arg
                     },
                 };
             }
-        } else if (arg[1] == '-' and utils.allAlphanumeric(arg[2..])) {
+        } else if (arg[1] == '-' and utils.allAlphanumericOrMinus(arg[2..])) {
             return .{
                 .LongFlag = .{
                     .name = arg[2..],

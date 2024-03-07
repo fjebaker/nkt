@@ -52,6 +52,16 @@ pub fn allAlphanumeric(string: []const u8) bool {
     return allAre(std.ascii.isAlphanumeric, string);
 }
 
+/// Check if all characters are alpha numeric or a minus (tag-like names)
+pub fn allAlphanumericOrMinus(string: []const u8) bool {
+    const S = struct {
+        fn f(c: u8) bool {
+            return std.ascii.isAlphanumeric(c) or c == '-';
+        }
+    };
+    return allAre(S.f, string);
+}
+
 /// Get the abbreviated hash of a key, selecting `len` bytes
 pub fn getMiniHash(key: u64, len: u6) u64 {
     const shift = (16 - len) * 4;
