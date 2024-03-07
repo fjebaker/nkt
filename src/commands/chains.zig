@@ -72,8 +72,8 @@ pub fn execute(
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const alloc = arena.allocator();
 
+    const alloc = arena.allocator();
     const first_items = try prepareChain(
         alloc,
         today,

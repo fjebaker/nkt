@@ -10,6 +10,7 @@ const Journal = @import("../topology/Journal.zig");
 const Tasklist = @import("../topology/Tasklist.zig");
 const Root = @import("../topology/Root.zig");
 
+const FormatPrinter = @import("../FormatPrinter.zig");
 const TaskPrinter = @import("../TaskPrinter.zig");
 
 const Self = @This();
@@ -29,12 +30,12 @@ pub const arguments = cli.ArgumentsHelp(&.{
         .help = "How to sort the item lists. Possible values are 'modified' or 'created'",
     },
     .{
-        .arg = "--directory name",
-        .help = "Name of the directory to list.",
+        .arg = "what",
+        .help = "Can be 'tags' or when directory is selected, can be used to subselect hiearchies",
     },
     .{
-        .arg = "note",
-        .help = "When directory is selected, can be used to subselect hiearchies",
+        .arg = "--directory name",
+        .help = "Name of the directory to list.",
     },
     .{
         .arg = "--journal name",
@@ -73,6 +74,7 @@ const ListSelection = union(enum) {
         archived: bool,
     },
     Collections: void,
+    Tags: void,
 };
 
 selection: ListSelection,
@@ -95,6 +97,7 @@ pub fn execute(
 
     switch (self.selection) {
         .Collections => try listCollections(root, writer, opts),
+        .Tags => try listTags(allocator, root, writer, opts),
         .Directory => |i| try listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
@@ -145,13 +148,31 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
         try utils.ensureOnly(
             arguments.ParsedArguments,
             args,
-            (MUTUAL_FIELDS ++ [_][]const u8{"note"}),
+            (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
             "directory",
         );
         return .{ .Directory = .{
             .name = directory,
-            .note = args.note,
+            .note = args.what,
         } };
+    }
+
+    if (args.what) |what| {
+        if (std.mem.eql(u8, what, "tags")) {
+            try utils.ensureOnly(
+                arguments.ParsedArguments,
+                args,
+                (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
+                "tags",
+            );
+            return .{ .Tags = {} };
+        }
+        try cli.throwError(
+            cli.CLIErrors.BadArgument,
+            "Unknown selection: '{s}'",
+            .{what},
+        );
+        unreachable;
     }
 
     try utils.ensureOnly(
@@ -177,6 +198,30 @@ fn listCollections(
     try printDescriptors(writer, root.info.tasklists);
     try writer.writeAll("\n");
     _ = opts;
+}
+
+fn listTags(
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    _ = opts;
+    var tdl = try root.getTagDescriptorList();
+
+    var printer = FormatPrinter.init(allocator, .{
+        .pretty = true,
+        .tag_descriptors = tdl.tags,
+    });
+    defer printer.deinit();
+
+    try printer.addText("Tags:\n", .{});
+    for (tdl.tags) |info| {
+        try printer.addFmtText(" - @{s}\n", .{info.name}, .{});
+    }
+    try printer.addText("\n", .{});
+
+    try printer.drain(writer);
 }
 
 fn printDescriptors(writer: anytype, descrs: []const Root.Descriptor) !void {

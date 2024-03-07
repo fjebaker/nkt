@@ -254,9 +254,10 @@ fn getTagDescriptorListPtr(self: *Root) !*tags.DescriptorList {
         if (self.getFileSystem()) |fs| {
             try self.readTaglist(fs);
         } else {
-            self.tag_descriptors = tags.DescriptorList{
-                .allocator = self.allocator,
-            };
+            self.tag_descriptors = try tags.DescriptorList.init(
+                self.allocator,
+                &.{},
+            );
         }
     }
     return &self.tag_descriptors.?;
@@ -707,9 +708,10 @@ pub fn getTasklist(self: *Root, name: []const u8) !?Tasklist {
 /// Add all of the default collections to the root
 pub fn addInitialCollections(self: *Root) !void {
     // initialize an empty tag descriptor list
-    self.tag_descriptors = tags.DescriptorList{
-        .allocator = self.allocator,
-    };
+    self.tag_descriptors = try tags.DescriptorList.init(
+        self.allocator,
+        &.{},
+    );
 
     // initialize an empty chain list
     self.chain_list = chains.ChainList{
@@ -754,21 +756,11 @@ pub fn createFilesystem(self: *Root) !void {
         try fs.overwrite(ROOT_FILEPATH, own_content);
     }
 
-    {
-        // create the tags file
-        var list = try self.getTagDescriptorListPtr();
-        const tag_content = try list.serialize(self.allocator);
-        defer self.allocator.free(tag_content);
-        try fs.overwrite(self.info.tagpath, tag_content);
-    }
+    // create the tags file
+    try self.writeTags();
 
-    {
-        // create the chain file
-        var list = try self.getChainList();
-        const chain_content = try list.serialize(self.allocator);
-        defer self.allocator.free(chain_content);
-        try fs.overwrite(self.info.chainpath, chain_content);
-    }
+    // create the chain file
+    try self.writeChains();
 
     // journals
     try self.writeAllDescriptors(fs, .CollectionJournal);
@@ -831,4 +823,28 @@ pub fn writeChanges(self: *Root) !void {
     try self.writeModifiedCollections(fs, .CollectionJournal);
     try self.writeModifiedCollections(fs, .CollectionTasklist);
     try self.writeModifiedCollections(fs, .CollectionDirectory);
+}
+
+/// Write the chain changes to the chain file.
+pub fn writeChains(self: *Root) !void {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    // create the chain file
+    var list = try self.getChainList();
+    const chain_content = try list.serialize(self.allocator);
+    defer self.allocator.free(chain_content);
+    try fs.overwrite(self.info.chainpath, chain_content);
+}
+
+/// Write the tag descriptor changes to the tags file
+pub fn writeTags(self: *Root) !void {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    // create the tags file
+    var list = try self.getTagDescriptorListPtr();
+    const tag_content = try list.serialize(self.allocator);
+    defer self.allocator.free(tag_content);
+    try fs.overwrite(self.info.tagpath, tag_content);
 }

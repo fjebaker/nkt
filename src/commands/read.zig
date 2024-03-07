@@ -162,6 +162,7 @@ pub fn execute(
         },
     }
 
+    bprinter.reverse();
     try bprinter.drain(writer);
 }
 

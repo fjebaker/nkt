@@ -21,6 +21,15 @@ pub const Tag = struct {
         pub fn isDescriptorOf(self: Descriptor, tag: Tag) bool {
             return std.mem.eql(u8, self.name, tag.name);
         }
+
+        /// Create a new tag with a random color
+        pub fn new(name: []const u8) Descriptor {
+            return .{
+                .name = name,
+                .created = time.timeNow(),
+                .color = colors.randomColor(),
+            };
+        }
     };
 
     name: []const u8,
@@ -37,7 +46,7 @@ const TagDescriptorWrapper = struct {
 };
 
 pub const DescriptorList = struct {
-    tags: []Tag.Descriptor = &.{},
+    tags: []Tag.Descriptor,
     allocator: std.mem.Allocator,
 
     pub fn init(
@@ -64,7 +73,8 @@ pub const DescriptorList = struct {
         };
     }
 
-    /// Add a new `Tag.Descriptor` to the descritor list.
+    /// Add a new `Tag.Descriptor` to the descritor list. Makes a copy of the
+    /// name.
     pub fn addTagDescriptor(self: *DescriptorList, tag: Tag.Descriptor) !void {
         for (self.tags) |t| {
             if (std.mem.eql(u8, t.name, tag.name)) {
@@ -72,16 +82,22 @@ pub const DescriptorList = struct {
             }
         }
 
+        var new_tag = tag;
+        new_tag.name = try self.allocator.dupe(u8, tag.name);
+
         var list = std.ArrayList(Tag.Descriptor).fromOwnedSlice(
             self.allocator,
             self.tags,
         );
-        try list.append(tag);
+        try list.append(new_tag);
         self.tags = try list.toOwnedSlice();
     }
 
     /// Serialize for saving to disk. Caller owns the memory
-    pub fn serialize(self: *const DescriptorList, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn serialize(
+        self: *const DescriptorList,
+        allocator: std.mem.Allocator,
+    ) ![]const u8 {
         return try std.json.stringifyAlloc(
             allocator,
             TagDescriptorWrapper{ .tags = self.tags },
@@ -90,9 +106,8 @@ pub const DescriptorList = struct {
     }
 
     pub fn deinit(self: *DescriptorList) void {
-        for (self.tags) |*t| {
-            self.allocator.free(t.name);
-        }
+        for (self.tags) |*t| self.allocator.free(t.name);
+        self.allocator.free(self.tags);
         self.* = undefined;
     }
 
@@ -161,14 +176,14 @@ pub fn readTagDescriptors(
         TagDescriptorWrapper,
         allocator,
         content,
-        .{},
+        .{ .allocate = .alloc_always },
     );
     defer parsed.deinit();
     return try DescriptorList.init(allocator, parsed.value.tags);
 }
 
-/// name of the tag if it is, else null. Will throw a `TagNotLowercase` error
-/// if the tag is not lowercase.
+/// Returns the name of the tag if the string is a @tag, else null. Will throw
+/// a `TagNotLowercase` error if the tag is not lowercase.
 pub fn getTagString(string: []const u8) error{TagNotLowercase}!?[]const u8 {
     if (string[0] == '@') {
         var itt = utils.ListIterator(u8).init(string[1..]);
