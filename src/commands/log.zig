@@ -90,6 +90,8 @@ pub fn execute(
     };
     defer j.deinit();
 
+    root.markModified(j.descriptor, .CollectionJournal);
+
     const entry_tags = try utils.parseAndAssertValidTags(
         allocator,
         root,

@@ -130,7 +130,9 @@ pub fn absPathify(
     allocator: std.mem.Allocator,
     rel_path: []const u8,
 ) ![]const u8 {
-    return try self.dir.realpathAlloc(allocator, rel_path);
+    const pwd = try self.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(pwd);
+    return try std.fs.path.join(allocator, &.{ pwd, rel_path });
 }
 
 pub fn moveFromCwd(

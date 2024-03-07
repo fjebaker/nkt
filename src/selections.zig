@@ -375,39 +375,63 @@ pub const Selection = struct {
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
+    /// Resolve the selection from the `Root`. If `NoSuchItem`, returns `null`
+    /// instead of raising error. All other errors are reported back as in
+    /// `resolveReportError`.
+    pub fn resolveOrNull(s: Selection, root: *Root) !?Item {
+        const rr = try s.resolve(root);
+        return rr.retrieve() catch |err| {
+            switch (err) {
+                Root.Error.NoSuchItem,
+                Error.UnknownSelection,
+                => return null,
+                else => {},
+            }
+            try reportResolveError(err);
+            return err;
+        };
+    }
+
     /// Resolve the selection from the `Root`. Errors are reported back to the
     /// terminal. Returns an `Item`.
     pub fn resolveReportError(s: Selection, root: *Root) !Item {
         const rr = try s.resolve(root);
         return rr.retrieve() catch |err| {
-            if (err == Error.AmbiguousSelection) {
-                try cli.throwError(
-                    err,
-                    "Selection is not concrete enough to resolve to an item",
-                    .{},
-                );
-                unreachable;
-            }
-            if (err == Error.UnknownSelection) {
-                try cli.throwError(
-                    err,
-                    "Selection is malformed.",
-                    .{},
-                );
-                unreachable;
-            }
-            if (err == Root.Error.NoSuchItem) {
-                try cli.throwError(
-                    err,
-                    "Cannot find item.",
-                    .{},
-                );
-                unreachable;
-            }
+            try reportResolveError(err);
             return err;
         };
     }
 };
+
+fn reportResolveError(err: anyerror) !void {
+    switch (err) {
+        Error.AmbiguousSelection => {
+            try cli.throwError(
+                err,
+                "Selection is not concrete enough to resolve to an item",
+                .{},
+            );
+            unreachable;
+        },
+        Error.UnknownSelection => {
+            try cli.throwError(
+                err,
+                "Selection is malformed.",
+                .{},
+            );
+            unreachable;
+        },
+        Root.Error.NoSuchItem => {
+            try cli.throwError(
+                err,
+                "Cannot find item.",
+                .{},
+            );
+            unreachable;
+        },
+        else => {},
+    }
+}
 
 fn testSelectionResolve(
     root: *Root,

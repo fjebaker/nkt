@@ -69,6 +69,7 @@ pub fn editPath(self: *Editor, path: []const u8) !void {
 }
 
 pub fn becomeWithArgs(self: *Editor, path: []const u8, args: []const []const u8) !void {
+    std.log.default.debug("Becoming editor: path '{s}'", .{path});
     const all_args = try assemble_args(self.allocator, self.editor, path, args);
     defer self.allocator.free(all_args);
 

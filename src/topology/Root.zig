@@ -681,10 +681,23 @@ pub fn getCollection(
     // create the stash
     try @field(self.cache, t.toFieldName()).put(
         descr.name,
-        .{ .item = info, .modified = true },
+        .{ .item = info, .modified = false },
     );
 
     return try self.lookupCollection(descr, t);
+}
+
+/// Mark a collection as modified, and therefore will be written to file when
+/// `writeChanges` is called
+pub fn markModified(
+    self: *Root,
+    descr: Descriptor,
+    comptime t: CollectionType,
+) void {
+    var entry = @field(self.cache, t.toFieldName()).getPtr(
+        descr.name,
+    ).?;
+    entry.modified = true;
 }
 
 /// Get a `Journal` by name. Returns `null` if name is invalid. `deinit` must

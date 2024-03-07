@@ -72,6 +72,10 @@ pub fn execute(
                 .{ d.day.name, d.journal.descriptor.name },
             )) {
                 try d.journal.removeDay(d.day);
+                root.markModified(
+                    d.journal.descriptor,
+                    .CollectionJournal,
+                );
                 try root.writeChanges();
                 try writer.writeAll("Day removed.\n");
             }
@@ -84,12 +88,31 @@ pub fn execute(
                 .{ t.task.outcome, t.task.hash, t.tasklist.descriptor.name },
             )) {
                 try t.tasklist.removeTask(t.task);
+                root.markModified(
+                    t.tasklist.descriptor,
+                    .CollectionTasklist,
+                );
                 try root.writeChanges();
                 try writer.writeAll("Entry removed.\n");
             }
         },
+        .Note => |*n| {
+            if (try prompt(
+                allocator,
+                writer,
+                "Remove note '{s}' in directory '{s}'?",
+                .{ n.note.name, n.directory.descriptor.name },
+            )) {
+                try n.directory.removeNote(n.note);
+                root.markModified(
+                    n.directory.descriptor,
+                    .CollectionDirectory,
+                );
+                try root.writeChanges();
+                try writer.writeAll("Note removed.\n");
+            }
+        },
         // TODO: implement these
-        .Note => {},
         .Collection => {},
     }
 }

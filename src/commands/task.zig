@@ -72,6 +72,8 @@ pub fn execute(
     };
     defer tl.deinit();
 
+    root.markModified(tl.descriptor, .CollectionTasklist);
+
     const hash = Tasklist.hash(.{
         .outcome = self.args.outcome,
         .action = self.args.action,

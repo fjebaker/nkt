@@ -11,7 +11,7 @@ const Directory = @This();
 pub const TOPOLOGY_FILENAME = "topology.json";
 pub const PATH_PREFIX = "dir";
 
-pub const Error = error{DuplicateNote};
+pub const Error = error{ DuplicateNote, NoSuchNote };
 
 pub const Note = struct {
     name: []const u8,
@@ -112,7 +112,12 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 
 /// Get the note by name. Returns `null` if no such note is in the directory.
 pub fn getNote(self: *const Directory, name: []const u8) ?Note {
-    for (self.info.notes) |n| {
+    const note_ptr = self.getNotePtr(name) orelse return null;
+    return note_ptr.*;
+}
+
+fn getNotePtr(self: *const Directory, name: []const u8) ?*Note {
+    for (self.info.notes) |*n| {
         if (std.mem.eql(u8, n.name, name)) return n;
     }
     return null;
@@ -126,6 +131,50 @@ pub fn readNote(
 ) ![]const u8 {
     var fs = self.fs orelse return error.NeedsFileSystem;
     return try fs.readFileAlloc(allocator, note.path);
+}
+
+/// Update the note by name with a new note descriptor
+pub fn updateNote(self: *Directory, name: []const u8, new: Note) !Note {
+    // TODO: maybe make copies of the slices?
+    // TODO: store the note index with the note on retrieval so we don't have
+    // to do this lookup twice, else even just hand around the pointer?
+    var note_ptr = self.getNotePtr(name) orelse return Error.NoSuchNote;
+    note_ptr.* = new;
+    return note_ptr.*;
+}
+
+/// Update the modified time of a note
+pub fn touchNote(self: *Directory, note: Note, t: time.Time) !Note {
+    var new = note;
+    new.modified = t;
+    return try self.updateNote(note.name, new);
+}
+
+/// Remove a note from the directory. Will attempt to remove the associated file in the filesystem.
+pub fn removeNote(self: *Directory, note: Note) !void {
+    var list = std.ArrayList(Note).fromOwnedSlice(
+        self.getTmpAllocator(),
+        self.info.notes,
+    );
+
+    const index = b: {
+        for (list.items, 0..) |n, i| {
+            if (n.created == note.created) {
+                break :b i;
+            }
+        }
+        return Error.NoSuchNote;
+    };
+
+    _ = list.orderedRemove(index);
+    self.info.notes = try list.toOwnedSlice();
+
+    // try and remove associated file
+    var fs = self.fs orelse {
+        std.log.default.debug("Cannot remove day file as no file system", .{});
+        return;
+    };
+    try fs.removeFile(note.path);
 }
 
 /// Caller owns memory
