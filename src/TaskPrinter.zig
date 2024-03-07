@@ -88,7 +88,7 @@ fn formatDueDate(
 
 fn formatTime(tz: time.TimeZone, t: time.Time) ![]const u8 {
     const local = tz.makeLocal(time.dateFromTime(t));
-    return &try time.formatDateTimeBuf(local);
+    return &try time.formatDateBuf(local);
 }
 
 fn formatTimeAlloc(
@@ -191,7 +191,7 @@ fn printTask(
     }
 
     const string = entry.pretty_date orelse entry.due;
-    try fp.addNTimes(' ', 1 + padding.due - strLen(string), .{});
+    try fp.addNTimes(' ', 1 + padding.due -| strLen(string), .{});
 
     const indicator: []const u8 = switch (entry.status) {
         .Archived => "A",

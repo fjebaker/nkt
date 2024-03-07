@@ -64,7 +64,10 @@ pub fn addToCurrent(bp: *BlockPrinter, text: []const u8, opts: FormatPrinter.Tex
     bp.current.?.end_index = end;
 }
 
-const HEADING_FORMAT = colors.CYAN.bold().fixed();
+const HEADING_FORMAT = (colors
+    .ComptimeFarbe.init()
+    .fgRgb(205, 175, 102)
+    .bold().fixed());
 
 pub fn addFormatted(
     bp: *BlockPrinter,

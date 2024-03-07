@@ -15,6 +15,8 @@ pub const Error = error{
     DuplicateTask,
     UnknownImportance,
     NoSuchTask,
+    AlreadyDone,
+    AlreadyArchived,
 };
 
 pub const Status = enum {
@@ -57,7 +59,7 @@ pub const Task = struct {
         if (t.archived != null) return .Archived;
         if (t.done) |_| return .Done;
         const due = if (t.due) |dm|
-            utils.Date.fromTimestamp(@intCast(dm))
+            time.dateFromTime(@intCast(dm))
         else
             return .NoStatus;
         if (now.gt(due)) return .PastDue;
@@ -256,7 +258,7 @@ pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
 /// the tasklist.
 pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
     self.sortTasks();
-    const now = time.timeNow();
+    std.mem.reverse(Task, self.info.tasks);
 
     var alloc = self.allocator;
     var index_map = b: {
@@ -271,17 +273,16 @@ pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
 
     var index: usize = 0;
     for (self.info.tasks, index_map) |t, *i| {
-        switch (t.getStatus(now)) {
-            .NearlyDue, .PastDue, .NoStatus => {
-                i.* = index;
-                index += 1;
-            },
-            else => {
-                i.* = null;
-            },
+        if (t.archived == null and t.done == null) {
+            i.* = index;
+            index += 1;
+        } else {
+            i.* = null;
         }
     }
 
+    // TODO: this can definitely be cleaned up to avoid 3 reversals
+    std.mem.reverse(Task, self.info.tasks);
     std.mem.reverse(?usize, index_map);
     self.index_map = index_map;
     return self.index_map.?;

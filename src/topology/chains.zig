@@ -1,7 +1,10 @@
 const std = @import("std");
-const Time = @import("time.zig").Time;
+const time = @import("time.zig");
+const Time = time.Time;
 const tags = @import("tags.zig");
 const Tag = tags.Tag;
+
+pub const Error = error{ChainAlreadyComplete};
 
 pub const Chain = struct {
     name: []const u8,
@@ -39,10 +42,24 @@ pub const ChainList = struct {
     pub fn addCompletionTime(self: *ChainList, i: usize, t: Time) !void {
         var list = std.ArrayList(Time).fromOwnedSlice(
             self.mem.allocator(),
-            self.chains[i].tags,
+            self.chains[i].completed,
         );
         try list.append(t);
-        self.chains[i].tags = try list.toOwnedSlice();
+        self.chains[i].completed = try list.toOwnedSlice();
+    }
+
+    /// Checks whether the chain has been marked as complete for today
+    pub fn isChainComplete(self: *const ChainList, i: usize, tz: time.TimeZone) bool {
+        _ = tz;
+        const chain = self.chains[i];
+
+        if (chain.completed.len == 0) return false;
+
+        const day_end = time.endOfDay(time.dateFromTime(time.timeNow()));
+        const latest = chain.completed[chain.completed.len - 1];
+
+        const delta = day_end.sub(time.dateFromTime(latest));
+        return (delta.years == 0 and delta.days == 0);
     }
 
     /// Add a new `Chain` to the chain list.

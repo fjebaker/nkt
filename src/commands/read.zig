@@ -332,7 +332,7 @@ fn printTask(
         "Created",
         "|",
         "  {s}\n",
-        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
+        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.created)))},
         null,
     );
     try addInfoLine(
@@ -340,7 +340,7 @@ fn printTask(
         "Modified",
         "|",
         "  {s}\n",
-        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
+        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.modified)))},
         null,
     );
     try addInfoLine(

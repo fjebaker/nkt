@@ -60,7 +60,7 @@ pub fn execute(
     opts: commands.Options,
 ) !void {
     try root.load();
-    const today = utils.dateFromMs(utils.now());
+    const today = time.dateFromTime(time.timeNow());
 
     const all_chains = try root.getChains();
     if (all_chains.len == 0) {
@@ -119,7 +119,7 @@ fn prepareChain(
     chain: Chain,
     tz: time.TimeZone,
 ) ![]Day {
-    const day_end = utils.endOfDay(today);
+    const day_end = time.endOfDay(today);
 
     // populate day slots
     var days = try allocator.alloc(Day, days_hence);
@@ -129,7 +129,7 @@ fn prepareChain(
 
     var itt = utils.ReverseIterator(u64).init(chain.completed);
     while (itt.next()) |item| {
-        const date = utils.dateFromMs(item);
+        const date = time.dateFromTime(item);
         const delta = day_end.sub(date);
 
         if (delta.years == 0 and delta.days < days.len) {

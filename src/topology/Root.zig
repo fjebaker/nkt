@@ -269,7 +269,8 @@ fn readChainList(self: *Root, fs: *FileSystem) !void {
     self.chain_list = try chains.readChainList(self.allocator, content);
 }
 
-fn getChainList(self: *Root) !*chains.ChainList {
+/// Get the `ChainList`
+pub fn getChainList(self: *Root) !*chains.ChainList {
     if (self.chain_list == null) {
         if (self.getFileSystem()) |fs| {
             try self.readChainList(fs);

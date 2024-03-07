@@ -86,8 +86,8 @@ pub fn execute(
         .hash = hash,
         .created = now,
         .modified = now,
-        .due = try parseDue(now, self.args.due),
-        .importance = try parseImportance(self.args.importance),
+        .due = try utils.parseDue(now, self.args.due),
+        .importance = try utils.parseImportance(self.args.importance),
         .tags = &.{},
     };
 
@@ -103,15 +103,4 @@ pub fn execute(
         return err;
     };
     try root.writeChanges();
-}
-
-fn parseImportance(importance: ?[]const u8) !Tasklist.Importance {
-    const imp = importance orelse
-        return .Low;
-    return try Tasklist.Importance.parseFromString(imp);
-}
-
-fn parseDue(now: time.Time, due: ?[]const u8) !?time.Time {
-    const d = due orelse return null;
-    return try time.parseTimelike(now, d);
 }
