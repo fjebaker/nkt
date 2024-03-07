@@ -77,18 +77,18 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
     var allocator = fp.mem.allocator();
     switch (text[start]) {
         '@' => {
-            if (tags.getTagString(text[start..]) catch null) |tag| {
+            if (tags.getTagString(text[start..]) catch null) |tag_name| {
                 const tag_descriptors = fp.opts.tag_descriptors orelse
                     return null;
 
                 const fmt = (try getTagFormat(
                     allocator,
                     tag_descriptors,
-                    tag[1..],
+                    tag_name,
                 )) orelse
                     return null;
 
-                const end = tag.len + start;
+                const end = tag_name.len + start + 1;
                 parser.skipN(end - start - 1);
                 return .{ .mark = .Tag, .start = start, .end = end, .fmt = fmt };
             }
