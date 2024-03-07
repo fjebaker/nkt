@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "nkt",
-        .root_source_file = .{ .path = "src/new_main.zig" },
+        .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
 
     const unit_tests = b.addTest(.{
         .name = "test-nkt",
-        .root_source_file = .{ .path = "src/new_main.zig" },
+        .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
