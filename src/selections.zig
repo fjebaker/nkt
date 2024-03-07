@@ -491,8 +491,8 @@ test "resolve selections" {
             &root,
             "0",
             null,
-            root.info.default_directory,
             null,
+            root.info.default_directory,
             .{ .Collection = .{ .journal = j } },
         ),
     );
@@ -619,10 +619,23 @@ fn addFlags(
     if (selection.collection_type) |ct| {
         switch (ct) {
             .CollectionJournal => {
-                if (directory != null) return .{
-                    .has = ct,
-                    .was_given = .CollectionDirectory,
-                };
+                if (directory != null) {
+                    // TODO: this should be cleaned up
+                    // want to allow `ByIndex` selections for directories
+                    if (selection.selector) |s| switch (s) {
+                        .ByIndex => |i| {
+                            selection.selector = .{ .ByDate = time.shiftBack(time.timeNow(), i) };
+                            selection.collection_name = directory;
+                            selection.collection_type = .CollectionDirectory;
+                            return null;
+                        },
+                        else => {},
+                    };
+                    return .{
+                        .has = ct,
+                        .was_given = .CollectionDirectory,
+                    };
+                }
                 if (tasklist != null) return .{
                     .has = ct,
                     .was_given = .CollectionTasklist,
@@ -752,7 +765,7 @@ test "selection parsing" {
     });
     try std.testing.expectError(
         Error.IncompatibleSelection,
-        testSelectionParsing("0", null, "place", null, .{}),
+        testSelectionParsing("0", null, null, "place", .{}),
     );
     try std.testing.expectError(
         Error.AmbiguousSelection,
