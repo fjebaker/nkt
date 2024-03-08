@@ -153,7 +153,7 @@ pub fn execute(
             try chains.addCompletionTime(index, time.timeNow());
             try root.writeChains();
 
-            try writer.print("Chain '{s}' marked as complete", .{c.name});
+            try writer.print("Chain '{s}' marked as complete\n", .{c.name});
         },
         .Item => |*s| {
             var item = try s.selection.resolveReportError(root);
