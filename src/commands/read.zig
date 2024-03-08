@@ -57,6 +57,23 @@ tags: []const []const u8,
 args: arguments.ParsedArguments,
 selection: selections.Selection,
 
+fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
+    const tag_name = tags.getTagString(arg) catch |err| {
+        try cli.throwError(err, "{s}", .{arg});
+        unreachable;
+    };
+    if (tag_name) |name| {
+        try tag_list.append(name);
+    } else {
+        try cli.throwError(
+            cli.CLIErrors.BadArgument,
+            "tag format: tags must begin with `@`",
+            .{},
+        );
+        unreachable;
+    }
+}
+
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);
 
@@ -66,20 +83,15 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     while (try itt.next()) |arg| {
         if (!try parser.parseArg(arg)) {
             if (arg.flag) try itt.throwUnknownFlag();
-            // tag parsing
-            const tag_name = tags.getTagString(arg.string) catch |err| {
-                try cli.throwError(err, "{s}", .{arg.string});
-                unreachable;
-            };
-            if (tag_name) |name| {
-                try tag_list.append(name);
-            } else {
-                try itt.throwBadArgument("tag format: tags must begin with `@`");
-            }
+            try addTag(&tag_list, arg.string);
         }
     }
 
-    const args = try parser.getParsed();
+    var args = try parser.getParsed();
+    if (args.item) |item| {
+        try addTag(&tag_list, item);
+        args.item = null;
+    }
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,
         args.item,
@@ -133,6 +145,7 @@ pub fn execute(
     switch (item) {
         .Day => |*day| {
             _ = try self.readDay(
+                allocator,
                 &day.journal,
                 day.day,
                 selected_tags,
@@ -147,6 +160,7 @@ pub fn execute(
         .Collection => |*c| {
             switch (c.*) {
                 .journal => |*j| try self.readJournal(
+                    allocator,
                     j,
                     selected_tags,
                     tdl.tags,
@@ -176,6 +190,7 @@ fn extractLineLimit(args: arguments.ParsedArguments) !?usize {
 
 fn readJournal(
     self: *Self,
+    allocator: std.mem.Allocator,
     j: *Journal,
     selected_tags: []const tags.Tag,
     tag_descriptors: []const tags.Tag.Descriptor,
@@ -187,6 +202,7 @@ fn readJournal(
     for (0..j.info.days.len) |i| {
         const day = j.getDayOffsetIndex(now, i) orelse continue;
         line_count += try self.readDay(
+            allocator,
             j,
             day,
             selected_tags,
@@ -201,8 +217,25 @@ fn readJournal(
     }
 }
 
+fn filterTags(
+    allocator: std.mem.Allocator,
+    selected_tags: []const tags.Tag,
+    entries: []const Journal.Entry,
+) ![]const Journal.Entry {
+    var list = std.ArrayList(Journal.Entry).init(allocator);
+    defer list.deinit();
+
+    for (entries) |entry| {
+        if (tags.hasUnion(selected_tags, entry.tags)) {
+            try list.append(entry);
+        }
+    }
+    return list.toOwnedSlice();
+}
+
 fn readDay(
     self: *Self,
+    allocator: std.mem.Allocator,
     j: *Journal,
     day: Journal.Day,
     selected_tags: []const tags.Tag,
@@ -216,11 +249,17 @@ fn readDay(
     if (entries.len == 0) return 0;
 
     // TODO: filter the entries by tags
-    _ = selected_tags;
+    const filtered = if (selected_tags.len > 0)
+        try filterTags(allocator, selected_tags, entries)
+    else
+        entries;
+    defer if (selected_tags.len > 0) allocator.free(filtered);
+
+    if (filtered.len == 0) return 0;
 
     return try self.printEntries(
         day,
-        entries,
+        filtered,
         tag_descriptors,
         printer,
         tz,
@@ -254,8 +293,19 @@ fn printEntries(
 
     var entries_written: usize = 0;
     var previous: ?Journal.Entry = null;
-    _ = previous;
     for (entries[offset..]) |entry| {
+        // if there is more than an hour between two entries, print a newline
+        // to separate clearer
+        if (previous) |prev| {
+            const diff = if (prev.created < entry.created)
+                entry.created - prev.created
+            else
+                prev.created - entry.created;
+            if (diff > std.time.ms_per_hour) {
+                try printer.addToCurrent("\n", .{ .is_counted = false });
+            }
+        }
+
         const entry_date = tz.makeLocal(
             time.dateFromTime(entry.created),
         );
@@ -289,6 +339,7 @@ fn printEntries(
         }
 
         try printer.addToCurrent("\n", .{ .is_counted = false });
+        previous = entry;
     }
 
     return entries_written;
