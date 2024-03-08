@@ -21,7 +21,7 @@ pub const Commands = union(enum) {
     config: @import("commands/config.zig"),
     chains: @import("commands/chains.zig"),
     edit: @import("commands/edit.zig"),
-    // find: @import("commands/find.zig"),
+    find: @import("commands/find.zig"),
     help: @import("commands/help.zig"),
     // import: @import("commands/import.zig"),
     init: @import("commands/init.zig"),
@@ -35,7 +35,7 @@ pub const Commands = union(enum) {
     select: @import("commands/select.zig"),
     set: @import("commands/set.zig"),
     // summary: @import("commands/summary.zig"),
-    // sync: @import("commands/sync.zig"),
+    sync: @import("commands/sync.zig"),
     // completion: @import("commands/completion.zig"),
 
     pub fn execute(

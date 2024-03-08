@@ -159,7 +159,7 @@ pub fn rename(
     const old_path = ptr.path;
     const new_path = try self.newPathFromName(
         new_name,
-        std.fs.path.extension(old_path),
+        std.fs.path.extension(old_path)[1..],
     );
 
     ptr.name = new_name;
