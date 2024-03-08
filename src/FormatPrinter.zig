@@ -1,5 +1,5 @@
 const std = @import("std");
-const tags = @import("tags.zig");
+const tags = @import("topology/tags.zig");
 const utils = @import("utils.zig");
 const colors = @import("colors.zig");
 
@@ -25,12 +25,12 @@ pub const Options = struct {
     indent: usize = 0,
     max_lines: ?usize = null, // null for no limit
     pretty: bool = true,
+    tag_descriptors: ?[]const tags.Tag.Descriptor = null,
 };
 
 mem: std.heap.ArenaAllocator,
 texts: std.ArrayList(RichText),
 opts: Options,
-tag_infos: ?[]const tags.TagInfo = null,
 
 pub fn init(alloc: std.mem.Allocator, opts: Options) FormatPrinter {
     return .{
@@ -53,24 +53,42 @@ pub fn add(fp: *FormatPrinter, rich: RichText) !void {
 const PRE_COLOR = colors.ComptimeFarbe.init().bgRgb(48, 48, 48).fgRgb(236, 106, 101);
 const URI_COLOR = colors.ComptimeFarbe.init().fgRgb(58, 133, 134).underlined();
 
+/// Get the `Farbe` attributed to a given tag from the list of tag descriptors.
+pub fn getTagFormat(
+    allocator: std.mem.Allocator,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    tag_name: []const u8,
+) !?Farbe {
+    const descriptor: tags.Tag.Descriptor = for (tag_descriptors) |td| {
+        if (std.mem.eql(u8, td.name, tag_name)) {
+            break td;
+        }
+    } else return null;
+
+    var f = try descriptor.color.toFarbe(allocator);
+    errdefer f.deinit();
+    try f.bold();
+    return f;
+}
+
 fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
     const text = parser.text;
     const start = parser.i - 1;
     var allocator = fp.mem.allocator();
     switch (text[start]) {
         '@' => {
-            if (tags.parseContextString(text[start..]) catch null) |tag| {
-                const tag_infos = fp.tag_infos orelse
+            if (tags.getTagString(text[start..]) catch null) |tag_name| {
+                const tag_descriptors = fp.opts.tag_descriptors orelse
                     return null;
 
-                const fmt = (try tags.getTagFormat(
+                const fmt = (try getTagFormat(
                     allocator,
-                    tag_infos,
-                    tag[1..],
+                    tag_descriptors,
+                    tag_name,
                 )) orelse
                     return null;
 
-                const end = tag.len + start;
+                const end = tag_name.len + start + 1;
                 parser.skipN(end - start - 1);
                 return .{ .mark = .Tag, .start = start, .end = end, .fmt = fmt };
             }

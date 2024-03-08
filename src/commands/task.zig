@@ -1,113 +1,106 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
+const selections = @import("../selections.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const alias = [_][]const u8{ "todo", "t" };
+pub const short_help = "Add a task to a specified task list.";
+pub const long_help = short_help;
 
-pub const help = "Add a task to a specified task list.";
+pub const arguments = cli.ArgumentsHelp(&.{
+    .{
+        .arg = "outcome",
+        .help = "Outcome of the task",
+        .required = true,
+    },
+    .{
+        .arg = "action",
+        .help = "(Next) Action that needs to be taken.",
+    },
+    .{
+        .arg = "--tasklist tasklist",
+        .help = "Name of the tasklist to write to (else uses default tasklist).",
+    },
+    .{
+        .arg = "--details info",
+        .help = "Optional additional details about the task.",
+    },
+    .{
+        .arg = "--due datelike",
+        .help = "Date by which this task must be completed. See `help dates` for format description (default: no due date).",
+    },
+    .{
+        .arg = "-i/--importance imp",
+        .help = "Choice of `low`, `medium`, and `high` (default: `low`).",
+    },
+}, .{});
 
-pub const extended_help =
-    \\Add a task to a specified task list.
-    \\
-    \\  nkt task
-    \\     <text>                short task description / name
-    \\     -d/--details str      richer textual details of the task
-    \\     --tl/--tasklist name    name of tasklist to write to (default: todo)
-    \\     --by <date-like>      date by which this task must be completed. see
-    \\                             below for a description of the date format
-    \\     -i/--importance       choice of `low`, `medium`, `high` (default: low)
-    \\
-    \\
-++ cli.selections.DATE_TIME_SELECTOR_HELP ++
-    \\
-;
-const Importance = @import("../Topology.zig").Task.Importance;
+args: arguments.ParsedArguments,
 
-const parseDateTimeLikeFlag = cli.selections.parseDateTimeLikeFlag;
-
-text: ?[]const u8 = null,
-tasklist: ?[]const u8 = null,
-by: ?utils.Date = null,
-importance: ?Importance = null,
-details: ?[]const u8 = null,
-
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{};
-
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (arg.is(null, "tasklist") or arg.is(null, "tl")) {
-                if (self.tasklist != null)
-                    return cli.CLIErrors.DuplicateFlag;
-
-                self.tasklist = (try itt.getValue()).string;
-            } else if (arg.is('d', "details")) {
-                if (self.details != null)
-                    return cli.CLIErrors.DuplicateFlag;
-
-                self.details = (try itt.getValue()).string;
-            } else if (arg.is('i', "importance")) {
-                if (self.importance != null)
-                    return cli.CLIErrors.DuplicateFlag;
-
-                const val = (try itt.getValue()).string;
-                self.importance = std.meta.stringToEnum(Importance, val) orelse
-                    return cli.CLIErrors.BadArgument;
-            } else if (try parseDateTimeLikeFlag(arg, itt, "by")) |date| {
-                if (self.by != null) return cli.CLIErrors.DuplicateFlag;
-                self.by = date;
-            } else {
-                return cli.CLIErrors.UnknownFlag;
-            }
-        } else {
-            if (self.text != null) return cli.CLIErrors.TooManyArguments;
-            self.text = arg.string;
-        }
-    }
-    self.tasklist = self.tasklist orelse "todo";
-    self.importance = self.importance orelse .low;
-    return self;
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var args = try arguments.parseAll(itt);
+    return .{ .args = args };
 }
 
-pub fn run(
+pub fn execute(
     self: *Self,
-    state: *State,
-    out_writer: anytype,
+    _: std.mem.Allocator,
+    root: *Root,
+    _: anytype,
+    _: commands.Options,
 ) !void {
-    self.text = self.text orelse return cli.CLIErrors.TooFewArguments;
-    const name = self.tasklist.?;
+    try root.load();
+    const now = time.timeNow();
+    const tl_name = self.args.tasklist orelse root.info.default_tasklist;
 
-    var tasklist = state.getTasklist(self.tasklist.?) orelse
-        return cli.SelectionError.NoSuchCollection;
+    var tl = if (try root.getTasklist(tl_name)) |tl|
+        tl
+    else {
+        try cli.throwError(
+            Root.Error.NoSuchCollection,
+            "No tasklist named '{s}'",
+            .{tl_name},
+        );
+        unreachable;
+    };
+    defer tl.deinit();
 
-    const by: ?u64 = if (self.by) |b| @intCast(b.toTimestamp()) else null;
+    root.markModified(tl.descriptor, .CollectionTasklist);
 
-    var contexts = try tags.parseContexts(state.allocator, self.text.?);
-    defer contexts.deinit();
-    const ts = try contexts.getTags(state.getTagInfo());
+    const hash = Tasklist.hash(.{
+        .outcome = self.args.outcome,
+        .action = self.args.action,
+    });
 
-    var ptr_to_task = try tasklist.Tasklist.addTask(
-        self.text.?,
-        .{
-            .due = by,
-            .importance = self.importance.?,
-            .details = self.details orelse "",
-        },
-    );
-    try tags.addTags(
-        tasklist.Tasklist.mem.allocator(),
-        &ptr_to_task.tags,
-        ts,
-    );
+    const new_task: Tasklist.Task = .{
+        .outcome = self.args.outcome,
+        .action = self.args.action,
+        .details = self.args.details,
+        .hash = hash,
+        .created = now,
+        .modified = now,
+        .due = try utils.parseDue(now, self.args.due),
+        .importance = try utils.parseImportance(self.args.importance),
+        .tags = &.{},
+    };
 
-    try state.writeChanges();
-    try out_writer.print(
-        "Written task to '{s}' in tasklist '{s}'\n",
-        .{ self.text.?, name },
-    );
+    tl.addNewTask(new_task) catch |err| {
+        if (err == Tasklist.Error.DuplicateTask) {
+            try cli.throwError(
+                err,
+                "Task with same hash already exists: {x}",
+                .{new_task.hash},
+            );
+            unreachable;
+        }
+        return err;
+    };
+    try root.writeChanges();
 }

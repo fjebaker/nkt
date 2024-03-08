@@ -1,96 +1,111 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const help = "Quickly add a note to a journal from the command line";
+pub const short_help = "Quickly log something to a journal from the command line";
 
-pub const extended_help =
-    \\Quickly add a note to a given journal from the command line.
-    \\
-    \\  nkt log
-    \\     [-j/--journal name]   name of journal to write to (default: diary)
-    \\     <text>                text to log
-    \\     [tag1,tag2,...]       optional tags for the entry
-    \\
+pub const long_help =
+    \\Add an entry to a journal by logging a new line. Entries contrast from diary
+    \\notes in that they are single, short lines or items, a literal
+    \\log file of your day. For longer form daily notes, use the 'edit' command.
+    \\Entries support the standard infix tagging (i.e. @tag).
 ;
 
-text: ?[]const u8 = null,
-tags: std.ArrayList([]const u8),
-journal: ?[]const u8 = null,
+pub const arguments = cli.ArgumentsHelp(&.{
+    .{
+        .arg = "text",
+        .help = "The text to log for the entry.",
+        .required = true,
+    },
+    .{
+        .arg = "-j/--journal name",
+        .help = "The name of the journal to add the entry to (else uses default journal).",
+    },
+    .{
+        .arg = "@tag1,@tag2,...",
+        .help = "Additional tags to add.",
+        .parse = false,
+    },
+}, .{});
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{ .tags = std.ArrayList([]const u8).init(alloc) };
+tags: []const []const u8,
+args: arguments.ParsedArguments,
+
+pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var parser = arguments.init(itt);
+
+    var tag_list = std.ArrayList([]const u8).init(allocator);
+    defer tag_list.deinit();
 
     while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (arg.is('j', "journal")) {
-                if (self.journal != null) return cli.CLIErrors.DuplicateFlag;
-                self.journal = (try itt.getValue()).string;
-            }
-        } else {
-            if (self.text != null) {
-                if (arg.string[0] == '@') {
-                    try self.tags.append(arg.string[1..]);
-                } else return cli.CLIErrors.BadArgument;
+        if (!try parser.parseArg(arg)) {
+            if (arg.flag) try itt.throwUnknownFlag();
+            // tag parsing
+            const tag_name = tags.getTagString(arg.string) catch |err| {
+                try cli.throwError(err, "{s}", .{arg.string});
+                unreachable;
+            };
+
+            if (tag_name) |name| {
+                try tag_list.append(name);
             } else {
-                self.text = arg.string;
+                try itt.throwBadArgument("tag format: tags must begin with `@`");
             }
         }
     }
-    self.text = self.text orelse return cli.CLIErrors.TooFewArguments;
-    return self;
+
+    const args = try parser.getParsed();
+    return .{
+        .tags = try tag_list.toOwnedSlice(),
+        .args = args,
+    };
 }
 
-pub fn run(
+pub fn execute(
     self: *Self,
-    state: *State,
-    out_writer: anytype,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    _: commands.Options,
 ) !void {
-    const journal_name: []const u8 = self.journal orelse "diary";
+    // load the topology
+    try root.load();
 
-    var journal = state.getJournal(journal_name) orelse
-        return cli.SelectionError.NoSuchCollection;
+    const journal_name = self.args.journal orelse
+        root.info.default_journal;
 
-    const today_string = try utils.formatDateBuf(utils.Date.now());
-    var entry = journal.get(&today_string) orelse
-        try journal.Journal.newDay(&today_string);
+    var j = (try root.getJournal(journal_name)) orelse {
+        try cli.throwError(
+            Root.Error.NoSuchCollection,
+            "Journal '{s}' does not exist",
+            .{journal_name},
+        );
+        unreachable;
+    };
+    defer j.deinit();
 
-    var contexts = try tags.parseContexts(state.allocator, self.text.?);
-    defer contexts.deinit();
+    root.markModified(j.descriptor, .CollectionJournal);
 
-    const allowed_tags = state.getTagInfo();
-
-    const ts = try contexts.getTags(allowed_tags);
-
-    var ptr_to_entry = try entry.Day.add(self.text.?);
-    try tags.addTags(
-        journal.Journal.content.allocator(),
-        &ptr_to_entry.tags,
-        ts,
+    const entry_tags = try utils.parseAndAssertValidTags(
+        allocator,
+        root,
+        self.args.text,
+        self.tags,
     );
+    defer allocator.free(entry_tags);
+    const day = try j.addNewEntryFromText(self.args.text, entry_tags);
 
-    if (self.tags.items.len > 0) {
-        const appended_tags = try tags.makeTagList(
-            state.allocator,
-            self.tags.items,
-            allowed_tags,
-        );
-        defer state.allocator.free(appended_tags);
-        try tags.addTags(
-            journal.Journal.content.allocator(),
-            &ptr_to_entry.tags,
-            appended_tags,
-        );
-    }
+    try root.writeChanges();
+    try j.writeDays();
 
-    try state.writeChanges();
-    try out_writer.print(
-        "Written text to '{s}' in journal '{s}'\n",
-        .{ entry.getName(), journal_name },
+    try writer.print(
+        "Written entry to '{s}' in journal '{s}'\n",
+        .{ day.name, j.descriptor.name },
     );
 }

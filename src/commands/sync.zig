@@ -2,19 +2,19 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Commands = commands.Commands;
+const Root = @import("../topology/Root.zig");
+
 const Self = @This();
 
-pub const help = "Sync root directory to remote git repository";
+pub const short_help = "Sync root directory to remote git repository";
+pub const long_help = short_help;
+pub const arguments = cli.ArgumentsHelp(&.{}, .{});
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    const self: Self = .{};
-
-    if (try itt.next()) |_| {
-        return cli.CLIErrors.TooManyArguments;
-    }
-
-    return self;
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    _ = try arguments.parseAll(itt);
+    return .{};
 }
 
 const Git = struct {
@@ -76,12 +76,14 @@ const Git = struct {
     }
 };
 
-pub fn run(
+pub fn execute(
     _: *Self,
-    state: *State,
+    allocator: std.mem.Allocator,
+    root: *Root,
     _: anytype,
+    _: commands.Options,
 ) !void {
-    var git = try Git.init(state.allocator, state.fs.root_path);
+    var git = try Git.init(allocator, root.fs.?.root_path);
     defer git.deinit();
 
     try git.addAllCommit("nkt sync backup");

@@ -147,12 +147,12 @@ fn processDendron(state: *State, note: *State.Item) !?ProcessorPipeline {
     note.Note.note.modified = try std.fmt.parseInt(u64, updated_s, 10);
     note.Note.note.created = try std.fmt.parseInt(u64, created_s, 10);
 
-    const title = map.get("title") orelse return null;
+    const outcome = map.get("outcome") orelse return null;
 
     const stop = itt.index;
     const new_content = try std.mem.concat(state.allocator, u8, &.{
         "# ",
-        title,
+        outcome,
         "\n",
         content[stop..],
     });

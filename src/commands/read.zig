@@ -1,297 +1,298 @@
 const std = @import("std");
-
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
+const selections = @import("../selections.zig");
+
+const commands = @import("../commands.zig");
+const Journal = @import("../topology/Journal.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
+const Root = @import("../topology/Root.zig");
+
 const colors = @import("../colors.zig");
 
-const State = @import("../State.zig");
+const FormatPrinter = @import("../FormatPrinter.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
-const Entry = @import("../Topology.zig").Entry;
 
 const Self = @This();
 
+pub const DEFAULT_LINE_COUNT = 20;
+
 pub const alias = [_][]const u8{ "r", "rp" };
 
-pub const help = "Display the contentes of notes in various ways";
-pub const extended_help =
-    \\Print the contents of a journal or note to stdout
-    \\  nkt read
-    \\     <what>                what to print: name of a journal, or a note
-    \\                             entry. if choice is ambiguous, will print both,
-    \\                             else specify with the `--journal` or `--dir`
-    \\                             flags
-    \\     [@tags]               show only those entries that have been tagged with
-    \\                             chosen tags.
-    \\
-++ cli.Selection.COLLECTION_FLAG_HELP ++
-    \\     -n/--limit int        maximum number of entries to display (default: 25)
-    \\     --date                print full date time (`YYYY-MM-DD HH:MM:SS`)
-    \\     -a/--all              display all items (overwrites `--limit`)
-    \\     --pretty/--nopretty   force pretty or no pretty printing
-    \\     -p/--page             read via pager
-    \\
-    \\The alias `rp` is a short hand for `read --page`.
-    \\
-;
+pub const short_help = "Read notes, task details, and journals.";
+pub const long_help = short_help;
 
-selection: cli.Selection = .{},
-number: usize = 20,
-all: bool = false,
-full_date: bool = false,
-pager: bool = false,
-pretty: ?bool = null,
-selected_tags: ?[][]const u8 = null,
+pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
+    "item",
+    "Selected item (see `help select` for the formatting). If not argument is provided, defaults to reading the last `--limit` entries of the default journal.",
+    .{ .required = false },
+) ++
+    &[_]cli.ArgumentDescriptor{
+    .{
+        .arg = "@tag1,@tag2,...",
+        .help = "Show only entries or note sections that contain one of the following tags",
+        .parse = false,
+    },
+    .{
+        .arg = "-n/--limit limit",
+        .help = "The maximum number of entries to display of a journal (default: 25).",
+    },
+    .{
+        .arg = "-d/--date",
+        .help = "Display the full date format (`YYYY-MM-DD HH:MM:SS`)",
+    },
+    .{
+        .arg = "-a/--all",
+        .help = "Display all items (overwrites `--limit`)",
+    },
+    .{
+        .arg = "-p/--page",
+        .help = "Read the item through the configured pager",
+    },
+}, .{});
 
-const parseCollection = cli.selections.parseJournalDirectoryItemlistFlag;
+tags: []const []const u8,
+args: arguments.ParsedArguments,
+selection: selections.Selection,
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, opts: cli.Options) !Self {
-    var self: Self = .{};
-    var tag_list = std.ArrayList([]const u8).init(alloc);
+fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
+    const tag_name = tags.getTagString(arg) catch |err| {
+        try cli.throwError(err, "{s}", .{arg});
+        unreachable;
+    };
+    if (tag_name) |name| {
+        try tag_list.append(name);
+    } else {
+        try cli.throwError(
+            cli.CLIErrors.BadArgument,
+            "tag format: tags must begin with `@`",
+            .{},
+        );
+        unreachable;
+    }
+}
+
+pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var parser = arguments.init(itt);
+
+    var tag_list = std.ArrayList([]const u8).init(allocator);
     defer tag_list.deinit();
 
-    itt.rewind();
-    const prog_name = (try itt.next()).?.string;
-    if (std.mem.eql(u8, prog_name, "rp")) self.pager = true;
-
-    itt.counter = 0;
     while (try itt.next()) |arg| {
-        // handle other options
-        if (arg.flag) {
-            if (arg.is('n', "limit")) {
-                const value = try itt.getValue();
-                self.number = try value.as(usize);
-            } else if (arg.is('a', "all")) {
-                self.all = true;
-            } else if (arg.is(null, "no-pretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = false;
-            } else if (arg.is(null, "pretty")) {
-                if (self.pretty != null) return cli.CLIErrors.InvalidFlag;
-                self.pretty = true;
-            } else if (arg.is('p', "pager")) {
-                self.pager = true;
-            } else if (arg.is(null, "date")) {
-                self.full_date = true;
-            } else {
-                return cli.CLIErrors.UnknownFlag;
-            }
-        } else {
-            if (arg.string[0] == '@') {
-                try tag_list.append(arg.string[1..]);
-                continue;
-            }
+        if (!try parser.parseArg(arg)) {
+            if (arg.flag) try itt.throwUnknownFlag();
+            try addTag(&tag_list, arg.string);
         }
-        // parse selection
-        if (try self.selection.parse(arg, itt)) continue;
     }
 
-    // don't pretty if to pager or being piped
-    self.pretty = self.pretty orelse
-        if (self.pager) false else !opts.piped;
-
-    // update the tags field if any were passed
-    if (tag_list.items.len > 0) {
-        self.selected_tags = try tag_list.toOwnedSlice();
+    var args = try parser.getParsed();
+    if (args.item) |item| {
+        try addTag(&tag_list, item);
+        args.item = null;
     }
-
-    return self;
+    const selection = try selections.fromArgs(
+        arguments.ParsedArguments,
+        args.item,
+        args,
+    );
+    return .{
+        .tags = try tag_list.toOwnedSlice(),
+        .selection = selection,
+        .args = args,
+    };
 }
 
-const NoSuchCollection = State.Error.NoSuchCollection;
-
-pub fn pipeToPager(
+pub fn execute(
+    self: *Self,
     allocator: std.mem.Allocator,
-    pager: []const []const u8,
-    s: []const u8,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
 ) !void {
-    var proc = std.ChildProcess.init(
-        pager,
+    try root.load();
+
+    // if nothing is selected, we default
+    if (self.selection.selector == null and
+        self.selection.collection_type == null and
+        self.selection.collection_name == null)
+    {
+        self.selection.collection_type = .CollectionJournal;
+        self.selection.collection_name = root.info.default_journal;
+    }
+
+    var item = try self.selection.resolveReportError(root);
+    defer item.deinit();
+
+    const selected_tags = try utils.parseAndAssertValidTags(
         allocator,
+        root,
+        null,
+        self.tags,
     );
+    defer allocator.free(selected_tags);
 
-    proc.stdin_behavior = std.ChildProcess.StdIo.Pipe;
-    proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
-    proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+    const N = try extractLineLimit(self.args);
+    var tdl = try root.getTagDescriptorList();
 
-    try proc.spawn();
-    _ = try proc.stdin.?.write(s);
-    proc.stdin.?.close();
-    proc.stdin = null;
-    _ = try proc.wait();
-}
+    var bprinter = BlockPrinter.init(allocator, .{
+        .max_lines = N,
+        .tag_descriptors = tdl.tags,
+    });
+    defer bprinter.deinit();
 
-pub fn run(
-    self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    if (self.pager) {
-        var buf = std.ArrayList(u8).init(state.allocator);
-        defer buf.deinit();
-        try read(self, state, buf.writer());
-        try pipeToPager(state.allocator, state.topology.pager, buf.items);
-    } else {
-        try read(self, state, out_writer);
-    }
-}
-
-fn read(
-    self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    const N = if (self.all) null else self.number;
-    var printer = BlockPrinter.init(
-        state.allocator,
-        .{ .max_lines = N, .pretty = self.pretty.? },
-    );
-    defer printer.deinit();
-
-    const tag_infos = state.getTagInfo();
-    const selected_tags = if (self.selected_tags) |names|
-        try tags.makeTagList(
-            state.allocator,
-            names,
-            tag_infos,
-        )
-    else
-        null;
-    defer if (selected_tags) |st| state.allocator.free(st);
-
-    if (self.selection.item != null) {
-        const selected: State.MaybeItem =
-            (try self.selection.find(state)) orelse
-            return NoSuchCollection;
-
-        if (selected.note) |note| {
-            try readNote(note, &printer);
-        }
-        if (selected.day) |day| {
-            printer.addTagInfo(state.getTagInfo());
-            try self.readDay(day, selected_tags, state, &printer);
-        }
-        if (selected.task) |task| {
-            printer.format_printer.opts.max_lines = null;
-            printer.addTagInfo(tag_infos);
-            try self.readTask(task, &printer);
-        }
-    } else if (self.selection.collection) |w| switch (w.container) {
-        // if no selection, but a collection
-        .Journal => {
-            const journal = state.getJournal(w.name) orelse
-                return NoSuchCollection;
-            try self.readJournal(journal, selected_tags, state, &printer);
+    switch (item) {
+        .Day => |*day| {
+            _ = try self.readDay(
+                allocator,
+                &day.journal,
+                day.day,
+                selected_tags,
+                tdl.tags,
+                &bprinter,
+                opts.tz,
+            );
         },
-        else => unreachable, // todo
-    } else {
-        // default behaviour
-        const journal = state.getJournal("diary").?;
-        printer.addTagInfo(tag_infos);
-        try self.readJournal(journal, selected_tags, state, &printer);
+        .Task => |*task| {
+            try self.printTask(task.task, &bprinter, opts.tz);
+        },
+        .Collection => |*c| {
+            switch (c.*) {
+                .journal => |*j| try self.readJournal(
+                    allocator,
+                    j,
+                    selected_tags,
+                    tdl.tags,
+                    &bprinter,
+                    opts.tz,
+                ),
+                // TODO: handle this better
+                else => unreachable,
+            }
+        },
+        inline else => |k| {
+            std.debug.print(">> {any}\n", .{k});
+        },
     }
 
-    try printer.drain(out_writer);
+    bprinter.reverse();
+    try bprinter.drain(writer);
 }
 
-pub fn readNote(
-    note: State.Item,
-    printer: *BlockPrinter,
-) !void {
-    const content = try note.Note.read();
-    try printer.addBlock("", .{});
-    _ = try printer.addToCurrent(content, .{});
+fn extractLineLimit(args: arguments.ParsedArguments) !?usize {
+    if (args.all orelse false) return null;
+    if (args.limit) |str| {
+        return try std.fmt.parseInt(usize, str, 10);
+    }
+    return DEFAULT_LINE_COUNT;
 }
 
-pub fn readDay(
+fn readJournal(
     self: *Self,
-    day: State.Item,
-    selected_tags: ?[]const tags.Tag,
-    state: *State,
+    allocator: std.mem.Allocator,
+    j: *Journal,
+    selected_tags: []const tags.Tag,
+    tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
+    tz: time.TimeZone,
 ) !void {
-    const alloc = day.Day.journal.mem.allocator();
+    const now = time.timeNow();
+    var line_count: usize = 0;
+    for (0..j.info.days.len) |i| {
+        const day = j.getDayOffsetIndex(now, i) orelse continue;
+        line_count += try self.readDay(
+            allocator,
+            j,
+            day,
+            selected_tags,
+            tag_descriptors,
+            printer,
+            tz,
+        );
 
-    // read all entries
-    const all_entries = try day.Day.journal.readEntries(day.Day.day);
+        if (printer.format_printer.opts.max_lines) |N| {
+            if (line_count >= N) break;
+        }
+    }
+}
 
-    // if tags are selected, filter only those entries
-    const filtered_entries = if (selected_tags) |tgs|
-        try tags.filterTagged(Entry, state.allocator, all_entries, tgs)
-    else
-        null;
-    defer if (filtered_entries) |fe| state.allocator.free(fe);
-    const entries = filtered_entries orelse all_entries;
+fn filterTags(
+    allocator: std.mem.Allocator,
+    selected_tags: []const tags.Tag,
+    entries: []const Journal.Entry,
+) ![]const Journal.Entry {
+    var list = std.ArrayList(Journal.Entry).init(allocator);
+    defer list.deinit();
 
+    for (entries) |entry| {
+        if (tags.hasUnion(selected_tags, entry.tags)) {
+            try list.append(entry);
+        }
+    }
+    return list.toOwnedSlice();
+}
+
+fn readDay(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    j: *Journal,
+    day: Journal.Day,
+    selected_tags: []const tags.Tag,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !usize {
+    // read the entries of that day
+    const entries = try j.getEntries(day);
     // no print if there are no entries for this day
-    if (entries.len == 0) return;
+    if (entries.len == 0) return 0;
 
-    const date = utils.dateFromMs(day.Day.day.created);
-    const day_of_week = try utils.dayOfWeek(alloc, date);
-    const month = try utils.monthOfYear(alloc, date);
+    // TODO: filter the entries by tags
+    const filtered = if (selected_tags.len > 0)
+        try filterTags(allocator, selected_tags, entries)
+    else
+        entries;
+    defer if (selected_tags.len > 0) allocator.free(filtered);
+
+    if (filtered.len == 0) return 0;
+
+    return try self.printEntries(
+        day,
+        filtered,
+        tag_descriptors,
+        printer,
+        tz,
+    );
+}
+
+fn printEntries(
+    self: *const Self,
+    day: Journal.Day,
+    entries: []const Journal.Entry,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !usize {
+    const local_date = tz.makeLocal(
+        time.dateFromTime(day.created),
+    );
 
     try printer.addFormatted(
         .Heading,
         "## Journal: {s} {s} of {s}",
-        .{ day.getName(), day_of_week, month },
-        .{},
+        .{
+            try time.formatDateBuf(local_date),
+            try time.dayOfWeek(local_date),
+            try time.monthOfYear(local_date),
+        },
+        .{ .is_counted = false },
     );
 
-    if (self.full_date) {
-        try self.addItems(entries, .FullTime, state, printer);
-    } else {
-        try self.addItems(entries, .ClockTime, state, printer);
-    }
-}
-
-pub fn readJournal(
-    self: *Self,
-    journal: *State.Collection,
-    selected_tags: ?[]const tags.Tag,
-    state: *State,
-    printer: *BlockPrinter,
-) !void {
-    const alloc = printer.format_printer.mem.allocator();
-    var day_list = try journal.getAll(alloc);
-
-    if (day_list.len == 0) {
-        try printer.addBlock("-- Empty --\n", .{});
-        return;
-    }
-
-    journal.sort(day_list, .Created);
-    std.mem.reverse(State.Item, day_list);
-
-    var line_count: usize = 0;
-    const last = for (0.., day_list) |i, *day| {
-        const entries = try journal.Journal.readEntries(day.Day.day);
-        line_count += entries.len;
-        if (!printer.couldFit(line_count)) {
-            break i;
-        }
-    } else day_list.len -| 1;
-
-    printer.reverse();
-    for (day_list[0 .. last + 1]) |day| {
-        try self.readDay(day, selected_tags, state, printer);
-        if (!printer.couldFit(1)) break;
-    }
-    printer.reverse();
-}
-
-fn addItems(
-    _: *Self,
-    entries: []Entry,
-    comptime format: enum { FullTime, ClockTime },
-    state: *State,
-    printer: *BlockPrinter,
-) !void {
     const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
-    const tag_infos = state.getTagInfo();
 
-    // the previously printed entry
-    var previous: ?Entry = null;
-
+    var entries_written: usize = 0;
+    var previous: ?Journal.Entry = null;
     for (entries[offset..]) |entry| {
         // if there is more than an hour between two entries, print a newline
         // to separate clearer
@@ -304,45 +305,44 @@ fn addItems(
                 try printer.addToCurrent("\n", .{ .is_counted = false });
             }
         }
-        const date = utils.dateFromMs(entry.created);
-        switch (format) {
-            .ClockTime => {
-                const time_of_day = try utils.formatTimeBuf(date);
-                try printer.addFormatted(
-                    .Item,
-                    "{s} | {s}",
-                    .{ time_of_day, entry.item },
-                    .{},
-                );
-            },
-            .FullTime => {
-                const full_time = try utils.formatDateTimeBuf(date);
-                try printer.addFormatted(
-                    .Item,
-                    "{s} | {s}",
-                    .{ full_time, entry.item },
-                    .{},
-                );
-            },
-        }
+
+        const entry_date = tz.makeLocal(
+            time.dateFromTime(entry.created),
+        );
+
+        const long_date = self.args.date orelse false;
+        const formated: []const u8 = if (!long_date)
+            &try time.formatTimeBuf(entry_date)
+        else
+            &try time.formatDateTimeBuf(entry_date);
+
+        try printer.addFormatted(
+            .Item,
+            "{s} | {s}",
+            .{ formated, entry.text },
+            .{},
+        );
+        entries_written += 1;
 
         if (entry.tags.len > 0) {
             try printer.addToCurrent(" ", .{ .is_counted = false });
-        }
-        for (entry.tags) |tag| {
-            try printer.addToCurrent("@", .{
-                .fmt = try tags.getTagFormat(
-                    printer.format_printer.mem.allocator(),
-                    tag_infos,
-                    tag.name,
-                ),
-                .is_counted = false,
-            });
+            for (entry.tags) |tag| {
+                try printer.addToCurrent("@", .{
+                    .fmt = try FormatPrinter.getTagFormat(
+                        printer.format_printer.mem.allocator(),
+                        tag_descriptors,
+                        tag.name,
+                    ),
+                    .is_counted = false,
+                });
+            }
         }
 
         try printer.addToCurrent("\n", .{ .is_counted = false });
         previous = entry;
     }
+
+    return entries_written;
 }
 
 const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();
@@ -351,21 +351,21 @@ const WARN_FORMAT = colors.YELLOW.fixed();
 const DIM_FORMAT = colors.DIM.fixed();
 const COMPLETED_FORMAT = colors.GREEN.fixed();
 
-fn readTask(
+fn printTask(
     _: *Self,
-    task: State.Item,
+    t: Tasklist.Task,
     printer: *BlockPrinter,
+    tz: time.TimeZone,
 ) !void {
-    const t = task.Task.task;
-    const status = t.status(utils.Date.now());
+    const status = t.getStatus(time.timeNow());
 
     const due_s = if (t.due) |due|
-        &try utils.formatDateTimeBuf(utils.dateFromMs(due))
+        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(due)))
     else
         "no date set";
 
-    const completed_s = if (t.completed) |compl|
-        &try utils.formatDateTimeBuf(utils.dateFromMs(compl))
+    const completed_s = if (t.done) |compl|
+        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(compl)))
     else
         "not completed";
 
@@ -374,7 +374,7 @@ fn readTask(
     try printer.addFormatted(
         .Item,
         "Task" ++ " " ** 11 ++ ":   {s}\n\n",
-        .{t.title},
+        .{t.outcome},
         .{ .fmt = HEADING_FORMAT },
     );
 
@@ -383,7 +383,7 @@ fn readTask(
         "Created",
         "|",
         "  {s}\n",
-        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.created))},
+        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.created)))},
         null,
     );
     try addInfoLine(
@@ -391,7 +391,7 @@ fn readTask(
         "Modified",
         "|",
         "  {s}\n",
-        .{&try utils.formatDateTimeBuf(utils.dateFromMs(t.modified))},
+        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.modified)))},
         null,
     );
     try addInfoLine(
@@ -412,14 +412,14 @@ fn readTask(
         "|",
         "{s}\n",
         .{switch (t.importance) {
-            .low => "  Low",
-            .high => "* High",
-            .urgent => "! Urgent",
+            .Low => "  Low",
+            .High => "* High",
+            .Urgent => "! Urgent",
         }},
         switch (t.importance) {
-            .high => WARN_FORMAT,
-            .low => DIM_FORMAT,
-            .urgent => URGENT_FORMAT,
+            .High => WARN_FORMAT,
+            .Low => DIM_FORMAT,
+            .Urgent => URGENT_FORMAT,
         },
     );
     try addInfoLine(
@@ -433,9 +433,12 @@ fn readTask(
             else => DIM_FORMAT,
         },
     );
-    try printer.addToCurrent("\nDetails:\n\n", .{ .fmt = HEADING_FORMAT });
-    try printer.addToCurrent(t.details, .{});
-    try printer.addToCurrent("\n", .{});
+
+    if (t.details) |details| {
+        try printer.addToCurrent("\nDetails:\n\n", .{ .fmt = HEADING_FORMAT });
+        try printer.addToCurrent(details, .{});
+        try printer.addToCurrent("\n", .{});
+    }
 }
 
 fn addInfoLine(

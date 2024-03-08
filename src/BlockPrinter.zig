@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const tags = @import("tags.zig");
-
 const FormatPrinter = @import("FormatPrinter.zig");
 const colors = @import("colors.zig");
 const Farbe = colors.Farbe;
@@ -27,11 +25,10 @@ current: ?*Block = null,
 format_printer: FormatPrinter,
 blocks: std.ArrayList(Block),
 
-pub fn addTagInfo(bp: *BlockPrinter, tag_infos: []tags.TagInfo) void {
-    bp.format_printer.tag_infos = tag_infos;
-}
-
-pub fn init(alloc: std.mem.Allocator, opts: FormatPrinter.Options) BlockPrinter {
+pub fn init(
+    alloc: std.mem.Allocator,
+    opts: FormatPrinter.Options,
+) BlockPrinter {
     const fp = FormatPrinter.init(alloc, opts);
     const blocks = std.ArrayList(Block).init(alloc);
     return .{ .format_printer = fp, .blocks = blocks };
@@ -67,7 +64,10 @@ pub fn addToCurrent(bp: *BlockPrinter, text: []const u8, opts: FormatPrinter.Tex
     bp.current.?.end_index = end;
 }
 
-const HEADING_FORMAT = colors.CYAN.bold().fixed();
+const HEADING_FORMAT = (colors
+    .ComptimeFarbe.init()
+    .fgRgb(205, 175, 102)
+    .bold().fixed());
 
 pub fn addFormatted(
     bp: *BlockPrinter,

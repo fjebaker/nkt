@@ -1,130 +1,96 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
+const selections = @import("../selections.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
 pub const alias = [_][]const u8{"mv"};
 
-pub const help = "Move or rename a note, directory, journal, or tasklist.";
-pub const extended_help =
-    \\Move or rename a note, directory, journal, or tasklist.
-    \\
-    \\  nkt rename
-    \\     <from>
-    \\     <to>
-    \\
-    \\     --from-journal name   name of the journal to move from (else default)
-    \\     --to-journal name     name of the journal to move from (else default)
-    \\
-    \\     --from-tasklist name  name of the tasklist to move from (else default)
-    \\     --to-tasklist name    name of the tasklist to move from (else default)
-    \\
-    \\     --from-dir name       name of the dir to move from (else default)
-    \\     --to-dir name         name of the dir to move to (else default)
-    \\
-;
+pub const short_help = "Move or rename a note, directory, journal, or tasklist.";
+pub const long_help = short_help;
 
-from: cli.Selection = .{},
-to: cli.Selection = .{},
+pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
+    "from",
+    "The item to move from (see `help select`).",
+    .{ .required = true, .flag_prefix = "from-" },
+) ++
+    selections.selectHelp(
+    "to",
+    "The item to move to (see `help select`).",
+    .{ .required = true, .flag_prefix = "to-" },
+), .{});
 
-pub fn init(alloc: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var self: Self = .{};
+from: selections.Selection,
+to: selections.Selection,
 
-    var paths = std.ArrayList([]const u8).init(alloc);
-    errdefer paths.deinit();
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var args = try arguments.parseAll(itt);
 
-    itt.counter = 0;
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (try self.from.parseCollectionPrefixed("from-", arg, itt)) continue;
-            if (try self.to.parseCollectionPrefixed("to-", arg, itt)) continue;
-            return cli.CLIErrors.UnknownFlag;
-        } else {
-            switch (arg.index.?) {
-                1 => try self.from.parseItem(arg),
-                2 => try self.to.parseItem(arg),
-                else => return cli.CLIErrors.TooManyArguments,
-            }
+    const from = try selections.fromArgsPrefixed(
+        arguments.ParsedArguments,
+        args.from,
+        args,
+        "from-",
+    );
+    const to = try selections.fromArgsPrefixed(
+        arguments.ParsedArguments,
+        args.to,
+        args,
+        "to-",
+    );
+
+    return .{ .from = from, .to = to };
+}
+
+pub fn execute(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try root.load();
+
+    var from_item = try self.from.resolveReportError(root);
+    defer from_item.deinit();
+
+    if (try self.to.resolveOrNull(root)) |to_item| {
+        _ = to_item;
+        unreachable;
+    } else {
+        const to_name = self.to.selector.?.ByName;
+        switch (from_item) {
+            .Note => |*n| {
+                const old_name = n.note.name;
+                _ = try n.directory.rename(old_name, to_name);
+                root.markModified(n.directory.descriptor, .CollectionDirectory);
+                try root.writeChanges();
+                try writer.print(
+                    "Moved '{s}' [directory: '{s}'] -> '{s}' [directory: '{s}']\n",
+                    .{
+                        old_name, n.directory.descriptor.name,
+                        to_name,  n.directory.descriptor.name,
+                    },
+                );
+            },
+            .Entry, .Day => {
+                try cli.throwError(
+                    error.InvalidSelection,
+                    "Cannot move entries or days of journals.",
+                    .{},
+                );
+                unreachable;
+            },
+            else => unreachable,
         }
     }
 
-    if (!self.from.validate(.Item) or !self.to.validate(.Item)) {
-        return cli.CLIErrors.TooFewArguments;
-    }
-
-    return self;
-}
-
-pub fn run(
-    self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    var from: State.MaybeItem = (try self.from.find(state)) orelse
-        return cli.SelectionError.InvalidSelection;
-
-    // make sure selection resolves to a single item
-    if (from.numActive() > 1)
-        return cli.SelectionError.AmbiguousSelection;
-
-    const to_collection: cli.selections.CollectionSelection = if (self.to.collection) |col|
-        col
-    else blk: {
-        const collection_name = try from.collectionName();
-        const collection_type = try from.collectionType();
-        break :blk .{
-            .container = collection_type,
-            .name = collection_name,
-        };
-    };
-
-    // ensure the collection types match
-    if (try from.collectionType() != to_collection.container)
-        return cli.SelectionError.IncompatibleSelection;
-
-    // assert the destination name does not already exist in chosen container
-    var destination_collection =
-        state.getSelectedCollection(to_collection.container, to_collection.name) orelse
-        return cli.SelectionError.InvalidSelection;
-
-    // get the item name, and since we need it later, use the collection's
-    // managed memory
-    const destination_name =
-        try self.to.getItemName(destination_collection.allocator());
-
-    if (destination_collection.get(destination_name)) |_|
-        return cli.SelectionError.ChildAlreadyExists;
-
-    // all checks passed, do the rename
-    var item = try from.getActive();
-    const old_name = try state.allocator.dupe(u8, item.getName());
-    defer state.allocator.free(old_name);
-    try renameItemCollection(item, destination_name, destination_collection);
-
-    try state.writeChanges();
-    try out_writer.print(
-        "Renamed '{s}' in '{s} -> '{s}' in '{s}'\n",
-        .{
-            old_name,
-            try from.collectionName(),
-            item.getName(),
-            to_collection.name,
-        },
-    );
-}
-
-fn renameItemCollection(
-    from: State.Item,
-    to: []const u8,
-    to_collection: *State.Collection,
-) !void {
-    if (std.mem.eql(u8, from.collectionName(), to_collection.getName())) {
-        // only need to rename the item and rename the file
-        try from.rename(to);
-    } else {
-        unreachable; // todo
-    }
+    _ = allocator;
+    _ = opts;
 }

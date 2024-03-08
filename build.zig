@@ -4,8 +4,18 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const time = b.dependency("time", .{}).module("zig-datetime");
-    const farbe = b.dependency("farbe", .{}).module("farbe");
+    const time = b.dependency("time", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zig-datetime");
+    const farbe = b.dependency("farbe", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("farbe");
+    const chrono = b.dependency("chrono", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("chrono");
 
     const exe = b.addExecutable(.{
         .name = "nkt",
@@ -16,6 +26,7 @@ pub fn build(b: *std.Build) void {
 
     exe.addModule("time", time);
     exe.addModule("farbe", farbe);
+    exe.addModule("chrono", chrono);
 
     b.installArtifact(exe);
 

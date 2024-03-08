@@ -7,6 +7,10 @@
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
             .hash = "1220209352d22a38b0ec94f5bc1ab95dce7d77be65ed3f1d31b9cc58292e6279406b",
         },
+        .chrono = .{
+            .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
+            .hash = "12205af759b48c182d0e2cde151f3ff754178e8f61dcc59d590a4660aeac352c7476",
+        },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
             .hash = "12207269ace434bd258232591e0abea457fe6aab1a9e2e5faf17780107c35c8a932c",

@@ -1,74 +1,101 @@
 const std = @import("std");
-
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
-const tags = @import("../tags.zig");
+const selections = @import("../selections.zig");
 
-const colors = @import("../colors.zig");
-
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const help = "Create a new collection.";
-pub const extended_help =
-    \\Create a new collection.
-    \\  nkt new
-    \\     <collection type>     Choice of directory, journal, tasklist, chain, or tag
-    \\     <name>                name of the collection
-    \\
-;
+pub const short_help = "Create a new tag or collection.";
+pub const long_help = short_help;
 
-selection: cli.Selection,
+pub const arguments = cli.ArgumentsHelp(&.{
+    .{
+        .arg = "type",
+        .help = "What sort of type to create. Can be 'journal', 'tasklist', 'directory', 'chain' or 'tag'.",
+        .required = true,
+    },
+    .{
+        .arg = "name",
+        .help = "Name to assign to new object.",
+        .required = true,
+    },
+}, .{});
 
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    const selected = try cli.Selection.positionalNamedCollection(itt);
-    return .{ .selection = selected };
+const NewType = enum {
+    journal,
+    directory,
+    tasklist,
+    chain,
+    tag,
+};
+
+ctype: NewType,
+name: []const u8,
+
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    const args = try arguments.parseAll(itt);
+
+    const ctype = std.meta.stringToEnum(NewType, args.type) orelse {
+        try cli.throwError(
+            cli.CLIErrors.BadArgument,
+            "Not a known type: '{s}'",
+            .{args.type},
+        );
+        unreachable;
+    };
+
+    return .{ .ctype = ctype, .name = args.name };
 }
 
-pub fn run(self: *Self, state: *State, out_writer: anytype) !void {
-    if (self.selection.collection) |collection| {
-        const c = try state.newCollection(collection.container, collection.name);
-        try state.fs.makeDirIfNotExists(c.getPath());
+pub fn execute(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try root.load();
 
-        try state.writeChanges();
-        try out_writer.print(
-            "{s} '{s}' created\n",
-            .{
-                switch (collection.container) {
-                    inline else => |i| @tagName(i),
-                },
-                collection.name,
-            },
-        );
-    } else if (self.selection.tag) |tagname| {
-        const info: tags.TagInfo = .{
-            .name = tagname,
-            .color = colors.randomColor(),
-            .created = utils.now(),
-        };
+    _ = allocator;
+    _ = opts;
 
-        try state.addTagInfo(info);
-        try state.writeChanges();
+    switch (self.ctype) {
+        .journal => {
+            var c = try root.addNewCollection(self.name, .CollectionJournal);
+            defer c.deinit();
+        },
+        .directory => {
+            var c = try root.addNewCollection(self.name, .CollectionDirectory);
+            defer c.deinit();
+        },
+        .tasklist => {
+            var c = try root.addNewCollection(self.name, .CollectionTasklist);
+            defer c.deinit();
+        },
+        .chain => {
+            try root.addNewChain(.{
+                .name = self.name,
+                .created = time.timeNow(),
+            });
+        },
+        .tag => {
+            try root.addNewTag(tags.Tag.Descriptor.new(self.name));
+        },
+    }
 
-        try out_writer.print(
-            "New tag '{s}' created\n",
-            .{tagname},
-        );
-    } else if (self.selection.chain) |chainname| {
-        var alloc = state.topology.mem.allocator();
-        const new_chain: State.Chain = .{
-            .name = chainname,
-            .created = utils.now(),
-            .active = true,
-            .tags = try utils.emptyTagList(alloc),
-            .completed = try alloc.alloc(u64, 0),
-        };
-        try state.addChain(new_chain);
-        try state.writeChanges();
-        try out_writer.print(
-            "New chain '{s}' created\n",
-            .{chainname},
-        );
+    try writer.print(
+        "New '{s}' created with name '{s}'\n",
+        .{ @tagName(self.ctype), self.name },
+    );
+
+    switch (self.ctype) {
+        .chain => try root.writeChains(),
+        .tag => try root.writeTags(),
+        else => try root.writeChanges(),
     }
 }
