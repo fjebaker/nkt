@@ -67,6 +67,7 @@ pub fn readFileAlloc(
     alloc: std.mem.Allocator,
     rel_path: []const u8,
 ) ![]u8 {
+    std.log.default.debug("Reading file {s}", .{rel_path});
     var file = try self.dir.openFile(rel_path, .{ .mode = .read_only });
     defer file.close();
     return file.readToEndAlloc(alloc, MAXIMUM_BYTES_READ);

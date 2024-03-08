@@ -1,9 +1,11 @@
 const std = @import("std");
 const FileSystem = @import("../FileSystem.zig");
-const Root = @import("Root.zig");
+const Root = @import("../topology/Root.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
 
 pub const Error = error{UnknownVersion};
 
+/// Migrate path and over-ride `root_dir`
 pub fn migratePath(allocator: std.mem.Allocator, root_dir: []const u8) !void {
     var old = try FileSystem.init(root_dir);
     defer old.deinit();
@@ -36,7 +38,7 @@ fn migrateFileSystem(allocator: std.mem.Allocator, old: *FileSystem) !void {
     const version = try parsed.toSemanticVersion();
 
     // init with non-arena allocator so that it is not freed at the end
-    var new = try Root.new(alloc);
+    var new = Root.new(alloc);
 
     if (version.major == 0 and version.minor == 2 and version.patch == 0) {
         try migrate_0_2_0(alloc, old, &new, data);
@@ -44,17 +46,13 @@ fn migrateFileSystem(allocator: std.mem.Allocator, old: *FileSystem) !void {
         return Error.UnknownVersion;
     }
 
+    new.fs = old.*;
     // new file system
-    const new_path = try std.fs.path.join(
-        alloc,
-        &.{ try std.fs.cwd().realpathAlloc(alloc, "."), "test-migration" },
-    );
-    var new_fs = try FileSystem.initElseCreate(new_path);
-    new.fs = new_fs;
     try new.createFilesystem();
+    try new.writeChanges();
 }
 
-const Topology_0_2_0 = @import("../Topology.zig");
+const Topology_0_2_0 = @import("Topology_0_2_0.zig");
 fn migrate_0_2_0(
     allocator: std.mem.Allocator,
     fs: *FileSystem,
@@ -108,10 +106,14 @@ fn migrate_0_2_0(
         const tasks = try Topology_0_2_0.parseTasks(allocator, content);
         for (tasks) |t| {
             try tasklist.addNewTask(.{
-                .outcome = t.outcome,
+                .outcome = t.title,
                 .details = t.details,
                 .created = t.created,
                 .modified = t.modified,
+                .hash = Tasklist.hash(.{
+                    .action = null,
+                    .outcome = t.title,
+                }),
                 .due = t.due,
                 .done = t.completed,
                 .archived = t.archived,
@@ -158,6 +160,9 @@ fn migrate_0_2_0(
                 });
             }
         }
+
+        journal.fs = fs.*;
+        try journal.writeDays();
     }
 
     // migrate directories

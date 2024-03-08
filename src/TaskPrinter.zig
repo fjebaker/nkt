@@ -217,13 +217,13 @@ fn printTask(
 
     if (full_hash) {
         try fp.addFmtText(
-            "/{x}",
+            "/{x:0>16}",
             .{entry.task.hash},
             .{ .fmt = colors.DIM.fixed() },
         );
     } else {
         try fp.addFmtText(
-            "/{x}",
+            "/{x:0>5}",
             .{@as(u20, @intCast(utils.getMiniHash(entry.task.hash, 5)))},
             .{ .fmt = colors.DIM.fixed() },
         );
