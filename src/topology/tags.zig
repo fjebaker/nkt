@@ -152,7 +152,7 @@ pub fn parseInlineTags(
     text: []const u8,
     now: Time,
 ) ![]Tag {
-    var positions = try parseInlineTagPositions(allocator, text);
+    const positions = try parseInlineTagPositions(allocator, text);
     defer allocator.free(positions);
 
     var tags = try std.ArrayList(Tag).initCapacity(allocator, positions.len);
@@ -347,7 +347,7 @@ pub fn parseInlineWithAdditional(
     const now = time.timeNow();
 
     // parse all the context tags and add them to the given tags
-    var inline_tags: []Tag = if (text) |txt|
+    const inline_tags: []Tag = if (text) |txt|
         try parseInlineTags(allocator, txt, now)
     else
         &.{};

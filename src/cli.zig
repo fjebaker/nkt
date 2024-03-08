@@ -540,7 +540,7 @@ fn makeField(
     const T = info.GetType();
     const default = info.getDefaultValue();
     return .{
-        .name = arg_name,
+        .name = @ptrCast(arg_name),
         .type = T,
         .default_value = @ptrCast(&@as(T, default)),
         .is_comptime = false,

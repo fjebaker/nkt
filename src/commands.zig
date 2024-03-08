@@ -49,7 +49,7 @@ pub const Commands = union(enum) {
 
         // create a buffered writer
         var out_buffered = std.io.bufferedWriter(out_fd.writer());
-        var out = out_buffered.writer();
+        const out = out_buffered.writer();
 
         // construct runtime options
         const opts: Options = .{

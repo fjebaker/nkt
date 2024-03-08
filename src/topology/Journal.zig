@@ -160,7 +160,7 @@ fn newDayFromName(self: *Journal, name: []const u8) !Day {
 
 fn newPathFromName(self: *Journal, name: []const u8) ![]const u8 {
     const dirname = std.fs.path.dirname(self.descriptor.path).?;
-    var alloc = self.getTmpAllocator();
+    const alloc = self.getTmpAllocator();
     return std.fs.path.join(
         alloc,
         &.{ dirname, try std.mem.join(
@@ -231,7 +231,7 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
     // otherwise we read from file
     var fs = self.fs orelse return error.NeedsFileSystem;
 
-    var entries = try self.readDayFromPath(&fs, day.path);
+    const entries = try self.readDayFromPath(&fs, day.path);
 
     // add to the chache
     try map.put(day.path, std.ArrayList(Entry).fromOwnedSlice(
@@ -285,10 +285,10 @@ fn addDayToStage(
     map: *StagedEntries,
     path: []const u8,
 ) !void {
-    var alloc = self.getTmpAllocator();
+    const alloc = self.getTmpAllocator();
     if (self.fs) |*fs| {
         // read entries and init owned list
-        var entries = try self.readDayFromPath(fs, path);
+        const entries = try self.readDayFromPath(fs, path);
         try map.put(path, std.ArrayList(Entry).fromOwnedSlice(
             alloc,
             entries,
@@ -337,7 +337,7 @@ pub fn addNewEntryToDay(
 /// Add a new entry to the appropriate day as given by the `created` timestamp
 /// in the entry.
 pub fn addEntry(self: *Journal, entry: Entry) !Day {
-    var alloc = self.getTmpAllocator();
+    const alloc = self.getTmpAllocator();
     // get the day this entry belongs to
     const day_name = try timeToName(alloc, entry.created);
     const day = try self.getDayOrNew(day_name);
@@ -365,7 +365,7 @@ pub fn addNewEntryFromText(
 
 /// Write all days that have staged changes to disk
 pub fn writeDays(self: *Journal) !void {
-    var fs = self.fs orelse return error.NeedsFileSystem;
+    const fs = self.fs orelse return error.NeedsFileSystem;
     var map = self.staged_entries orelse {
         std.log.default.debug("No staged entries for Journal '{s}'", .{self.descriptor.name});
         return;

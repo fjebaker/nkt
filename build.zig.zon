@@ -5,15 +5,15 @@
     .dependencies = .{
         .time = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
-            .hash = "1220209352d22a38b0ec94f5bc1ab95dce7d77be65ed3f1d31b9cc58292e6279406b",
+            .hash = "122038b4b5df08d2af6daf81e5f18d4c244d807c9323224db826cc107ce3894f6fa9",
         },
         .chrono = .{
             .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
-            .hash = "12205af759b48c182d0e2cde151f3ff754178e8f61dcc59d590a4660aeac352c7476",
+            .hash = "1220e9cc30b0fb9a096fc4d65000071e1b46fd3de7310206560336268ff0a55e7e26",
         },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
-            .hash = "12207269ace434bd258232591e0abea457fe6aab1a9e2e5faf17780107c35c8a932c",
+            .hash = "1220623c42ffb9f78fdd017f10e3ba2291210965893b22efc062f4f24d7ad306651b",
         },
     },
 }

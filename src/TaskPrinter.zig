@@ -103,7 +103,7 @@ fn formatTimeAlloc(
 }
 
 pub fn add(self: *Self, task: Task, index: ?usize) !void {
-    var alloc = self.mem.allocator();
+    const alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
 
     // make date pretty
@@ -178,7 +178,7 @@ fn printTask(
     details: bool,
     full_hash: bool,
 ) !void {
-    var allocator = fp.mem.allocator();
+    const allocator = fp.mem.allocator();
 
     if (entry.index) |index| {
         try fp.addFmtText(

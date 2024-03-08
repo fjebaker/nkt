@@ -207,7 +207,7 @@ fn listTags(
     opts: commands.Options,
 ) !void {
     _ = opts;
-    var tdl = try root.getTagDescriptorList();
+    const tdl = try root.getTagDescriptorList();
 
     var printer = FormatPrinter.init(allocator, .{
         .pretty = true,
@@ -249,7 +249,7 @@ fn listTasklist(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    var maybe_tl = try root.getTasklist(tl.name);
+    const maybe_tl = try root.getTasklist(tl.name);
     var tasklist = maybe_tl orelse {
         try cli.throwError(
             Root.Error.NoSuchCollection,
@@ -315,7 +315,7 @@ fn listDirectory(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    var maybe_dir = try root.getDirectory(d.name);
+    const maybe_dir = try root.getDirectory(d.name);
     var dir = maybe_dir orelse {
         try cli.throwError(
             Root.Error.NoSuchCollection,

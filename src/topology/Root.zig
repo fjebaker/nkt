@@ -167,13 +167,13 @@ fs: ?FileSystem = null,
 
 /// Initialize a new `Root` with all default values
 pub fn new(alloc: std.mem.Allocator) Root {
-    var info: Info = .{
+    const info: Info = .{
         .tasklists = &.{},
         .directories = &.{},
         .journals = &.{},
     };
 
-    var cache = Cache.init(alloc);
+    const cache = Cache.init(alloc);
 
     return .{
         .info = info,
@@ -197,7 +197,7 @@ pub fn load(self: *Root) !void {
 /// Load the `Root.Info` from a JSON string. Will make copies of all strings,
 /// so the input string may be freed later.
 pub fn loadFromString(self: *Root, string: []const u8) !void {
-    var alloc = self.arena.allocator();
+    const alloc = self.arena.allocator();
     self.info = try std.json.parseFromSliceLeaky(
         Info,
         alloc,
@@ -245,7 +245,7 @@ pub fn readTaglist(self: *Root, fs: *FileSystem) !void {
 /// Get the `tags.DescriptorList` for all of the tags. Will attempt to read
 /// from disk if not already cached.
 pub fn getTagDescriptorList(self: *Root) !tags.DescriptorList {
-    var tl = try self.getTagDescriptorListPtr();
+    const tl = try self.getTagDescriptorListPtr();
     return tl.*;
 }
 
@@ -304,14 +304,14 @@ fn createFileStructure(
 
 /// Returns a slice with all currently loaded chains.
 pub fn getChains(self: *Root) ![]const chains.Chain {
-    var chainlist = try self.getChainList();
+    const chainlist = try self.getChainList();
     return chainlist.chains;
 }
 
 /// Return a list of `Tag.Descriptor` of the valid tags. If no filesystem is
 /// given, returns an empty list.
 pub fn getTags(self: *Root) ?[]const Tag.Descriptor {
-    var list = try self.getTagDescriptorListPtr();
+    const list = try self.getTagDescriptorListPtr();
     return list.tags;
 }
 
@@ -358,7 +358,7 @@ pub fn getDescriptor(
 }
 
 test "add and get descriptors" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var root = Root.new(alloc);
     defer root.deinit();
 
@@ -519,7 +519,7 @@ fn newPathFrom(
     name: []const u8,
     comptime t: CollectionType,
 ) ![]const u8 {
-    var alloc = self.arena.allocator();
+    const alloc = self.arena.allocator();
     const base_dir = switch (t) {
         .CollectionDirectory => try std.mem.join(
             alloc,
@@ -592,7 +592,7 @@ fn collectionFromInfoPtr(
     comptime t: CollectionType,
     info_ptr: *t.ToType().Info,
 ) !t.ToType() {
-    var tag_list = try self.getTagDescriptorListPtr();
+    const tag_list = try self.getTagDescriptorListPtr();
     return switch (t) {
         .CollectionJournal => .{
             .info = info_ptr,
@@ -670,9 +670,9 @@ pub fn getCollection(
     defer self.allocator.free(info_content);
 
     const InfoType = t.ToType().Info;
-    var alloc = self.arena.allocator();
+    const alloc = self.arena.allocator();
 
-    var info = try std.json.parseFromSliceLeaky(
+    const info = try std.json.parseFromSliceLeaky(
         InfoType,
         alloc,
         info_content,
@@ -831,7 +831,7 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
 
 /// Write only modified collections back to the disk
 pub fn writeChanges(self: *Root) !void {
-    var fs = self.getFileSystem() orelse
+    const fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
     try self.writeModifiedCollections(fs, .CollectionJournal);

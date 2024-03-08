@@ -28,7 +28,7 @@ pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{.{
 what: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
     return .{
         .what = args.what,
     };
@@ -47,7 +47,7 @@ pub fn execute(
 
     const dirname = root.info.default_directory;
 
-    var dir = (try root.getDirectory(dirname)) orelse {
+    const dir = (try root.getDirectory(dirname)) orelse {
         try cli.throwError(
             Root.Error.NoSuchCollection,
             "No such directory '{s}'",
@@ -95,7 +95,7 @@ fn getAllPaths(alloc: std.mem.Allocator, root: *Root) ![][]const u8 {
     errdefer paths.deinit();
 
     for (root.info.directories) |d| {
-        var dir = (try root.getDirectory(d.name)).?;
+        const dir = (try root.getDirectory(d.name)).?;
         for (dir.info.notes) |note| {
             try paths.append(note.path);
         }

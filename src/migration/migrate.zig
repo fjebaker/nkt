@@ -24,7 +24,7 @@ const SchemaReader = struct {
 fn migrateFileSystem(allocator: std.mem.Allocator, old: *FileSystem) !void {
     var mem = std.heap.ArenaAllocator.init(allocator);
     defer mem.deinit();
-    var alloc = mem.allocator();
+    const alloc = mem.allocator();
 
     const data = try old.readFileAlloc(alloc, "topology.json");
     // learn what schema version we are migrating from

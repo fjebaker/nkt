@@ -99,7 +99,8 @@ pub fn hash(comptime T: type, key: T) u64 {
     if (T == []const u8) {
         return std.hash.Wyhash.hash(0, key);
     }
-    if (comptime std.meta.trait.hasUniqueRepresentation(T)) {
+
+    if (comptime std.meta.hasUniqueRepresentation(T)) {
         return std.hash.Wyhash.hash(0, std.mem.asBytes(&key));
     } else {
         var hasher = std.hash.Wyhash.init(0);

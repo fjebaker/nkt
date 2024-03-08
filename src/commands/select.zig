@@ -25,7 +25,7 @@ pub const arguments = cli.ArgumentsHelp(
 selection: selections.Selection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
 
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,

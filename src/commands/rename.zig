@@ -30,7 +30,7 @@ from: selections.Selection,
 to: selections.Selection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
 
     const from = try selections.fromArgsPrefixed(
         arguments.ParsedArguments,

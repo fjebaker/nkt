@@ -86,7 +86,7 @@ pub fn execute(
     // TODO: fix pretty printing toggles
     try printHeadings(writer, padding, first_items, true);
     for (all_chains) |chain| {
-        var items = try prepareChain(
+        const items = try prepareChain(
             alloc,
             today,
             self.num_days,

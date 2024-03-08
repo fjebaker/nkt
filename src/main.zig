@@ -22,9 +22,9 @@ test "main" {
 }
 
 // configure logging
-pub const std_options = struct {
+pub const std_options: std.Options = .{
     // Define logFn to override the std implementation
-    pub const logFn = loggerFn;
+    .logFn = loggerFn,
 };
 
 pub fn loggerFn(

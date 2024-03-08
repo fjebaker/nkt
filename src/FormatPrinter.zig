@@ -74,7 +74,7 @@ pub fn getTagFormat(
 fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
     const text = parser.text;
     const start = parser.i - 1;
-    var allocator = fp.mem.allocator();
+    const allocator = fp.mem.allocator();
     switch (text[start]) {
         '@' => {
             if (tags.getTagString(text[start..]) catch null) |tag_name| {

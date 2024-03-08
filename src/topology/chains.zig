@@ -112,7 +112,7 @@ pub fn readChainList(allocator: std.mem.Allocator, content: []const u8) !ChainLi
     var mem = std.heap.ArenaAllocator.init(allocator);
     errdefer mem.deinit();
 
-    var chains = try std.json.parseFromSliceLeaky(
+    const chains = try std.json.parseFromSliceLeaky(
         ChainWrapper,
         mem.allocator(),
         content,

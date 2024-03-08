@@ -24,9 +24,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.addModule("time", time);
-    exe.addModule("farbe", farbe);
-    exe.addModule("chrono", chrono);
+    exe.root_module.addImport("time", time);
+    exe.root_module.addImport("farbe", farbe);
+    exe.root_module.addImport("chrono", chrono);
 
     b.installArtifact(exe);
 
@@ -48,8 +48,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    unit_tests.addModule("time", time);
-    unit_tests.addModule("farbe", farbe);
+    unit_tests.root_module.addImport("time", time);
+    unit_tests.root_module.addImport("farbe", farbe);
+    unit_tests.root_module.addImport("chrono", chrono);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 

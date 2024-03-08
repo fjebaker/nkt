@@ -45,7 +45,7 @@ pub const arguments = cli.ArgumentsHelp(&.{
 args: arguments.ParsedArguments,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
     return .{ .args = args };
 }
 

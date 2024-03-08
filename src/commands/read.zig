@@ -134,7 +134,7 @@ pub fn execute(
     defer allocator.free(selected_tags);
 
     const N = try extractLineLimit(self.args);
-    var tdl = try root.getTagDescriptorList();
+    const tdl = try root.getTagDescriptorList();
 
     var bprinter = BlockPrinter.init(allocator, .{
         .max_lines = N,

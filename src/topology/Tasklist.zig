@@ -248,7 +248,7 @@ pub fn removeTask(self: *Tasklist, task: Task) !void {
 /// Get task by index. Returns `null` if no task found.
 pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
     const map = try self.makeIndexMap();
-    var i = std.mem.indexOfScalar(?usize, map, index) orelse
+    const i = std.mem.indexOfScalar(?usize, map, index) orelse
         return null;
     return self.info.tasks[i];
 }
@@ -261,7 +261,7 @@ pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
     std.mem.reverse(Task, self.info.tasks);
 
     var alloc = self.allocator;
-    var index_map = b: {
+    const index_map = b: {
         if (self.index_map) |im| {
             if (im.len == self.info.tasks.len) {
                 break :b self.index_map.?;

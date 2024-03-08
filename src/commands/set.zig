@@ -57,7 +57,7 @@ const SetSelection = union(enum) {
 selection: SetSelection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
 
     const what = std.meta.stringToEnum(SetVerbs, args.what) orelse {
         try cli.throwError(

@@ -74,7 +74,7 @@ pub fn addNewNoteByName(
     if (self.getNote(name)) |_| return Error.DuplicateNote;
 
     const now = time.timeNow();
-    var note: Note = .{
+    const note: Note = .{
         .name = name,
         .path = try self.newPathFromName(name, opts.extension),
         .created = now,
@@ -92,7 +92,7 @@ fn newPathFromName(
     extension: []const u8,
 ) ![]const u8 {
     const dirname = std.fs.path.dirname(self.descriptor.path).?;
-    var alloc = self.getTmpAllocator();
+    const alloc = self.getTmpAllocator();
     return std.fs.path.join(
         alloc,
         &.{ dirname, try std.mem.join(
@@ -140,7 +140,7 @@ pub fn updateNote(self: *Directory, name: []const u8, new: Note) !Note {
     // TODO: maybe make copies of the slices?
     // TODO: store the note index with the note on retrieval so we don't have
     // to do this lookup twice, else even just hand around the pointer?
-    var note_ptr = self.getNotePtr(name) orelse return Error.NoSuchNote;
+    const note_ptr = self.getNotePtr(name) orelse return Error.NoSuchNote;
     note_ptr.* = new;
     return note_ptr.*;
 }

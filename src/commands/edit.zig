@@ -46,7 +46,7 @@ selection: selections.Selection,
 opts: EditOptions,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var args = try arguments.parseAll(itt);
+    const args = try arguments.parseAll(itt);
 
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,

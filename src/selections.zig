@@ -460,7 +460,7 @@ fn testSelectionResolve(
 }
 
 test "resolve selections" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var root = Root.new(alloc);
     defer root.deinit();
 
