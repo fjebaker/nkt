@@ -51,7 +51,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
 pub fn execute(
     self: *Self,
-    _: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     root: *Root,
     _: anytype,
     _: commands.Options,
@@ -79,6 +79,22 @@ pub fn execute(
         .action = self.args.action,
     });
 
+    const total_string = try std.mem.join(
+        allocator,
+        " ",
+        &.{ self.args.outcome, self.args.action orelse "" },
+    );
+    defer allocator.free(total_string);
+
+    // parse the tags from the outcome and action
+    const task_tags = try utils.parseAndAssertValidTags(
+        allocator,
+        root,
+        total_string,
+        &.{},
+    );
+    defer allocator.free(task_tags);
+
     const new_task: Tasklist.Task = .{
         .outcome = self.args.outcome,
         .action = self.args.action,
@@ -88,7 +104,7 @@ pub fn execute(
         .modified = now,
         .due = try utils.parseDue(now, self.args.due),
         .importance = try utils.parseImportance(self.args.importance),
-        .tags = &.{},
+        .tags = task_tags,
     };
 
     tl.addNewTask(new_task) catch |err| {
