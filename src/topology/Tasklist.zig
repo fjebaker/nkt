@@ -173,6 +173,21 @@ pub fn getTaskByMiniHash(self: *Tasklist, h: u64) !?Task {
     return selected;
 }
 
+/// Rename and move files associated with the Note at `old_name` to `new_name`.
+pub fn rename(
+    self: *Tasklist,
+    old: Task,
+    new_outcome: []const u8,
+) !Task {
+    var ptr = self.getTaskByHashPtr(old.hash) orelse
+        return Error.NoSuchTask;
+    ptr.outcome = new_outcome;
+    // recompute hash
+    ptr.hash = hash(.{ .outcome = new_outcome, .action = old.action });
+    ptr.modified = time.timeNow();
+    return ptr.*;
+}
+
 test "get by mini hash" {
     var tasks = [_]Task{
         .{

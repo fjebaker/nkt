@@ -87,6 +87,19 @@ pub fn execute(
                 );
                 unreachable;
             },
+            .Task => |*t| {
+                const old_name = t.task.outcome;
+                _ = try t.tasklist.rename(t.task, to_name);
+                root.markModified(t.tasklist.descriptor, .CollectionTasklist);
+                try root.writeChanges();
+                try writer.print(
+                    "Moved '{s}' [tasklist: '{s}'] -> '{s}' [tasklist: '{s}']\n",
+                    .{
+                        old_name, t.tasklist.descriptor.name,
+                        to_name,  t.tasklist.descriptor.name,
+                    },
+                );
+            },
             else => unreachable,
         }
     }
