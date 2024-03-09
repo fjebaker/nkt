@@ -360,3 +360,110 @@ pub fn parseInlineWithAdditional(
 
     return try all_tags.toOwnedSlice();
 }
+
+/// Set difference between two lists of tags. Returns all those tags in A that are not in B.
+pub fn setDifference(
+    allocator: std.mem.Allocator,
+    list_A: []const Tag,
+    list_B: []const Tag,
+) ![]const Tag {
+    var list = std.ArrayList(Tag).init(allocator);
+
+    for (list_A) |t1| {
+        for (list_B) |t2| {
+            if (t1.eql(t2)) break;
+        } else {
+            try list.append(t1);
+        }
+    }
+
+    return try list.toOwnedSlice();
+}
+
+test "tag difference" {
+    const alloc = std.testing.allocator;
+
+    const diff = try setDifference(
+        alloc,
+        &.{ .{
+            .name = "A",
+            .added = 0,
+        }, .{
+            .name = "B",
+            .added = 0,
+        } },
+        &.{.{
+            .name = "A",
+            .added = 0,
+        }},
+    );
+    defer alloc.free(diff);
+
+    try std.testing.expectEqualDeep(
+        &[_]Tag{.{
+            .name = "B",
+            .added = 0,
+        }},
+        diff,
+    );
+}
+
+/// Returns the union of two tag sets. Will remove duplicate tags.
+pub fn setUnion(
+    allocator: std.mem.Allocator,
+    list_A: []const Tag,
+    list_B: []const Tag,
+) ![]const Tag {
+    var list = std.ArrayList(Tag).init(allocator);
+
+    // TODO: this algorithm can be made much more efficient
+
+    for (list_A) |t1| {
+        for (list.items) |t| {
+            if (t.eql(t1)) break;
+        } else {
+            try list.append(t1);
+        }
+    }
+
+    for (list_B) |t1| {
+        for (list.items) |t| {
+            if (t.eql(t1)) break;
+        } else {
+            try list.append(t1);
+        }
+    }
+
+    return try list.toOwnedSlice();
+}
+
+test "tag union" {
+    const alloc = std.testing.allocator;
+
+    const diff = try setUnion(
+        alloc,
+        &.{ .{
+            .name = "A",
+            .added = 0,
+        }, .{
+            .name = "B",
+            .added = 0,
+        } },
+        &.{.{
+            .name = "A",
+            .added = 0,
+        }},
+    );
+    defer alloc.free(diff);
+
+    try std.testing.expectEqualDeep(
+        &[_]Tag{ .{
+            .name = "A",
+            .added = 0,
+        }, .{
+            .name = "B",
+            .added = 0,
+        } },
+        diff,
+    );
+}

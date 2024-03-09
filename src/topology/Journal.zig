@@ -346,6 +346,22 @@ pub fn addEntry(self: *Journal, entry: Entry) !Day {
     return day;
 }
 
+/// Get a pointer to a known entry.
+pub fn getEntryPtr(self: *Journal, day: Day, entry: Entry) !*Entry {
+    var map = self.getStagedEntries();
+    if (map.getPtr(day.path)) |entry_list| {
+        for (entry_list.items) |*ptr| {
+            if (std.mem.eql(u8, ptr.text, entry.text) and
+                ptr.created == entry.created)
+            {
+                return ptr;
+            }
+        }
+    }
+    // TODO: handle this
+    unreachable;
+}
+
 /// Add a new entry with `text` with a list of additional tags. Will also parse
 /// the text for context tags and append. The additional tags should already
 /// have the `@` trimmed.

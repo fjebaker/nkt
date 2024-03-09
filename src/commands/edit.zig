@@ -167,6 +167,75 @@ fn editElseMaybeCreate(
                     e_opts,
                 );
             },
+            .Entry => |*e| {
+                var editor = try Editor.init(allocator);
+                defer editor.deinit();
+
+                // todo: might lead to topology getting out of sync
+                const new_entry = try editor.editTemporaryContent(
+                    allocator,
+                    e.entry.text,
+                );
+                defer allocator.free(new_entry);
+
+                const new_text = std.mem.trim(u8, new_entry, "\r\n\t ");
+
+                if (std.mem.eql(u8, new_text, e.entry.text)) {
+                    std.log.default.debug("No changes to task made", .{});
+                    return;
+                }
+
+                // difference in tags
+                const old_entry_tags = try utils.parseAndAssertValidTags(
+                    allocator,
+                    root,
+                    new_text,
+                    &.{},
+                );
+                defer allocator.free(old_entry_tags);
+
+                const additional_tags = try tags.setDifference(
+                    allocator,
+                    e.entry.tags,
+                    old_entry_tags,
+                );
+                defer allocator.free(additional_tags);
+
+                const entry_tags = try utils.parseAndAssertValidTags(
+                    allocator,
+                    root,
+                    new_text,
+                    &.{},
+                );
+                defer allocator.free(entry_tags);
+
+                const new_tags = try tags.setUnion(
+                    allocator,
+                    entry_tags,
+                    additional_tags,
+                );
+                defer allocator.free(new_tags);
+
+                var ptr = try e.journal.getEntryPtr(e.day, e.entry);
+                ptr.text = new_text;
+                ptr.tags = new_tags;
+                ptr.modified = time.timeNow();
+                root.markModified(e.journal.descriptor, .CollectionJournal);
+
+                try e.journal.writeDays();
+                try root.writeChanges();
+                try writer.print(
+                    "Entry '{s}' in day '{s}' updated\n",
+                    .{
+                        try time.formatTimeBuf(opts.tz.makeLocal(
+                            time.dateFromTime(ptr.created),
+                        )),
+                        try time.formatDateBuf(opts.tz.makeLocal(
+                            time.dateFromTime(e.day.created),
+                        )),
+                    },
+                );
+            },
             else => {
                 // TODO: implement all the others
                 unreachable;
