@@ -139,6 +139,7 @@ pub fn execute(
     var bprinter = BlockPrinter.init(allocator, .{
         .max_lines = N,
         .tag_descriptors = tdl.tags,
+        .pretty = !opts.piped,
     });
     defer bprinter.deinit();
 
