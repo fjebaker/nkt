@@ -288,7 +288,7 @@ fn listTasks(
     var printer = TaskPrinter.init(
         allocator,
         .{
-            .pretty = true,
+            .pretty = !opts.piped,
             .tag_descriptors = tag_descriptors.tags,
             .full_hash = tl.hash,
             .tz = opts.tz,
