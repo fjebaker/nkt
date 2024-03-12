@@ -89,8 +89,11 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     var args = try parser.getParsed();
     if (args.item) |item| {
-        try addTag(&tag_list, item);
-        args.item = null;
+        if (item[0] == '@') {
+            try addTag(&tag_list, item);
+            // don't try and process as selection
+            args.item = null;
+        }
     }
     const selection = try selections.fromArgs(
         arguments.ParsedArguments,
