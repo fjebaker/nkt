@@ -162,13 +162,36 @@ pub fn drain(
     const col_widths = self.columnWidth();
 
     try fp.addText("\n", .{});
+
+    var previous: ?FormattedTask = null;
     for (self.entries.items) |item| {
+        if (needsSeperator(previous, item)) {
+            try fp.addText("\n", .{});
+        }
         try printTask(&fp, item, col_widths, details, self.opts.full_hash);
         try fp.addText("\n", .{});
+        previous = item;
     }
     try fp.addText("\n", .{});
 
     try fp.drain(writer);
+}
+
+fn needsSeperator(prev: ?FormattedTask, current: FormattedTask) bool {
+    const p = prev orelse return false;
+
+    const p_due = p.task.due orelse {
+        // print spacer between those we due dates and those without
+        return current.task.due != null;
+    };
+
+    const c_due = current.task.due.?;
+
+    // if they are both overdue, no gap
+    if (p.status == .PastDue and current.status == .PastDue) return false;
+
+    const t_diff = time.absTimeDiff(p_due, c_due);
+    return t_diff > std.time.ms_per_day;
 }
 
 fn printTask(

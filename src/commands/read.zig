@@ -338,13 +338,8 @@ fn printEntriesOrEvents(
         // if there is more than an hour between two entries, print a newline
         // to separate clearer
         if (previous) |prev| {
-            const prev_time = prev.getTime();
-            const curr_time = entry.getTime();
-            const diff = if (prev_time < curr_time)
-                curr_time - prev_time
-            else
-                prev_time - curr_time;
-            if (diff > std.time.ms_per_hour) {
+            const t_diff = time.absTimeDiff(prev.getTime(), entry.getTime());
+            if (t_diff > std.time.ms_per_hour) {
                 try printer.addToCurrent("\n", .{ .is_counted = false });
             }
         }

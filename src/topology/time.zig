@@ -418,3 +418,11 @@ test "time parsing" {
         nowish.shiftDays(1).shiftHours(2).shiftMinutes(30),
     );
 }
+
+/// Get the absolute time difference between two `Time`
+pub fn absTimeDiff(t1: Time, t2: Time) Time {
+    if (t1 < t2) {
+        return t2 - t1;
+    }
+    return t1 - t2;
+}
