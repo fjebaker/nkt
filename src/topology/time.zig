@@ -77,8 +77,13 @@ pub fn endOfDay(day: Date) Date {
         i64,
         @intFromFloat(day.time.toSeconds()),
     );
-    const day_end = day.shiftSeconds(second_to_day_end - 1);
-    return day_end;
+    return day.shiftSeconds(second_to_day_end - 1);
+}
+/// Get the start of the day `Date` from a `Date`. This is the equivalent to
+/// 00:00:00.
+pub fn startOfDay(day: Date) Date {
+    const seconds_to_start: i64 = @intFromFloat(day.time.toSeconds());
+    return day.shiftSeconds(-seconds_to_start);
 }
 
 /// Turn a `Time` into a `Date`

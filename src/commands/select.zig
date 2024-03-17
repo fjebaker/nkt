@@ -1,5 +1,6 @@
 const std = @import("std");
 const selections = @import("../selections.zig");
+const abstractions = @import("../abstractions.zig");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 
@@ -49,7 +50,7 @@ pub fn execute(
     try handleSelection(writer, item);
 }
 
-fn handleSelection(writer: anytype, item: selections.Item) !void {
+fn handleSelection(writer: anytype, item: abstractions.Item) !void {
     switch (item) {
         .Day => |d| {
             try writer.print(

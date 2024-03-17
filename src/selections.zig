@@ -9,6 +9,8 @@ const Journal = @import("topology/Journal.zig");
 const Directory = @import("topology/Directory.zig");
 const Tasklist = @import("topology/Tasklist.zig");
 
+const Item = @import("abstractions.zig").Item;
+
 pub const Error = error{
     /// Selection does not uniquely select an item
     AmbiguousSelection,
@@ -51,112 +53,6 @@ pub const Selector = union(Method) {
     pub fn today() Method {
         const date = time.Date.now();
         return .{ .ByDate = date };
-    }
-};
-
-/// Structure representing the resolution of a `Selection`
-pub const Item = union(enum) {
-    Entry: struct {
-        journal: Journal,
-        day: Journal.Day,
-        entry: Journal.Entry,
-    },
-    Day: struct {
-        journal: Journal,
-        day: Journal.Day,
-    },
-    Note: struct {
-        directory: Directory,
-        note: Directory.Note,
-    },
-    Task: struct {
-        tasklist: Tasklist,
-        task: Tasklist.Task,
-    },
-    Collection: union(enum) {
-        directory: Directory,
-        journal: Journal,
-        tasklist: Tasklist,
-        // TODO: chains, etc.
-
-        /// Call the relevant destructor irrelevant of active field.
-        pub fn deinit(self: *@This()) void {
-            switch (self.*) {
-                inline else => |*i| i.deinit(),
-            }
-            self.* = undefined;
-        }
-
-        fn eql(i: @This(), j: @This()) bool {
-            if (std.meta.activeTag(i) != std.meta.activeTag(j))
-                return false;
-
-            switch (i) {
-                inline else => |ic| {
-                    switch (j) {
-                        inline else => |jc| return std.mem.eql(
-                            u8,
-                            ic.descriptor.path,
-                            jc.descriptor.path,
-                        ),
-                    }
-                },
-            }
-        }
-    },
-
-    /// Call the relevant destructor irrelevant of active field.
-    pub fn deinit(self: *Item) void {
-        switch (self.*) {
-            .Entry => |*i| i.journal.deinit(),
-            .Day => |*i| i.journal.deinit(),
-            .Note => |*i| i.directory.deinit(),
-            .Task => |*i| i.tasklist.deinit(),
-            .Collection => |*i| i.deinit(),
-        }
-        self.* = undefined;
-    }
-
-    fn eql(i: Item, j: Item) bool {
-        if (std.meta.activeTag(i) != std.meta.activeTag(j))
-            return false;
-        switch (i) {
-            .Entry => |is| {
-                const js = j.Entry;
-                return std.mem.eql(u8, js.entry.text, is.entry.text);
-            },
-            .Day => |id| {
-                const jd = j.Day;
-                return std.mem.eql(u8, jd.day.name, id.day.name) and
-                    std.mem.eql(
-                    u8,
-                    id.journal.descriptor.name,
-                    id.journal.descriptor.name,
-                );
-            },
-            .Note => |in| {
-                const jn = j.Note;
-                return std.mem.eql(u8, in.note.name, jn.note.name) and
-                    std.mem.eql(
-                    u8,
-                    in.directory.descriptor.name,
-                    jn.directory.descriptor.name,
-                );
-            },
-            .Task => |it| {
-                const jt = j.Task;
-                return std.mem.eql(u8, it.task.outcome, jt.task.outcome) and
-                    std.mem.eql(
-                    u8,
-                    it.tasklist.descriptor.name,
-                    jt.tasklist.descriptor.name,
-                );
-            },
-            .Collection => |ic| {
-                const jc = j.Collection;
-                return ic.eql(jc);
-            },
-        }
     }
 };
 

@@ -862,3 +862,19 @@ pub fn writeTags(self: *Root) !void {
     defer self.allocator.free(tag_content);
     try fs.overwrite(self.info.tagpath, tag_content);
 }
+
+/// Returns a list of all tasks in all tasklists
+pub fn getAllTasks(
+    self: *Root,
+    allocator: std.mem.Allocator,
+) ![]const Tasklist.Task {
+    var list = std.ArrayList(Tasklist.Task).init(allocator);
+    defer list.deinit();
+
+    for (self.info.tasklists) |descr| {
+        const tl = (try self.getTasklist(descr.name)).?;
+        try list.appendSlice(tl.info.tasks);
+    }
+
+    return try list.toOwnedSlice();
+}

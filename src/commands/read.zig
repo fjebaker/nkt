@@ -4,6 +4,7 @@ const tags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
+const abstractions = @import("../abstractions.zig");
 
 const commands = @import("../commands.zig");
 const Journal = @import("../topology/Journal.zig");
@@ -150,8 +151,10 @@ pub fn execute(
         .Day => |*day| {
             _ = try self.readDay(
                 allocator,
+                root,
                 &day.journal,
                 day.day,
+                &.{},
                 selected_tags,
                 tdl.tags,
                 &bprinter,
@@ -164,6 +167,7 @@ pub fn execute(
         .Collection => |*c| {
             switch (c.*) {
                 .journal => |*j| try self.readJournal(
+                    root,
                     allocator,
                     j,
                     selected_tags,
@@ -194,6 +198,7 @@ fn extractLineLimit(args: arguments.ParsedArguments) !?usize {
 
 fn readJournal(
     self: *Self,
+    root: *Root,
     allocator: std.mem.Allocator,
     j: *Journal,
     selected_tags: []const tags.Tag,
@@ -201,14 +206,25 @@ fn readJournal(
     printer: *BlockPrinter,
     tz: time.TimeZone,
 ) !void {
+    const tasks = try root.getAllTasks(allocator);
+    defer allocator.free(tasks);
+
+    var task_events = try abstractions.TaskEventList.init(allocator, tasks);
+    defer task_events.deinit();
+
     const now = time.timeNow();
     var line_count: usize = 0;
     for (0..j.info.days.len) |i| {
         const day = j.getDayOffsetIndex(now, i) orelse continue;
+
+        const events = task_events.eventsOnDay(day.getDate());
+
         line_count += try self.readDay(
             allocator,
+            root,
             j,
             day,
+            events,
             selected_tags,
             tag_descriptors,
             printer,
@@ -224,13 +240,17 @@ fn readJournal(
 fn filterTags(
     allocator: std.mem.Allocator,
     selected_tags: []const tags.Tag,
-    entries: []const Journal.Entry,
-) ![]const Journal.Entry {
-    var list = std.ArrayList(Journal.Entry).init(allocator);
+    entries: []const abstractions.EntryOrTaskEvent,
+) ![]abstractions.EntryOrTaskEvent {
+    var list = std.ArrayList(abstractions.EntryOrTaskEvent).init(allocator);
     defer list.deinit();
 
     for (entries) |entry| {
-        if (tags.hasUnion(selected_tags, entry.tags)) {
+        const ts = switch (entry) {
+            .entry => |e| e.tags,
+            .task_event => |t| t.task.tags,
+        };
+        if (tags.hasUnion(selected_tags, ts)) {
             try list.append(entry);
         }
     }
@@ -240,28 +260,45 @@ fn filterTags(
 fn readDay(
     self: *Self,
     allocator: std.mem.Allocator,
+    _: *Root,
     j: *Journal,
     day: Journal.Day,
+    task_events: []const abstractions.TaskEvent,
     selected_tags: []const tags.Tag,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
     tz: time.TimeZone,
 ) !usize {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
     // read the entries of that day
     const entries = try j.getEntries(day);
-    // no print if there are no entries for this day
-    if (entries.len == 0) return 0;
 
-    // TODO: filter the entries by tags
-    const filtered = if (selected_tags.len > 0)
-        try filterTags(allocator, selected_tags, entries)
-    else
-        entries;
-    defer if (selected_tags.len > 0) allocator.free(filtered);
+    // combine with task events
+    const all = try abstractions.entryOrTaskEventList(
+        arena.allocator(),
+        entries,
+        task_events,
+    );
+    // no print if there is nothing for this day
+    if (all.len == 0) return 0;
 
+    // filter tags
+    const filtered = if (selected_tags.len > 0) try filterTags(
+        arena.allocator(),
+        selected_tags,
+        all,
+    ) else all;
     if (filtered.len == 0) return 0;
 
-    return try self.printEntries(
+    std.sort.insertion(
+        abstractions.EntryOrTaskEvent,
+        filtered,
+        {},
+        abstractions.EntryOrTaskEvent.timeAscending,
+    );
+
+    return try self.printEntriesOrEvents(
         day,
         filtered,
         tag_descriptors,
@@ -270,10 +307,10 @@ fn readDay(
     );
 }
 
-fn printEntries(
+fn printEntriesOrEvents(
     self: *const Self,
     day: Journal.Day,
-    entries: []const Journal.Entry,
+    entries: []const abstractions.EntryOrTaskEvent,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
     tz: time.TimeZone,
@@ -296,57 +333,119 @@ fn printEntries(
     const offset = if (printer.remaining()) |rem| entries.len -| rem else 0;
 
     var entries_written: usize = 0;
-    var previous: ?Journal.Entry = null;
+    var previous: ?abstractions.EntryOrTaskEvent = null;
     for (entries[offset..]) |entry| {
         // if there is more than an hour between two entries, print a newline
         // to separate clearer
         if (previous) |prev| {
-            const diff = if (prev.created < entry.created)
-                entry.created - prev.created
+            const prev_time = prev.getTime();
+            const curr_time = entry.getTime();
+            const diff = if (prev_time < curr_time)
+                curr_time - prev_time
             else
-                prev.created - entry.created;
+                prev_time - curr_time;
             if (diff > std.time.ms_per_hour) {
                 try printer.addToCurrent("\n", .{ .is_counted = false });
             }
         }
 
-        const entry_date = tz.makeLocal(
-            time.dateFromTime(entry.created),
-        );
-
-        const long_date = self.args.date orelse false;
-        const formated: []const u8 = if (!long_date)
-            &try time.formatTimeBuf(entry_date)
-        else
-            &try time.formatDateTimeBuf(entry_date);
-
-        try printer.addFormatted(
-            .Item,
-            "{s} | {s}",
-            .{ formated, entry.text },
-            .{},
-        );
-        entries_written += 1;
-
-        if (entry.tags.len > 0) {
-            try printer.addToCurrent(" ", .{ .is_counted = false });
-            for (entry.tags) |tag| {
-                try printer.addToCurrent("@", .{
-                    .fmt = try FormatPrinter.getTagFormat(
-                        printer.format_printer.mem.allocator(),
-                        tag_descriptors,
-                        tag.name,
-                    ),
-                    .is_counted = false,
-                });
-            }
+        switch (entry) {
+            .entry => |e| try self.printEntry(
+                e,
+                tag_descriptors,
+                printer,
+                tz,
+            ),
+            .task_event => |t| try self.printTaskEvent(
+                t,
+                tag_descriptors,
+                printer,
+                tz,
+            ),
         }
 
-        try printer.addToCurrent("\n", .{ .is_counted = false });
+        entries_written += 1;
         previous = entry;
     }
 
     return entries_written;
+}
+
+fn printEntry(
+    self: *const Self,
+    entry: Journal.Entry,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !void {
+    const entry_date = tz.makeLocal(
+        time.dateFromTime(entry.created),
+    );
+
+    const long_date = self.args.date orelse false;
+    const formated: []const u8 = if (!long_date)
+        &try time.formatTimeBuf(entry_date)
+    else
+        &try time.formatDateTimeBuf(entry_date);
+
+    try printer.addFormatted(
+        .Item,
+        "{s} | {s}",
+        .{ formated, entry.text },
+        .{},
+    );
+
+    if (entry.tags.len > 0) {
+        try printer.addToCurrent(" ", .{ .is_counted = false });
+        for (entry.tags) |tag| {
+            try printer.addToCurrent("@", .{
+                .fmt = try FormatPrinter.getTagFormat(
+                    printer.format_printer.mem.allocator(),
+                    tag_descriptors,
+                    tag.name,
+                ),
+                .is_counted = false,
+            });
+        }
+    }
+
+    try printer.addToCurrent("\n", .{ .is_counted = false });
+}
+
+fn printTaskEvent(
+    self: *const Self,
+    t: abstractions.TaskEvent,
+    _: []const tags.Tag.Descriptor,
+    printer: *BlockPrinter,
+    tz: time.TimeZone,
+) !void {
+    const entry_date = tz.makeLocal(
+        time.dateFromTime(t.getTime()),
+    );
+
+    const long_date = self.args.date orelse false;
+    const formated: []const u8 = if (!long_date)
+        &try time.formatTimeBuf(entry_date)
+    else
+        &try time.formatDateTimeBuf(entry_date);
+
+    try printer.addFormatted(
+        .Item,
+        "{s} | {s} '{s}' (/{x:0>5})",
+        .{
+            formated,
+            switch (t.event) {
+                .Archived => "archived",
+                .Created => "created",
+                .Done => "completed",
+            },
+            t.task.outcome,
+            @as(u20, @intCast(utils.getMiniHash(t.task.hash, 5))),
+        },
+        .{ .fmt = colors.DIM.italic().fixed() },
+    );
+
+    try printer.addToCurrent("\n", .{ .is_counted = false });
 }
 
 const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();

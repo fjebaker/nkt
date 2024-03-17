@@ -36,6 +36,10 @@ pub const Day = struct {
     created: Time,
     modified: Time,
     tags: []Tag,
+
+    pub fn getDate(day: Day) time.Date {
+        return time.dateFromTime(day.created);
+    }
 };
 
 pub const Info = struct {
