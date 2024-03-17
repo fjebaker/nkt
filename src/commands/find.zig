@@ -20,10 +20,10 @@ pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
 pub const short_help = "Find in notes.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{.{
+pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
     .arg = "what",
     .help = "What to search in",
-}}, .{});
+}});
 
 what: ?[]const u8,
 

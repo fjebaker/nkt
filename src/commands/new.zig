@@ -13,7 +13,7 @@ const Self = @This();
 pub const short_help = "Create a new tag or collection.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(&.{
+pub const arguments = cli.Arguments(&.{
     .{
         .arg = "type",
         .help = "What sort of type to create. Can be 'journal', 'tasklist', 'directory', 'chain' or 'tag'.",
@@ -24,7 +24,7 @@ pub const arguments = cli.ArgumentsHelp(&.{
         .help = "Name to assign to new object.",
         .required = true,
     },
-}, .{});
+});
 
 const NewType = enum {
     journal,

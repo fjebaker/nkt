@@ -15,5 +15,9 @@
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
             .hash = "1220623c42ffb9f78fdd017f10e3ba2291210965893b22efc062f4f24d7ad306651b",
         },
+        .clippy = .{
+            .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
+            .hash = "1220ce2d2a61dabcaed9d9b1a0fde73eeb3eaa065a763ff41c73a3fd35d0e2eeccaa",
+        },
     },
 }

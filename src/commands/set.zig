@@ -14,7 +14,7 @@ const Self = @This();
 pub const short_help = "Modify attributes of entries, notes, chains, or tasks.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{.{
+pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
     .arg = "what",
     .help = "May be one of 'done', 'archive', 'todo'",
     .required = true,
@@ -37,7 +37,7 @@ pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{.{
         .arg = "-i/--importance imp",
         .help = "Choice of `low`, `medium`, and `high` (default: `low`).",
     },
-}, .{});
+});
 
 const SetVerbs = enum { todo, archive, done, alias };
 
@@ -78,7 +78,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             unreachable;
         }
         const selection = try selections.fromArgs(
-            arguments.ParsedArguments,
+            arguments.Parsed,
             args.item,
             args,
         );

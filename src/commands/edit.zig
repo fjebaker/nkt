@@ -21,7 +21,7 @@ pub const alias = [_][]const u8{"e"};
 pub const short_help = "Edit a note or item in the editor.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
+pub const arguments = cli.Arguments(selections.selectHelp(
     "item",
     "The item to edit (see `help select`).",
     .{ .required = true },
@@ -35,7 +35,7 @@ pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
         .arg = "-e/--ext extension",
         .help = "The file extension for the new note (default: 'md').",
     },
-}, .{});
+});
 
 const EditOptions = struct {
     allow_new: bool = false,
@@ -49,12 +49,12 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
     const selection = try selections.fromArgs(
-        arguments.ParsedArguments,
+        arguments.Parsed,
         args.item,
         args,
     );
 
-    if (args.new == null and args.ext != null) {
+    if (args.new == false and args.ext != null) {
         try cli.throwError(
             cli.CLIErrors.InvalidFlag,
             "Cannot provide `--ext` without `--new`",
@@ -66,7 +66,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return .{
         .selection = selection,
         .opts = .{
-            .allow_new = args.new orelse false,
+            .allow_new = args.new,
             .extension = args.ext orelse "md",
         },
     };

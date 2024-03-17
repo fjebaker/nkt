@@ -12,12 +12,12 @@ pub const short_help = "Print this help message or help for other commands.";
 pub const long_help =
     \\Print help messages and additional information about subcommands.
 ;
-pub const arguments = cli.ArgumentsHelp(&.{
+pub const arguments = cli.Arguments(&.{
     .{
         .arg = "command",
         .help = "Subcommand to print extended help for.",
     },
-}, .{});
+});
 
 command: ?[]const u8,
 
@@ -100,10 +100,8 @@ fn printExtendedHelp(
 
             if (has_arguments) {
                 const args = @field(field.type, "arguments");
-                if (args.arguments.len > 0) {
-                    try writer.writeAll("Arguments:\n\n");
-                    try args.writeHelp(writer);
-                }
+                try writer.writeAll("Arguments:\n\n");
+                try args.writeHelp(writer, .{});
             }
             try writer.writeByte('\n');
             return;

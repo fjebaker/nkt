@@ -16,6 +16,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("chrono");
+    const clippy = b.dependency("clippy", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("clippy");
 
     const exe = b.addExecutable(.{
         .name = "nkt",
@@ -27,6 +31,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("time", time);
     exe.root_module.addImport("farbe", farbe);
     exe.root_module.addImport("chrono", chrono);
+    exe.root_module.addImport("clippy", clippy);
 
     b.installArtifact(exe);
 
@@ -51,6 +56,7 @@ pub fn build(b: *std.Build) void {
     unit_tests.root_module.addImport("time", time);
     unit_tests.root_module.addImport("farbe", farbe);
     unit_tests.root_module.addImport("chrono", chrono);
+    unit_tests.root_module.addImport("clippy", clippy);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 

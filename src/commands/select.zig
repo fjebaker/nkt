@@ -14,13 +14,12 @@ pub const long_help =
     \\Select an item or collection
 ;
 
-pub const arguments = cli.ArgumentsHelp(
+pub const arguments = cli.Arguments(
     selections.selectHelp(
         "item",
         "The selection item",
         .{ .required = false },
     ),
-    .{},
 );
 
 selection: selections.Selection,
@@ -29,7 +28,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
     const selection = try selections.fromArgs(
-        arguments.ParsedArguments,
+        arguments.Parsed,
         args.item,
         args,
     );

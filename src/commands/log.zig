@@ -17,7 +17,7 @@ pub const long_help =
     \\Entries support the standard infix tagging (i.e. @tag).
 ;
 
-pub const arguments = cli.ArgumentsHelp(&.{
+pub const arguments = cli.Arguments(&.{
     .{
         .arg = "text",
         .help = "The text to log for the entry.",
@@ -32,10 +32,10 @@ pub const arguments = cli.ArgumentsHelp(&.{
         .help = "Additional tags to add.",
         .parse = false,
     },
-}, .{});
+});
 
 tags: []const []const u8,
-args: arguments.ParsedArguments,
+args: arguments.Parsed,
 
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);

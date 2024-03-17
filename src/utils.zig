@@ -44,13 +44,28 @@ pub fn ensureOnly(
                 break;
             }
         } else {
-            if (@field(args, f.name) != null) {
-                try cli.throwError(
-                    error.AmbiguousSelection,
-                    "Cannot provide '{s}' argument when selecting '{s}'",
-                    .{ f.name, collection_type },
-                );
-                unreachable;
+            switch (@typeInfo(f.type)) {
+                .Optional => {
+                    if (@field(args, f.name) != null) {
+                        try cli.throwError(
+                            error.AmbiguousSelection,
+                            "Cannot provide '{s}' argument when selecting '{s}'",
+                            .{ f.name, collection_type },
+                        );
+                        unreachable;
+                    }
+                },
+                .Bool => {
+                    if (@field(args, f.name) == true) {
+                        try cli.throwError(
+                            error.AmbiguousSelection,
+                            "Cannot provide '{s}' argument when selecting '{s}'",
+                            .{ f.name, collection_type },
+                        );
+                        unreachable;
+                    }
+                },
+                else => {},
             }
         }
     }

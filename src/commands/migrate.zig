@@ -11,7 +11,7 @@ const Self = @This();
 
 pub const short_help = "Migrate differing versions of nkt's topology";
 pub const long_help = short_help;
-pub const arguments = cli.ArgumentsHelp(&.{}, .{});
+pub const arguments = cli.Arguments(&.{});
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     _ = try arguments.parseAll(itt);

@@ -25,7 +25,7 @@ pub const alias = [_][]const u8{ "r", "rp" };
 pub const short_help = "Read notes, task details, and journals.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
+pub const arguments = cli.Arguments(selections.selectHelp(
     "item",
     "Selected item (see `help select` for the formatting). If not argument is provided, defaults to reading the last `--limit` entries of the default journal.",
     .{ .required = false },
@@ -52,10 +52,10 @@ pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
         .arg = "-p/--page",
         .help = "Read the item through the configured pager",
     },
-}, .{});
+});
 
 tags: []const []const u8,
-args: arguments.ParsedArguments,
+args: arguments.Parsed,
 selection: selections.Selection,
 
 fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
@@ -97,7 +97,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         }
     }
     const selection = try selections.fromArgs(
-        arguments.ParsedArguments,
+        arguments.Parsed,
         args.item,
         args,
     );
@@ -188,8 +188,8 @@ pub fn execute(
     try bprinter.drain(writer);
 }
 
-fn extractLineLimit(args: arguments.ParsedArguments) !?usize {
-    if (args.all orelse false) return null;
+fn extractLineLimit(args: arguments.Parsed) !?usize {
+    if (args.all) return null;
     if (args.limit) |str| {
         return try std.fmt.parseInt(usize, str, 10);
     }
@@ -377,7 +377,7 @@ fn printEntry(
         time.dateFromTime(entry.created),
     );
 
-    const long_date = self.args.date orelse false;
+    const long_date = self.args.date;
     const formated: []const u8 = if (!long_date)
         &try time.formatTimeBuf(entry_date)
     else
@@ -418,7 +418,7 @@ fn printTaskEvent(
         time.dateFromTime(t.getTime()),
     );
 
-    const long_date = self.args.date orelse false;
+    const long_date = self.args.date;
     const formated: []const u8 = if (!long_date)
         &try time.formatTimeBuf(entry_date)
     else

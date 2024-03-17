@@ -26,12 +26,12 @@ pub const alias = [_][]const u8{"chain"};
 pub const short_help = "View and interact with habitual chains.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(&[_]cli.ArgumentDescriptor{
+pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
     .{
         .arg = "--days num",
         .help = "Number of days to display (default: 30).",
     },
-}, .{});
+});
 
 num_days: usize,
 

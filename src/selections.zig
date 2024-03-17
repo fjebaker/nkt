@@ -750,7 +750,7 @@ fn fromArgsFields(
     return selection;
 }
 
-/// Parse the selection from a `cli.ParsedArguments` structure that has been
+/// Parse the selection from a `cli.Parsed` structure that has been
 /// augmented with `selectHelp`. Will report errors to stderr.
 pub fn fromArgs(
     comptime T: type,

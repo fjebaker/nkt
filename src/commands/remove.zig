@@ -19,18 +19,18 @@ pub const alias = [_][]const u8{"rm"};
 pub const short_help = "Remove items, tags, or entire collections themselves.";
 pub const long_help = short_help;
 
-pub const arguments = cli.ArgumentsHelp(selections.selectHelp(
+pub const arguments = cli.Arguments(selections.selectHelp(
     "selection",
     "Selected item or collection to remove (see `help select` for the formatting).",
     .{ .required = true },
-), .{});
+));
 
 selection: selections.Selection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
     const selection = try selections.fromArgs(
-        arguments.ParsedArguments,
+        arguments.Parsed,
         args.selection,
         args,
     );

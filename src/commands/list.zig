@@ -24,7 +24,7 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
     "sort",
 };
 
-pub const arguments = cli.ArgumentsHelp(&.{
+pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
         .help = "How to sort the item lists. Possible values are 'modified' or 'created'",
@@ -57,7 +57,7 @@ pub const arguments = cli.ArgumentsHelp(&.{
         .arg = "--archived",
         .help = "If a tasklist is selected, enables listing tasks marked as 'archived'",
     },
-}, .{});
+});
 
 const ListSelection = union(enum) {
     Directory: struct {
@@ -104,7 +104,7 @@ pub fn execute(
     }
 }
 
-fn processArguments(args: arguments.ParsedArguments) !ListSelection {
+fn processArguments(args: arguments.Parsed) !ListSelection {
     var count: usize = 0;
     if (args.journal != null) count += 1;
     if (args.directory != null) count += 1;
@@ -121,7 +121,7 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     if (args.journal) |journal| {
         // make sure none of the incompatible fields are selected
         try utils.ensureOnly(
-            arguments.ParsedArguments,
+            arguments.Parsed,
             args,
             MUTUAL_FIELDS,
             "journal",
@@ -131,22 +131,22 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     if (args.tasklist) |tasklist| {
         // make sure none of the incompatible fields are selected
         try utils.ensureOnly(
-            arguments.ParsedArguments,
+            arguments.Parsed,
             args,
             (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash" }),
             "tasklist",
         );
         return .{ .Tasklist = .{
             .name = tasklist,
-            .done = args.done orelse false,
-            .hash = args.hash orelse false,
-            .archived = args.archived orelse false,
+            .done = args.done,
+            .hash = args.hash,
+            .archived = args.archived,
         } };
     }
     if (args.directory) |directory| {
         // make sure none of the incompatible fields are selected
         try utils.ensureOnly(
-            arguments.ParsedArguments,
+            arguments.Parsed,
             args,
             (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
             "directory",
@@ -160,7 +160,7 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     if (args.what) |what| {
         if (std.mem.eql(u8, what, "tags")) {
             try utils.ensureOnly(
-                arguments.ParsedArguments,
+                arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
                 "tags",
@@ -176,7 +176,7 @@ fn processArguments(args: arguments.ParsedArguments) !ListSelection {
     }
 
     try utils.ensureOnly(
-        arguments.ParsedArguments,
+        arguments.Parsed,
         args,
         MUTUAL_FIELDS,
         "collections",
