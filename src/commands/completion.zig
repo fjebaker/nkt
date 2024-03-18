@@ -1,158 +1,98 @@
 const std = @import("std");
-
 const cli = @import("../cli.zig");
+const tags = @import("../topology/tags.zig");
+const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
-const Commands = @import("../main.zig").Commands;
+const selections = @import("../selections.zig");
 
-const State = @import("../State.zig");
+const commands = @import("../commands.zig");
+const Commands = commands.Commands;
+const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const alias = [_][]const u8{ "r", "rp" };
+pub const arguments = cli.Arguments(&.{});
 
-pub const help = "zsh completion helper";
+pub const short_help = "Shell completion helper";
+pub const long_help = short_help;
 
-const Mode =
-    enum { Listing, Prefixed, Zsh };
-mode: Mode,
-
-pub fn init(_: std.mem.Allocator, itt: *cli.ArgIterator, _: cli.Options) !Self {
-    var mode: ?Mode = null;
-    while (try itt.next()) |arg| {
-        if (arg.flag) {
-            if (arg.is(null, "listing")) {
-                if (mode != null) return cli.CLIErrors.InvalidFlag;
-                mode = .Listing;
-            } else if (arg.is(null, "prefixed")) {
-                if (mode != null) return cli.CLIErrors.InvalidFlag;
-                mode = .Prefixed;
-            } else if (arg.is(null, "zsh")) {
-                if (mode != null) return cli.CLIErrors.InvalidFlag;
-                mode = .Zsh;
-            }
-        } else return cli.CLIErrors.TooManyArguments;
-    }
-
-    if (mode == null) return cli.CLIErrors.NoValueGiven;
-
-    return .{ .mode = mode.? };
+pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    _ = itt;
+    return .{};
 }
 
-pub fn run(
+pub fn execute(
     self: *Self,
-    state: *State,
-    out_writer: anytype,
-) !void {
-    switch (self.mode) {
-        .Listing => {
-            for (state.directories) |*dir| {
-                // skip the diary for now
-                if (std.mem.eql(u8, dir.getName(), "diary")) {
-                    continue;
-                }
-                try listDirContentsPrefixed(
-                    state.allocator,
-                    out_writer,
-                    dir,
-                    "",
-                );
-            }
-        },
-        .Prefixed => {
-            for (state.directories) |*dir| {
-                const prefix = try std.fmt.allocPrint(state.allocator, "{s}.", .{dir.getName()});
-                defer state.allocator.free(prefix);
-                try listDirContentsPrefixed(
-                    state.allocator,
-                    out_writer,
-                    dir,
-                    prefix,
-                );
-            }
-        },
-        .Zsh => {
-            try printZshCompletionFile(state.allocator, out_writer);
-        },
-    }
-}
-
-fn listDirContentsPrefixed(
-    alloc: std.mem.Allocator,
+    allocator: std.mem.Allocator,
+    root: *Root,
     writer: anytype,
-    directory: *State.Collection,
-    prefix: []const u8,
+    opts: commands.Options,
 ) !void {
-    const notelist = try directory.getAll(alloc);
-    defer alloc.free(notelist);
-    for (notelist) |note| {
-        try writer.print("{s}{s} ", .{ prefix, note.getName() });
-    }
-}
+    _ = self;
+    _ = root;
+    _ = opts;
 
-fn listCommandHelp(
-    alloc: std.mem.Allocator,
-) ![]const u8 {
-    var buf = std.ArrayList(u8).init(alloc);
-    errdefer buf.deinit();
-    var writer = buf.writer();
+    try writer.writeAll("#compdef _nkt nkt\n\n");
 
-    inline for (@typeInfo(Commands).Union.fields) |field| {
-        if (!std.mem.eql(u8, field.name, "completion")) {
-            const help_text = @field(field.type, "help");
-            try writer.print("'{s}:{s}' ", .{ field.name, help_text });
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    var alloc = arena.allocator();
+
+    var case_switches = std.ArrayList(u8).init(alloc);
+    defer case_switches.deinit();
+
+    var switch_writer = case_switches.writer();
+
+    var all_commands = std.ArrayList(u8).init(alloc);
+    defer all_commands.deinit();
+
+    var all_writer = all_commands.writer();
+
+    const info = @typeInfo(Commands).Union;
+    inline for (info.fields) |field| {
+        const name = field.name;
+        const descr = @field(field.type, "short_help");
+        const has_arguments = @hasDecl(field.type, "arguments");
+        if (has_arguments) {
+            const args = @field(field.type, "arguments");
+
+            const cmpl = try args.generateCompletion(alloc, .Zsh, name);
+            defer alloc.free(cmpl);
+            try writer.writeAll(cmpl);
+
+            try switch_writer.print(
+                \\        {s})
+                \\            _arguments_{s}
+                \\        ;;
+                \\
+            , .{ name, name });
         }
+
+        const escp_descr = try std.mem.replaceOwned(u8, alloc, descr, "'", "'\\''");
+        try all_writer.print("        '{s}:{s}'\n", .{ name, escp_descr });
     }
 
-    return buf.toOwnedSlice();
+    try writer.print(ZSH_TEMPLATE, .{ all_commands.items, case_switches.items });
 }
 
-fn printZshCompletionFile(alloc: std.mem.Allocator, writer: anytype) !void {
-    var mem = std.heap.ArenaAllocator.init(alloc);
-    defer mem.deinit();
-    const allocator = mem.allocator();
-    _ = try writer.writeAll(
-        \\#compdef _nkt nkt
-        \\
-        \\_nkt() {
-        \\    local line state
-        \\    _arguments -C \
-        \\               "1: :->cmds" \
-        \\               "2::arg:->args"
-        \\
-        \\    case "$state" in
-        \\        cmds)
-        \\
-    );
-    const command_descriptions = try listCommandHelp(allocator);
-    try writer.print(
-        \\            subcmds=({s})
-        \\            _describe 'command' subcmds
-        \\
-    ,
-        .{command_descriptions},
-    );
-    _ = try writer.writeAll(
-        \\            ;;
-        \\
-        \\        args)
-        \\            case $line[1] in
-        \\                edit|e|r|rp|read)
-        \\                    _list_note_options
-        \\                    ;;
-        \\                ls|list|fe|find|fr|fp)
-        \\                    _list_prefixed_options
-        \\                    ;;
-        \\            esac
-        \\            ;;
-        \\    esac
-        \\}
-        \\
-        \\_list_note_options() {
-        \\    compadd $(nkt completion --listing)
-        \\}
-        \\_list_prefixed_options() {
-        \\    compadd $(nkt completion --prefixed)
-        \\}
-        \\
-    );
-}
+const ZSH_TEMPLATE =
+    \\_subcommands() {{
+    \\    local -a commands
+    \\    commands=(
+    \\{s}        )
+    \\    _describe 'command' commands
+    \\}}
+    \\
+    \\_nkt() {{
+    \\    local line state
+    \\
+    \\    _arguments \
+    \\        '1:command:_subcommands' \
+    \\        '*::arg:->args'
+    \\
+    \\    case $line[1] in
+    \\{s}
+    \\    esac
+    \\}}
+    \\
+;

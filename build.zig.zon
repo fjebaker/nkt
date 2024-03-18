@@ -17,7 +17,7 @@
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
-            .hash = "1220ce2d2a61dabcaed9d9b1a0fde73eeb3eaa065a763ff41c73a3fd35d0e2eeccaa",
+            .hash = "12202c06347efdb3779174f486566bd382128a72b9e0e25c085102f45442132a28e0",
         },
     },
 }

@@ -37,7 +37,7 @@ pub const Commands = union(enum) {
     set: @import("commands/set.zig"),
     // summary: @import("commands/summary.zig"),
     sync: @import("commands/sync.zig"),
-    // completion: @import("commands/completion.zig"),
+    completion: @import("commands/completion.zig"),
 
     pub fn execute(
         self: *Commands,
