@@ -7,7 +7,10 @@ editor: []const u8,
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator) !Editor {
-    const editor = std.os.getenv("EDITOR") orelse "vim";
+    var envmap = try std.process.getEnvMap(allocator);
+    defer envmap.deinit();
+    const editor = try allocator.dupe(u8, envmap.get("EDITOR") orelse "vim");
+
     return .{
         .editor = editor,
         .allocator = allocator,
@@ -15,6 +18,7 @@ pub fn init(allocator: std.mem.Allocator) !Editor {
 }
 
 pub fn deinit(self: *Editor) void {
+    self.allocator.free(self.editor);
     self.* = undefined;
 }
 
