@@ -239,14 +239,20 @@ pub fn parseInlineTagPositions(allocator: std.mem.Allocator, string: []const u8)
 
     var itt = utils.ListIterator(u8).init(string);
 
+    var escaped: bool = false;
     while (itt.next()) |c| {
-        if (c == '@') { // at the beginning of a tag
+        if (c == '\\') {
+            escaped = true;
+            continue;
+        }
+        if (!escaped and c == '@') { // at the beginning of a tag
             const start = itt.index - 1;
             const end = try getTagStringIterated(&itt);
             try positions.append(
                 .{ .start = start, .end = end - 1 },
             );
         }
+        escaped = false;
     }
 
     return try positions.toOwnedSlice();
@@ -332,6 +338,11 @@ test "inline position parsing" {
     );
     try testInlineTagPositions(
         "this is something that needs to be done",
+        &.{},
+        &.{},
+    );
+    try testInlineTagPositions(
+        "this is \\@something that needs to be done",
         &.{},
         &.{},
     );
