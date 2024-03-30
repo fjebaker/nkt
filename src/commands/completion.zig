@@ -11,14 +11,19 @@ const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const arguments = cli.Arguments(&.{});
+pub const arguments = cli.Arguments(&.{.{
+    .arg = "--list collection",
+    .help = "For internal use only.",
+}});
 
 pub const short_help = "Shell completion helper";
 pub const long_help = short_help;
 
+args: arguments.Parsed,
+
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    _ = itt;
-    return .{};
+    const args = try arguments.parseAll(itt);
+    return .{ .args = args };
 }
 
 pub fn execute(
@@ -28,10 +33,44 @@ pub fn execute(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    _ = self;
-    _ = root;
+    try root.load();
     _ = opts;
 
+    if (self.args.list) |collection| {
+        if (std.mem.eql(u8, collection, "journal")) {
+            for (root.info.journals) |c| {
+                try writer.writeAll(c.name);
+                try writer.writeAll(" ");
+            }
+        } else if (std.mem.eql(u8, collection, "directory")) {
+            for (root.info.directories) |c| {
+                try writer.writeAll(c.name);
+                try writer.writeAll(" ");
+            }
+        } else if (std.mem.eql(u8, collection, "tasklist")) {
+            for (root.info.tasklists) |c| {
+                try writer.writeAll(c.name);
+                try writer.writeAll(" ");
+            }
+        } else if (std.mem.eql(u8, collection, "chains")) {
+            const chainlist = try root.getChainList();
+            for (chainlist.chains) |c| {
+
+                // try writer.print("\"{s}\" ", .{c.name});
+                if (c.alias) |alias| {
+                    try writer.writeAll(alias);
+                    try writer.writeAll(" ");
+                }
+            }
+        } else {
+            try cli.throwError(error.UnknownSelection, "Invalid completion collection '{s}'", .{collection});
+        }
+    } else {
+        try writeTemplate(allocator, writer);
+    }
+}
+
+pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
     try writer.writeAll("#compdef _nkt nkt\n\n");
 
     var arena = std.heap.ArenaAllocator.init(allocator);

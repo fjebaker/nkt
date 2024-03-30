@@ -808,6 +808,7 @@ pub fn selectHelp(
         .{
             .arg = "--" ++ opts.flag_prefix ++ "journal journal",
             .help = "The name of a journal to select the day or entry from. If unassigned uses default journal.",
+            .completion = "{compadd $(nkt completion --list journal)}",
         },
         .{
             .arg = "--" ++ opts.flag_prefix ++ "time HH:MM:SS",
@@ -816,10 +817,12 @@ pub fn selectHelp(
         .{
             .arg = "--" ++ opts.flag_prefix ++ "directory directory",
             .help = "The name of the directory to select a note from. If unassigned uses default directory.",
+            .completion = "{compadd $(nkt completion --list directory)}",
         },
         .{
             .arg = "--" ++ opts.flag_prefix ++ "tasklist tasklist",
             .help = "The name of the tasklist to select a task from. If unassigned uses default tasklist.",
+            .completion = "{compadd $(nkt completion --list tasklist)}",
         },
     };
     return args;
