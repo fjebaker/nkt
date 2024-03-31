@@ -254,12 +254,20 @@ fn editElseMaybeCreate(
             defer allocator.free(path);
             try becomeEditorRelativePath(allocator, &root.fs.?, path);
         } else {
-            try cli.throwError(
-                Root.Error.NoSuchItem,
-                "Use `--new` to allow new items to be created.",
-                .{},
-            );
-            unreachable;
+            // make sure was trying to select a note
+            if (selection.collection_type != null and selection.collection_type.? == .CollectionDirectory) {
+                try cli.throwError(
+                    Root.Error.NoSuchItem,
+                    "Use `--new` to allow new items to be created.",
+                    .{},
+                );
+            } else {
+                try cli.throwError(
+                    Root.Error.NoSuchItem,
+                    "Cannot create new item of selection type with edit.",
+                    .{},
+                );
+            }
         }
     }
 }
