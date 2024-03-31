@@ -36,6 +36,13 @@ pub const TimeZone = struct {
         return date.shiftTimezone(&self.tz);
     }
 
+    /// Convert a given local date to UTC date
+    pub fn makeUTC(self: TimeZone, date: Date) Date {
+        var to_utc = self.tz;
+        to_utc.offset = -to_utc.offset;
+        return date.shiftTimezone(&to_utc);
+    }
+
     /// Get the local time now
     pub fn localTimeNow(self: TimeZone) Date {
         return self.makeLocal(dateFromTime(timeNow()));
@@ -191,7 +198,8 @@ pub fn shiftBack(t: Time, index: usize) Date {
     );
 }
 
-fn toTimestamp(string: []const u8) !Timestamp {
+/// Convert a string to an HH MM SS timestamp
+pub fn toTimestamp(string: []const u8) !Timestamp {
     if (string.len < 8) return Error.DateTooShort;
     const hour = try std.fmt.parseInt(u8, string[0..2], 10);
     const minute = try std.fmt.parseInt(u8, string[3..5], 10);

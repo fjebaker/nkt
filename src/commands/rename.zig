@@ -57,10 +57,10 @@ pub fn execute(
 ) !void {
     try root.load();
 
-    var from_item = try self.from.resolveReportError(root);
+    var from_item = try self.from.resolveReportError(root, opts.tz);
     defer from_item.deinit();
 
-    if (try self.to.resolveOrNull(root)) |to_item| {
+    if (try self.to.resolveOrNull(root, opts.tz)) |to_item| {
         _ = to_item;
         unreachable;
     } else {
@@ -105,5 +105,4 @@ pub fn execute(
     }
 
     _ = allocator;
-    _ = opts;
 }

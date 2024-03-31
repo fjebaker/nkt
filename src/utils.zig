@@ -272,6 +272,12 @@ pub fn findUriFromColon(text: []const u8, index_of_colon: usize) ?UriSlice {
     };
 }
 
+/// Return the absolute difference between two values
+pub fn absDiff(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
+    if (a > b) return a - b;
+    return b - a;
+}
+
 // needs revisting below here
 // vvvvvvvvvvvvvvvvvvvvvvvvvv
 

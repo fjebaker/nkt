@@ -98,7 +98,7 @@ fn editElseMaybeCreate(
     opts: commands.Options,
     e_opts: EditOptions,
 ) !void {
-    var maybe_item = try selection.resolveOrNull(root);
+    var maybe_item = try selection.resolveOrNull(root, opts.tz);
     if (maybe_item) |*item| {
         defer item.deinit();
         // edit the existing item

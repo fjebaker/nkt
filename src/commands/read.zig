@@ -126,7 +126,7 @@ pub fn execute(
         self.selection.collection_name = root.info.default_journal;
     }
 
-    var item = try self.selection.resolveReportError(root);
+    var item = try self.selection.resolveReportError(root, opts.tz);
     defer item.deinit();
 
     const selected_tags = try utils.parseAndAssertValidTags(

@@ -158,7 +158,7 @@ pub fn execute(
             try writer.print("Chain '{s}' marked as complete\n", .{c.name});
         },
         .Item => |*s| {
-            var item = try s.selection.resolveReportError(root);
+            var item = try s.selection.resolveReportError(root, opts.tz);
             defer item.deinit();
             var task = item.Task;
 

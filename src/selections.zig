@@ -73,7 +73,12 @@ const ResolveResult = struct {
     }
 };
 
-fn retrieveFromJournal(s: Selector, journal: *Journal, entry_time: ?[]const u8) !ResolveResult {
+fn retrieveFromJournal(
+    s: Selector,
+    journal: *Journal,
+    entry_time: ?[]const u8,
+    tz: time.TimeZone,
+) !ResolveResult {
     const now = time.timeNow();
     const day = switch (s) {
         .ByQualifiedIndex, .ByIndex => b: {
@@ -96,13 +101,19 @@ fn retrieveFromJournal(s: Selector, journal: *Journal, entry_time: ?[]const u8) 
     };
 
     if (entry_time) |t| {
+        // convert to UTC
+        const time_stamp = try time.toTimestamp(t);
+        const utc_seconds = time_stamp.totalSeconds() - tz.tz.offsetSeconds();
+
         const entries = try journal.getEntries(day);
         for (entries) |entry| {
-            // TODO: this should ideally be a numerical not string compare
-            const tf = try time.formatTimeBuf(
-                time.dateFromTime(entry.created),
+            const etime = time.Timestamp.fromTimestamp(
+                @intCast(entry.created),
             );
-            if (std.mem.eql(u8, &tf, t)) {
+
+            const entry_seconds = etime.totalSeconds();
+
+            if (utc_seconds == entry_seconds) {
                 return ResolveResult.ok(.{ .Entry = .{
                     .journal = journal.*,
                     .day = day,
@@ -143,7 +154,7 @@ fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
 
             break :b try tasklist.getTaskByIndex(index);
         },
-        .ByDate => return Error.InvalidSelection,
+        .ByDate => return ResolveResult.throw(Error.InvalidSelection),
         .ByHash => |h| switch (@clz(h)) {
             0 => tasklist.getTaskByHash(h),
             1...63 => tasklist.getTaskByMiniHash(h) catch |e|
@@ -201,7 +212,7 @@ pub const Selection = struct {
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
-    fn resolve(s: Selection, root: *Root) !ResolveResult {
+    fn resolve(s: Selection, root: *Root, tz: time.TimeZone) !ResolveResult {
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
@@ -219,6 +230,7 @@ pub const Selection = struct {
                         selector,
                         &journal,
                         s.modifiers.entry_time,
+                        tz,
                     );
                 },
                 .CollectionDirectory => {
@@ -249,7 +261,7 @@ pub const Selection = struct {
         }) |ct| {
             var canary = s;
             canary.collection_type = ct;
-            const r = try canary.resolve(root);
+            const r = try canary.resolve(root, tz);
             if (r.err) |err| {
                 switch (err) {
                     Error.UnknownSelection,
@@ -274,8 +286,8 @@ pub const Selection = struct {
     /// Resolve the selection from the `Root`. If `NoSuchItem`, returns `null`
     /// instead of raising error. All other errors are reported back as in
     /// `resolveReportError`.
-    pub fn resolveOrNull(s: Selection, root: *Root) !?Item {
-        const rr = try s.resolve(root);
+    pub fn resolveOrNull(s: Selection, root: *Root, tz: time.TimeZone) !?Item {
+        const rr = try s.resolve(root, tz);
         return rr.retrieve() catch |err| {
             switch (err) {
                 Root.Error.NoSuchItem,
@@ -290,8 +302,8 @@ pub const Selection = struct {
 
     /// Resolve the selection from the `Root`. Errors are reported back to the
     /// terminal. Returns an `Item`.
-    pub fn resolveReportError(s: Selection, root: *Root) !Item {
-        const rr = try s.resolve(root);
+    pub fn resolveReportError(s: Selection, root: *Root, tz: time.TimeZone) !Item {
+        const rr = try s.resolve(root, tz);
         return rr.retrieve() catch |err| {
             try reportResolveError(err);
             return err;
@@ -312,7 +324,7 @@ fn reportResolveError(err: anyerror) !void {
         Error.UnknownSelection => {
             try cli.throwError(
                 err,
-                "Selection is malformed.",
+                "Selection is unknown.",
                 .{},
             );
             unreachable;
@@ -350,7 +362,10 @@ fn testSelectionResolve(
         tasklist,
     )) |_| return Error.IncompatibleSelection;
 
-    const rr = try selection.resolve(root);
+    var tz = try time.TimeZone.initUTC(std.testing.allocator);
+    defer tz.deinit();
+
+    const rr = try selection.resolve(root, tz);
     const item = try rr.retrieve();
     try std.testing.expect(item.eql(expected));
 }

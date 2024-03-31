@@ -44,9 +44,8 @@ pub fn execute(
     _: anytype,
     opts: commands.Options,
 ) !void {
-    _ = opts;
     try root.load();
-    var item = try self.selection.resolveReportError(root);
+    var item = try self.selection.resolveReportError(root, opts.tz);
     defer item.deinit();
 
     var writer = std.io.getStdOut().writer();
