@@ -179,6 +179,11 @@ pub fn execute(
                 else => unreachable,
             }
         },
+        .Note => |*n| {
+            const content = try root.fs.?.readFileAlloc(allocator, n.note.path);
+            defer allocator.free(content);
+            try writer.writeAll(content);
+        },
         inline else => |k| {
             std.debug.print(">> {any}\n", .{k});
         },
