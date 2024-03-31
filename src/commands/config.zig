@@ -16,11 +16,13 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
 pub fn execute(
     _: *Self,
-    _: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     root: *Root,
     out_writer: anytype,
     opts: commands.Options,
 ) !void {
+    const now = try opts.tz.formatTime(allocator, time.timeNow());
+    defer allocator.free(now);
     try out_writer.print(
         \\nkt schema version     : {s}
         \\root directory         : {s}
@@ -31,6 +33,6 @@ pub fn execute(
         Root.schemaVersion(),
         root.fs.?.root_path,
         opts.tz.tz.name,
-        try time.formatDateTimeBuf(opts.tz.localTimeNow()),
+        now,
     });
 }

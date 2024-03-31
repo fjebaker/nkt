@@ -21,6 +21,20 @@ pub const TimeZone = struct {
         self.* = undefined;
     }
 
+    /// Format a UTC date with the given timezone for saving to disk or
+    /// displaying Caller owns memory
+    pub fn formatTime(self: TimeZone, allocator: std.mem.Allocator, t: Time) ![]const u8 {
+        const adjusted = self.makeLocal(dateFromTime(t));
+        const date_time = try formatDateTimeBuf(adjusted);
+        const offset = @divFloor(self.tz.offset, 60);
+        return try std.fmt.allocPrint(allocator, "{s} {s} (GMT{s}{d})", .{
+            date_time,
+            self.tz.name,
+            if (offset > 0) "+" else "-",
+            @abs(offset),
+        });
+    }
+
     /// Initialize a UTC timezone
     pub fn initUTC(allocator: std.mem.Allocator) !TimeZone {
         const utc_copy = try allocator.dupe(u8, "UTC");
