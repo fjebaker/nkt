@@ -418,7 +418,7 @@ test "serialize" {
 
     const expected =
         \\{
-        \\    "_schema_version": "0.3.0",
+        \\    "_schema_version": "0.4.0",
         \\    "editor": [
         \\        "vim"
         \\    ],
@@ -459,7 +459,7 @@ test "serialize" {
 
     const expected_with_dir =
         \\{
-        \\    "_schema_version": "0.3.0",
+        \\    "_schema_version": "0.4.0",
         \\    "editor": [
         \\        "vim"
         \\    ],
