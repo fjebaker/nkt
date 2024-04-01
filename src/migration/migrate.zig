@@ -78,7 +78,7 @@ fn migrate_0_2_0(
     // migrate the tags
     for (topo.tags) |t| {
         try new.addNewTag(
-            .{ .name = t.name, .created = t.created, .color = t.color },
+            .{ .name = t.name, .created = .{ .time = t.created }, .color = t.color },
         );
     }
 
@@ -86,13 +86,22 @@ fn migrate_0_2_0(
     const chain_content = try fs.readFileAlloc(allocator, topo.chainpath);
     const chains = try Topology_0_2_0.parseChains(allocator, chain_content);
     for (chains) |chain| {
+        var times = try std.ArrayList(Root.Time).initCapacity(
+            allocator,
+            chain.completed.len,
+        );
+
+        for (chain.completed) |cmpl| {
+            times.appendAssumeCapacity(.{ .time = cmpl });
+        }
+
         try new.addNewChain(.{
             .name = chain.name,
             .alias = chain.alias,
             .details = chain.details,
             .active = chain.active,
-            .created = chain.created,
-            .completed = chain.completed,
+            .created = .{ .time = chain.created },
+            .completed = times.items,
             .tags = try convertTags_0_2_0(allocator, chain.tags),
         });
     }
@@ -103,8 +112,8 @@ fn migrate_0_2_0(
             .{
                 .name = tl.name,
                 .path = tl.path,
-                .created = tl.created,
-                .modified = tl.modified,
+                .created = .{ .time = tl.created },
+                .modified = .{ .time = tl.modified },
             },
         );
 
@@ -117,15 +126,15 @@ fn migrate_0_2_0(
             try tasklist.addNewTask(.{
                 .outcome = t.title,
                 .details = t.details,
-                .created = t.created,
-                .modified = t.modified,
+                .created = .{ .time = t.created },
+                .modified = .{ .time = t.modified },
                 .hash = Tasklist.hash(.{
                     .action = null,
                     .outcome = t.title,
                 }),
-                .due = t.due,
-                .done = t.completed,
-                .archived = t.archived,
+                .due = if (t.due) |ti| Root.Time{ .time = ti } else null,
+                .done = if (t.completed) |ti| Root.Time{ .time = ti } else null,
+                .archived = if (t.archived) |ti| Root.Time{ .time = ti } else null,
                 .importance = convertImportance_0_2_0(t.importance),
                 .tags = try convertTags_0_2_0(allocator, t.tags),
             });
@@ -151,8 +160,8 @@ fn migrate_0_2_0(
             try journal.addNewDay(.{
                 .name = day.name,
                 .path = day.path,
-                .created = day.created,
-                .modified = day.modified,
+                .created = .{ .time = day.created },
+                .modified = .{ .time = day.modified },
                 .tags = try convertTags_0_2_0(allocator, day.tags),
             });
             // todo: don't really want to read all of the entries into memory
@@ -163,8 +172,8 @@ fn migrate_0_2_0(
             for (entries) |entry| {
                 try journal.addNewEntryToPath(day.path, .{
                     .text = entry.item,
-                    .created = entry.created,
-                    .modified = entry.modified,
+                    .created = .{ .time = entry.created },
+                    .modified = .{ .time = entry.modified },
                     .tags = try convertTags_0_2_0(allocator, entry.tags),
                 });
             }
@@ -193,8 +202,8 @@ fn migrate_0_2_0(
             try directory.addNewNote(.{
                 .name = note.name,
                 .path = note.path,
-                .created = note.created,
-                .modified = note.modified,
+                .created = .{ .time = note.created },
+                .modified = .{ .time = note.modified },
                 .tags = try convertTags_0_2_0(allocator, note.tags),
             });
         }
@@ -214,7 +223,7 @@ fn convertTags_0_2_0(
     for (tags) |t| {
         try list.append(.{
             .name = t.name,
-            .added = t.added,
+            .added = .{ .time = t.added },
         });
     }
 
