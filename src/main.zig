@@ -98,7 +98,7 @@ pub fn main() !void {
     const out_fd = std.io.getStdOut();
 
     // get the local timezone information
-    var tz = try time.getTimeZone(allocator);
+    var tz = try time.TimeZone.init(allocator);
     defer tz.deinit();
 
     try nkt_main(allocator, raw_args, out_fd, tz, fs);

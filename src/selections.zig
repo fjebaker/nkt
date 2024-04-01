@@ -108,7 +108,7 @@ fn retrieveFromJournal(
         const entries = try journal.getEntries(day);
         for (entries) |entry| {
             const etime = time.Timestamp.fromTimestamp(
-                @intCast(entry.created),
+                @intCast(entry.created.time),
             );
 
             const entry_seconds = etime.totalSeconds();

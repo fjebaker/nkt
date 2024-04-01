@@ -153,7 +153,7 @@ pub fn execute(
                 unreachable;
             }
             try chains.addCompletionTime(index, time.timeNow());
-            try root.writeChains();
+            try root.writeChains(opts.tz);
 
             try writer.print("Chain '{s}' marked as complete\n", .{c.name});
         },
@@ -195,7 +195,7 @@ pub fn execute(
                 .alias => unreachable,
             }
             root.markModified(task.tasklist.descriptor, .CollectionTasklist);
-            try root.writeChanges();
+            try root.writeChanges(opts.tz);
         },
     }
 }

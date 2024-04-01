@@ -1,16 +1,21 @@
 const std = @import("std");
 const FileSystem = @import("../FileSystem.zig");
 const Root = @import("../topology/Root.zig");
+const TimeZone = @import("../topology/time.zig").TimeZone;
 const Tasklist = @import("../topology/Tasklist.zig");
 
 pub const Error = error{UnknownVersion};
 
 /// Migrate path and over-ride `root_dir`
-pub fn migratePath(allocator: std.mem.Allocator, root_dir: []const u8) !void {
+pub fn migratePath(
+    allocator: std.mem.Allocator,
+    root_dir: []const u8,
+    tz: TimeZone,
+) !void {
     var old = try FileSystem.init(root_dir);
     defer old.deinit();
 
-    try migrateFileSystem(allocator, &old);
+    try migrateFileSystem(allocator, &old, tz);
 }
 
 const SchemaReader = struct {
@@ -21,7 +26,11 @@ const SchemaReader = struct {
     }
 };
 
-fn migrateFileSystem(allocator: std.mem.Allocator, old: *FileSystem) !void {
+fn migrateFileSystem(
+    allocator: std.mem.Allocator,
+    old: *FileSystem,
+    tz: TimeZone,
+) !void {
     var mem = std.heap.ArenaAllocator.init(allocator);
     defer mem.deinit();
     const alloc = mem.allocator();
@@ -48,8 +57,8 @@ fn migrateFileSystem(allocator: std.mem.Allocator, old: *FileSystem) !void {
 
     new.fs = old.*;
     // new file system
-    try new.createFilesystem();
-    try new.writeChanges();
+    try new.createFilesystem(tz);
+    try new.writeChanges(tz);
 }
 
 const Topology_0_2_0 = @import("Topology_0_2_0.zig");

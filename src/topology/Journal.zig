@@ -182,7 +182,7 @@ pub fn removeEntryFromDay(self: *Journal, day: Day, entry: Entry) !void {
     // need to get the index of the entry in the list
     const index = b: {
         for (list.items, 0..) |e, i| {
-            if (e.created == entry.created) {
+            if (e.created.eql(entry.created)) {
                 break :b i;
             }
         }
@@ -202,7 +202,7 @@ pub fn removeDay(self: *Journal, day: Day) !void {
 
     const index = b: {
         for (list.items, 0..) |d, i| {
-            if (d.created == day.created) {
+            if (d.created.eql(day.created)) {
                 break :b i;
             }
         }
@@ -356,7 +356,7 @@ pub fn getEntryPtr(self: *Journal, day: Day, entry: Entry) !*Entry {
     if (map.getPtr(day.path)) |entry_list| {
         for (entry_list.items) |*ptr| {
             if (std.mem.eql(u8, ptr.text, entry.text) and
-                ptr.created == entry.created)
+                ptr.created.eql(entry.created))
             {
                 return ptr;
             }

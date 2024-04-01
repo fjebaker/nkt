@@ -59,7 +59,7 @@ pub const Task = struct {
         if (t.archived != null) return .Archived;
         if (t.done) |_| return .Done;
         const due = if (t.due) |dm|
-            time.dateFromTime(@intCast(dm))
+            time.dateFromTime(dm)
         else
             return .NoStatus;
         if (now.gt(due)) return .PastDue;
@@ -347,15 +347,15 @@ fn sortDue(_: void, lhs: Task, rhs: Task) bool {
     if (lhs_due == null and rhs_due == null) return true;
     if (lhs_due == null) return false;
     if (rhs_due == null) return true;
-    return lhs_due.? < rhs_due.?;
+    return lhs_due.?.time < rhs_due.?.time;
 }
 
 fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
     const both_same =
         (lhs.due == null and rhs.due == null) or
-        (lhs.due != null and rhs.due != null);
+        ((lhs.due != null and rhs.due != null) and (lhs.due.?.eql(rhs.due.?)));
 
-    if (both_same and lhs.due == rhs.due) {
+    if (both_same) {
         // if they are both due at the same time, we sort lexographically
         return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
     }

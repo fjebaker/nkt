@@ -396,6 +396,9 @@ pub fn addNewChain(self: *Root, chain: chains.Chain) !void {
 
 /// Serialize into a string for writing to file.  Caller owns the memory.
 pub fn serialize(self: *const Root, allocator: std.mem.Allocator) ![]const u8 {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
     return std.json.stringifyAlloc(
         allocator,
         self.info,
@@ -754,7 +757,7 @@ pub fn addInitialCollections(self: *Root) !void {
 /// Create the file system. Overwrites any existing files, only to be used for
 /// initalization or migration, else risks deleting existing data if not all
 /// read.
-pub fn createFilesystem(self: *Root) !void {
+pub fn createFilesystem(self: *Root, tz: time.TimeZone) !void {
     var fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
 
     // migration: first we validate that all of the journals / directories /
@@ -771,10 +774,10 @@ pub fn createFilesystem(self: *Root) !void {
     }
 
     // create the tags file
-    try self.writeTags();
+    try self.writeTags(tz);
 
     // create the chain file
-    try self.writeChains();
+    try self.writeChains(tz);
 
     // journals
     try self.writeAllDescriptors(fs, .CollectionJournal);
@@ -830,7 +833,8 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
 }
 
 /// Write only modified collections back to the disk
-pub fn writeChanges(self: *Root) !void {
+pub fn writeChanges(self: *Root, tz: time.TimeZone) !void {
+    _ = tz;
     const fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
@@ -840,7 +844,8 @@ pub fn writeChanges(self: *Root) !void {
 }
 
 /// Write the chain changes to the chain file.
-pub fn writeChains(self: *Root) !void {
+pub fn writeChains(self: *Root, tz: time.TimeZone) !void {
+    _ = tz;
     var fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
@@ -852,13 +857,13 @@ pub fn writeChains(self: *Root) !void {
 }
 
 /// Write the tag descriptor changes to the tags file
-pub fn writeTags(self: *Root) !void {
+pub fn writeTags(self: *Root, tz: time.TimeZone) !void {
     var fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
     // create the tags file
     var list = try self.getTagDescriptorListPtr();
-    const tag_content = try list.serialize(self.allocator);
+    const tag_content = try list.serialize(self.allocator, tz);
     defer self.allocator.free(tag_content);
     try fs.overwrite(self.info.tagpath, tag_content);
 }

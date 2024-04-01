@@ -127,7 +127,7 @@ fn prepareChain(
         day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))), tz);
     }
 
-    var itt = utils.ReverseIterator(u64).init(chain.completed);
+    var itt = utils.ReverseIterator(time.Time).init(chain.completed);
     while (itt.next()) |item| {
         const date = time.dateFromTime(item);
         const delta = day_end.sub(date);

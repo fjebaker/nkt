@@ -72,7 +72,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     // load the topology
     try root.load();
@@ -101,7 +101,7 @@ pub fn execute(
     defer allocator.free(entry_tags);
     const day = try j.addNewEntryFromText(self.args.text, entry_tags);
 
-    try root.writeChanges();
+    try root.writeChanges(opts.tz);
     try j.writeDays();
 
     try writer.print(

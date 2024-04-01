@@ -11,20 +11,61 @@ const Self = @This();
 
 pub const short_help = "Migrate differing versions of nkt's topology";
 pub const long_help = short_help;
-pub const arguments = cli.Arguments(&.{});
+pub const arguments = cli.Arguments(&.{
+    .{
+        .arg = "touch",
+        .help = "Touch all files",
+    },
+});
+
+touch: bool,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    _ = try arguments.parseAll(itt);
-    return .{};
+    const args = try arguments.parseAll(itt);
+    return .{ .touch = args.touch != null };
 }
 
 pub fn execute(
-    _: *Self,
+    self: *Self,
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
-    try migration.migratePath(allocator, root.fs.?.root_path);
-    try writer.writeAll("Migration complete\n");
+    if (self.touch) {
+
+        // load and write all files
+        try root.load();
+        for (root.info.journals) |jrnl| {
+            var journal = (try root.getJournal(jrnl.name)).?;
+            defer journal.deinit();
+            for (journal.info.days) |day| {
+                const d = journal.getDay(day.name).?;
+                _ = try journal.getEntries(d);
+            }
+            try journal.writeDays();
+
+            root.markModified(jrnl, .CollectionJournal);
+        }
+        for (root.info.directories) |dir| {
+            var directory = (try root.getDirectory(dir.name)).?;
+            defer directory.deinit();
+            root.markModified(dir, .CollectionDirectory);
+        }
+        for (root.info.tasklists) |tl| {
+            var tasks = (try root.getTasklist(tl.name)).?;
+            defer tasks.deinit();
+            root.markModified(tl, .CollectionTasklist);
+        }
+        try root.writeChanges(opts.tz);
+        try root.writeTags(opts.tz);
+        try root.writeChains(opts.tz);
+    } else {
+        try migration.migratePath(
+            allocator,
+            root.fs.?.root_path,
+            opts.tz,
+        );
+        try writer.writeAll("Migration complete\n");
+    }
 }

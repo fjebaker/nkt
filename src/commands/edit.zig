@@ -104,7 +104,7 @@ fn editElseMaybeCreate(
         // edit the existing item
         switch (item.*) {
             .Note => |*n| {
-                try editNote(allocator, root, n.note, &n.directory);
+                try editNote(allocator, root, n.note, &n.directory, opts);
             },
             .Task => |*t| {
                 var editor = try Editor.init(allocator);
@@ -128,7 +128,7 @@ fn editElseMaybeCreate(
 
                 root.markModified(t.tasklist.descriptor, .CollectionTasklist);
 
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
 
                 try writer.print(
                     "Task details for '{s}' in '{s}' updated\n",
@@ -223,7 +223,7 @@ fn editElseMaybeCreate(
                 root.markModified(e.journal.descriptor, .CollectionJournal);
 
                 try e.journal.writeDays();
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.print(
                     "Entry '{s}' in day '{s}' updated\n",
                     .{
@@ -249,7 +249,7 @@ fn editElseMaybeCreate(
                 allocator,
                 root,
                 e_opts.extension,
-                opts.tz,
+                opts,
             );
             defer allocator.free(path);
             try becomeEditorRelativePath(allocator, &root.fs.?, path);
@@ -277,6 +277,7 @@ fn editNote(
     root: *Root,
     n: Directory.Note,
     dir: *Directory,
+    opts: commands.Options,
 ) !void {
     const note = try dir.touchNote(
         n,
@@ -286,7 +287,7 @@ fn editNote(
         dir.descriptor,
         .CollectionDirectory,
     );
-    try root.writeChanges();
+    try root.writeChanges(opts.tz);
 
     try becomeEditorRelativePath(
         allocator,
@@ -300,7 +301,7 @@ fn createNew(
     allocator: std.mem.Allocator,
     root: *Root,
     extension: []const u8,
-    tz: time.TimeZone,
+    opts: commands.Options,
 ) ![]const u8 {
     if (selection.collection_type) |ctype| {
         if (ctype != .CollectionDirectory) {
@@ -317,7 +318,7 @@ fn createNew(
         .ByDate => |date| {
             const cname = selection.collection_name orelse
                 root.info.default_journal;
-            const local_date = tz.makeLocal(date);
+            const local_date = opts.tz.makeLocal(date);
             const date_string = try time.formatDateBuf(local_date);
             const template = try dateTemplate(allocator, local_date);
             return try createNewNote(
@@ -327,12 +328,21 @@ fn createNew(
                 root,
                 extension,
                 template,
+                opts,
             );
         },
         .ByName => |name| {
             const cname = selection.collection_name orelse
                 root.info.default_directory;
-            return try createNewNote(allocator, cname, name, root, extension, null);
+            return try createNewNote(
+                allocator,
+                cname,
+                name,
+                root,
+                extension,
+                null,
+                opts,
+            );
         },
         // all others should not be accessible for new
         else => unreachable,
@@ -359,6 +369,7 @@ fn createNewNote(
     root: *Root,
     extension: []const u8,
     template: ?[]const u8,
+    opts: commands.Options,
 ) ![]const u8 {
     var dir = (try root.getDirectory(collection_name)) orelse {
         try cli.throwError(
@@ -382,7 +393,7 @@ fn createNewNote(
     }
 
     root.markModified(dir.descriptor, .CollectionDirectory);
-    try root.writeChanges();
+    try root.writeChanges(opts.tz);
 
     return try allocator.dupe(u8, note.path);
 }

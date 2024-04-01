@@ -42,7 +42,7 @@ pub const Tag = struct {
 };
 
 const TagDescriptorWrapper = struct {
-    tags: []Tag.Descriptor,
+    tags: []const Tag.Descriptor,
 };
 
 pub const DescriptorList = struct {
@@ -97,7 +97,11 @@ pub const DescriptorList = struct {
     pub fn serialize(
         self: *const DescriptorList,
         allocator: std.mem.Allocator,
+        _: time.TimeZone,
     ) ![]const u8 {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+
         return try std.json.stringifyAlloc(
             allocator,
             TagDescriptorWrapper{ .tags = self.tags },
@@ -179,6 +183,7 @@ pub fn readTagDescriptors(
         .{ .allocate = .alloc_always },
     );
     defer parsed.deinit();
+
     return try DescriptorList.init(allocator, parsed.value.tags);
 }
 

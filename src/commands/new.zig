@@ -62,7 +62,6 @@ pub fn execute(
     try root.load();
 
     _ = allocator;
-    _ = opts;
 
     switch (self.ctype) {
         .journal => {
@@ -94,8 +93,8 @@ pub fn execute(
     );
 
     switch (self.ctype) {
-        .chain => try root.writeChains(),
-        .tag => try root.writeTags(),
-        else => try root.writeChanges(),
+        .chain => try root.writeChains(opts.tz),
+        .tag => try root.writeTags(opts.tz),
+        else => try root.writeChanges(opts.tz),
     }
 }

@@ -70,7 +70,7 @@ pub fn execute(
                 const old_name = n.note.name;
                 _ = try n.directory.rename(old_name, to_name);
                 root.markModified(n.directory.descriptor, .CollectionDirectory);
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.print(
                     "Moved '{s}' [directory: '{s}'] -> '{s}' [directory: '{s}']\n",
                     .{
@@ -91,7 +91,7 @@ pub fn execute(
                 const old_name = t.task.outcome;
                 _ = try t.tasklist.rename(t.task, to_name);
                 root.markModified(t.tasklist.descriptor, .CollectionTasklist);
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.print(
                     "Moved '{s}' [tasklist: '{s}'] -> '{s}' [tasklist: '{s}']\n",
                     .{

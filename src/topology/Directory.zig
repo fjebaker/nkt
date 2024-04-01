@@ -186,7 +186,7 @@ pub fn removeNote(self: *Directory, note: Note) !void {
 
     const index = b: {
         for (list.items, 0..) |n, i| {
-            if (n.created == note.created) {
+            if (n.created.eql(note.created)) {
                 break :b i;
             }
         }

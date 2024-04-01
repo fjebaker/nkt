@@ -54,7 +54,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     _: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     try root.load();
     const now = time.timeNow();
@@ -118,5 +118,5 @@ pub fn execute(
         }
         return err;
     };
-    try root.writeChanges();
+    try root.writeChanges(opts.tz);
 }

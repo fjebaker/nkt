@@ -165,7 +165,7 @@ pub const TaskEvent = struct {
         lhs: TaskEvent,
         rhs: TaskEvent,
     ) bool {
-        return lhs.getTime() < rhs.getTime();
+        return lhs.getTime().time < rhs.getTime().time;
     }
 };
 
@@ -185,7 +185,7 @@ pub const EntryOrTaskEvent = union(enum) {
         lhs: EntryOrTaskEvent,
         rhs: EntryOrTaskEvent,
     ) bool {
-        return lhs.getTime() < rhs.getTime();
+        return lhs.getTime().time < rhs.getTime().time;
     }
 };
 
@@ -240,13 +240,13 @@ pub const TaskEventList = struct {
         const end_time = time.timeFromDate(time.endOfDay(date));
 
         const start = for (self.events, 0..) |e, i| {
-            if (e.getTime() >= start_time) break i;
+            if (e.getTime().time >= start_time.time) break i;
         } else self.events.len;
 
         if (start == self.events.len) return &.{};
 
         const end = for (self.events[start..], start..) |e, i| {
-            if (e.getTime() >= end_time) break i;
+            if (e.getTime().time >= end_time.time) break i;
         } else self.events.len;
 
         return self.events[start..end];

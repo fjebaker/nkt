@@ -75,7 +75,7 @@ pub fn execute(
                     d.journal.descriptor,
                     .CollectionJournal,
                 );
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.writeAll("Day removed.\n");
             }
         },
@@ -91,7 +91,7 @@ pub fn execute(
                     t.tasklist.descriptor,
                     .CollectionTasklist,
                 );
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.writeAll("Entry removed.\n");
             }
         },
@@ -107,7 +107,7 @@ pub fn execute(
                     n.directory.descriptor,
                     .CollectionDirectory,
                 );
-                try root.writeChanges();
+                try root.writeChanges(opts.tz);
                 try writer.writeAll("Note removed.\n");
             }
         },

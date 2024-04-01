@@ -55,7 +55,7 @@ pub fn deinit(self: *Self) void {
 fn formatDueDate(
     self: *const Self,
     alloc: std.mem.Allocator,
-    due_time: ?u64,
+    due_time: ?time.Time,
 ) ![]const u8 {
     const due = if (due_time) |t|
         time.dateFromTime(t)

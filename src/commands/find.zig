@@ -43,7 +43,6 @@ pub fn execute(
 ) !void {
     try root.load();
     _ = writer;
-    _ = opts;
 
     const dirname = root.info.default_directory;
 
@@ -73,7 +72,7 @@ pub fn execute(
 
     std.log.default.debug("Selected: {s}:{d}", .{ selected.path, selected.line_number });
 
-    try editFileAt(allocator, root, selected.path, selected.line_number);
+    try editFileAt(allocator, root, selected.path, selected.line_number, opts);
 }
 
 fn directoryNotesUnder(
@@ -109,6 +108,7 @@ fn editFileAt(
     root: *Root,
     path: []const u8,
     line: usize,
+    opts: commands.Options,
 ) !void {
     if (path.len == 0) return;
     const c_name = utils.inferCollectionName(path).?;
@@ -119,7 +119,7 @@ fn editFileAt(
     var note = dir.getNotePtr(note_name).?;
     note.modified = time.timeNow();
     root.markModified(dir.descriptor, .CollectionDirectory);
-    try root.writeChanges();
+    try root.writeChanges(opts.tz);
 
     const abs_path = try root.fs.?.absPathify(allocator, path);
     defer allocator.free(abs_path);

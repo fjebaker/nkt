@@ -6,7 +6,31 @@ pub const Error = error{DateTooShort};
 
 /// The type representing times in the topology: an integer counting
 /// miliseconds since epoch in UTC
-pub const Time = u64;
+pub const Time = struct {
+    time: u64,
+
+    pub fn eql(s: Time, o: Time) bool {
+        return s.time == o.time;
+    }
+
+    pub fn jsonStringify(t: Time, writer: anytype) !void {
+        try writer.print("{d}", .{t.time});
+    }
+
+    pub fn jsonParse(
+        allocator: std.mem.Allocator,
+        source: anytype,
+        options: std.json.ParseOptions,
+    ) std.json.ParseError(@TypeOf(source.*))!Time {
+        _ = allocator;
+        _ = options;
+        const token = try source.next();
+        const val = std.fmt.parseInt(u64, token.number, 10) catch {
+            return error.InvalidNumber;
+        };
+        return .{ .time = val };
+    }
+};
 
 pub const Timestamp = time.datetime.Time;
 pub const Date = time.datetime.Datetime;
@@ -61,34 +85,34 @@ pub const TimeZone = struct {
     pub fn localTimeNow(self: TimeZone) Date {
         return self.makeLocal(dateFromTime(timeNow()));
     }
-};
 
-/// Get the timezone
-pub fn getTimeZone(allocator: std.mem.Allocator) !TimeZone {
-    switch (@import("builtin").os.tag) {
-        .linux, .macos => {}, // ok
-        else => @compileError("Timezone not inferrable for this OS in current version"),
+    /// Get the timezone
+    pub fn init(allocator: std.mem.Allocator) !TimeZone {
+        switch (@import("builtin").os.tag) {
+            .linux, .macos => {}, // ok
+            else => @compileError("Timezone not inferrable for this OS in current version"),
+        }
+
+        var tzdb = try chrono.tz.DataBase.init(allocator);
+        defer tzdb.deinit();
+
+        const timezone = try tzdb.getLocalTimeZone();
+
+        const timestamp_utc = std.time.timestamp();
+        const local_offset = timezone.offsetAtTimestamp(timestamp_utc) orelse 0;
+        const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
+
+        const tz = time.datetime.Timezone.create(
+            try allocator.dupe(u8, designation),
+            @intCast(@divFloor(local_offset, 60)), // convert to minutes
+        );
+        return .{ .tz = tz, .allocator = allocator };
     }
-
-    var tzdb = try chrono.tz.DataBase.init(allocator);
-    defer tzdb.deinit();
-
-    const timezone = try tzdb.getLocalTimeZone();
-
-    const timestamp_utc = std.time.timestamp();
-    const local_offset = timezone.offsetAtTimestamp(timestamp_utc) orelse 0;
-    const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
-
-    const tz = time.datetime.Timezone.create(
-        try allocator.dupe(u8, designation),
-        @intCast(@divFloor(local_offset, 60)), // convert to minutes
-    );
-    return .{ .tz = tz, .allocator = allocator };
-}
+};
 
 /// Get the time now as `Time`
 pub fn timeNow() Time {
-    return @intCast(std.time.milliTimestamp());
+    return .{ .time = @intCast(std.time.milliTimestamp()) };
 }
 
 /// Get the end of the day `Date` from a `Date`. This is the equivalent to
@@ -109,12 +133,56 @@ pub fn startOfDay(day: Date) Date {
 
 /// Turn a `Time` into a `Date`
 pub fn dateFromTime(t: Time) Date {
-    return Date.fromTimestamp(@intCast(t));
+    return Date.fromTimestamp(@intCast(t.time));
+}
+
+/// Turn a `DateString` into a `Date`
+pub fn dateFromDateString(s: []const u8) !Date {
+    var date = try toDate(s[0..10]);
+    const time_of_day = try toTimestamp(s[11..19]);
+    date.time = time_of_day;
+
+    const tz1 = std.mem.indexOfAny(u8, s, "(").? + 4;
+    const tz2 = std.mem.indexOfScalarPos(
+        u8,
+        s,
+        tz1,
+        ')',
+    ).?;
+    const time_zone_shift = try std.fmt.parseInt(
+        i32,
+        s[tz1 + 1 .. tz2],
+        10,
+    );
+
+    if (s[tz1] == '+') {
+        date = date.shiftHours(time_zone_shift);
+    } else {
+        date = date.shiftHours(-time_zone_shift);
+    }
+    return date;
+}
+
+/// Turn a `DateString` into a `Time`
+pub fn timeFromDateString(s: []const u8) !Time {
+    const date = try dateFromDateString(s);
+    return timeFromDate(date);
 }
 
 /// Get a `Time` from a `Date`
 pub fn timeFromDate(date: Date) Time {
-    return @intCast(date.toTimestamp());
+    return .{ .time = @intCast(date.toTimestamp()) };
+}
+
+test "date string conversion" {
+    const t = timeNow();
+    var tz = try TimeZone.initUTC(std.testing.allocator);
+    defer tz.deinit();
+
+    const timeDate = try tz.formatTime(std.testing.allocator, t);
+    defer std.testing.allocator.free(timeDate);
+
+    _ = try timeFromDateString(timeDate);
 }
 
 /// Counts the occurances of `spacer` in `string` and ensures all non spacer
@@ -262,7 +330,7 @@ pub const Colloquial = struct {
         var arg = try c.next();
 
         if (_eq(arg, "soon")) {
-            var prng = std.rand.DefaultPrng.init(timeNow());
+            var prng = std.rand.DefaultPrng.init(timeNow().time);
             const days_different = prng.random().intRangeAtMost(
                 i32,
                 3,
@@ -442,9 +510,9 @@ test "time parsing" {
 }
 
 /// Get the absolute time difference between two `Time`
-pub fn absTimeDiff(t1: Time, t2: Time) Time {
-    if (t1 < t2) {
-        return t2 - t1;
+pub fn absTimeDiff(t1: Time, t2: Time) u64 {
+    if (t1.time < t2.time) {
+        return t2.time - t1.time;
     }
-    return t1 - t2;
+    return t1.time - t2.time;
 }
