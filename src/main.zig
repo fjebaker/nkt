@@ -171,7 +171,8 @@ test "end-to-end" {
     defer outfile.close();
 
     // always UTC for tests
-    const tz = try time.TimeZone.initUTC();
+    const tz = try time.initTimeZone(allocator);
+    defer time.deinitTimeZone();
 
     var fs = try FileSystem.init(root_path);
     defer fs.deinit();

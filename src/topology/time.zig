@@ -39,6 +39,15 @@ pub fn deinitTimeZone() void {
     global_time_zone = null;
 }
 
+/// Initialize the global time zone as UTC (mainly for tests)
+pub fn initTimeZoneUTC(allocator: std.mem.Allocator) !TimeZone {
+    var mem = std.heap.ArenaAllocator.init(allocator);
+    errdefer mem.deinit();
+    const tz = time.timezones.UTC;
+    global_time_zone = .{ .tz = .{ .tz = tz }, .mem = mem };
+    return getLocalTimeZone();
+}
+
 /// Initialize the global time zone
 pub fn initTimeZone(allocator: std.mem.Allocator) !TimeZone {
     var mem = std.heap.ArenaAllocator.init(allocator);
@@ -301,13 +310,14 @@ pub fn dateFromDateString(s: []const u8) !Date {
 }
 
 test "date string conversion" {
+    var tz = try initTimeZoneUTC(std.testing.allocator);
+    defer deinitTimeZone();
     const t = Time.now();
-    var tz = try TimeZone.initUTC(std.testing.allocator);
-    defer tz.deinit();
 
     const timeDate = try tz.formatTime(std.testing.allocator, t);
     defer std.testing.allocator.free(timeDate);
 
+    // TODO: actually add some good tests here
     _ = try Time.fromString(timeDate);
 }
 

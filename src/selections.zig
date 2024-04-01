@@ -362,6 +362,9 @@ test "resolve selections" {
     var root = Root.new(alloc);
     defer root.deinit();
 
+    _ = try time.initTimeZoneUTC(alloc);
+    defer time.deinitTimeZone();
+
     try root.addInitialCollections();
 
     var j = (try root.getJournal(root.info.default_journal)).?;

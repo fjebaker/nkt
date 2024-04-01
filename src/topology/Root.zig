@@ -410,6 +410,9 @@ test "serialize" {
     var root = Root.new(alloc);
     defer root.deinit();
 
+    _ = try time.initTimeZoneUTC(alloc);
+    defer time.deinitTimeZone();
+
     const str = try root.serialize(alloc);
     defer alloc.free(str);
 
@@ -482,8 +485,8 @@ test "serialize" {
         \\        {
         \\            "name": "test",
         \\            "path": "dir.test",
-        \\            "created": 0,
-        \\            "modified": 1
+        \\            "created": "1970-01-01 00:00:00 UTC (GMT+0)",
+        \\            "modified": "1970-01-01 00:00:00 UTC (GMT+0)"
         \\        }
         \\    ],
         \\    "journals": []
