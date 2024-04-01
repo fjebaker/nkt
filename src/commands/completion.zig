@@ -11,6 +11,12 @@ const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
+const SelectArgs = cli.Arguments(selections.selectHelp(
+    "item",
+    "Completion for an item selection.",
+    .{ .required = false },
+));
+
 pub const arguments = cli.Commands(
     .{
         .commands = &.{
@@ -25,11 +31,7 @@ pub const arguments = cli.Commands(
             },
             .{
                 .name = "item",
-                .args = cli.Arguments(selections.selectHelp(
-                    "item",
-                    "Completion for an item selection.",
-                    .{ .required = false },
-                )),
+                .args = SelectArgs,
             },
         },
     },
@@ -42,8 +44,13 @@ args: ?arguments.Parsed,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     if (itt.argCount() > 2) {
-        const args = try arguments.parseAll(itt);
-        return .{ .args = args };
+        var args = arguments.init(itt);
+        while (try itt.next()) |arg| {
+            if (!args.parseArgForgiving(arg)) {
+                // ignore unparseable args
+            }
+        }
+        return .{ .args = try args.getParsed() };
     } else {
         return .{ .args = null };
     }
@@ -57,7 +64,9 @@ pub fn execute(
     opts: commands.Options,
 ) !void {
     if (self.args) |args| {
-        try executeInternal(args, allocator, root, writer, opts);
+        executeInternal(args, allocator, root, writer, opts) catch |err| {
+            std.log.default.debug("completion error: {any}", .{err});
+        };
     } else {
         try writeTemplate(allocator, writer);
     }
@@ -72,7 +81,6 @@ fn executeInternal(
 ) !void {
     try root.load();
     _ = opts;
-    _ = allocator;
 
     switch (parsed_args.commands) {
         .list => |args| {
@@ -110,7 +118,42 @@ fn executeInternal(
                 );
             }
         },
-        .item => {},
+        .item => |args| {
+            const selection = try selections.fromArgs(
+                SelectArgs.Parsed,
+                args.item,
+                args,
+            );
+            if (selection.collection_type) |ctype| {
+                switch (ctype) {
+                    .CollectionDirectory => try listNotesInDirectory(
+                        writer,
+                        root,
+                        selection.collection_name,
+                        allocator,
+                    ),
+                    else => {},
+                }
+            } else {
+                try listNotesInDirectory(writer, root, null, allocator);
+            }
+        },
+    }
+}
+
+fn listNotesInDirectory(
+    writer: anytype,
+    root: *Root,
+    name: ?[]const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    _ = allocator;
+    const dir_name = name orelse root.info.default_directory;
+    var dir = (try root.getDirectory(dir_name)) orelse return;
+    defer dir.deinit();
+
+    for (dir.info.notes) |note| {
+        try writer.print("{s} ", .{note.name});
     }
 }
 
