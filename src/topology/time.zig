@@ -188,13 +188,30 @@ pub const Time = struct {
                 const val = std.fmt.parseInt(u64, number, 10) catch {
                     return error.InvalidNumber;
                 };
-                return .{ .time = val, .timezone = global_time_zone };
+                return migrateOldTime(val);
             },
             .string => |string| {
                 return Time.fromString(string) catch error.InvalidNumber;
             },
             else => return error.InvalidNumber,
         }
+    }
+
+    fn migrateOldTime(val: u64) Time {
+        // if before 29 October 2024
+        const tz = if (val < 1698544800000)
+            TimeZone.create("BST", 60)
+        else
+        // if before 31 March 2024, GMT 0
+        if (val < 1711846800000)
+            TimeZone.create("UTC", 0)
+        else
+            getLocalTimeZone();
+
+        return .{
+            .time = val,
+            .timezone = tz,
+        };
     }
 };
 
