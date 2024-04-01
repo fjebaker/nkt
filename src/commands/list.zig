@@ -36,14 +36,17 @@ pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--directory name",
         .help = "Name of the directory to list.",
+        .completion = "{compadd $(nkt completion list --collection directory)}",
     },
     .{
         .arg = "--journal name",
         .help = "Name of the journal to list.",
+        .completion = "{compadd $(nkt completion list --collection journal)}",
     },
     .{
         .arg = "--tasklist name",
         .help = "Name of the tasklist to list.",
+        .completion = "{compadd $(nkt completion list --collection tasklist)}",
     },
     .{
         .arg = "--hash",

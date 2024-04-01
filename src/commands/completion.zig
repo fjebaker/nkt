@@ -52,8 +52,16 @@ pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
         const cmd = (try itt.next()).?;
         _ = try args.parseArg(cmd);
-        // eat the first one, as that will be the command argument
-        _ = try itt.next();
+
+        if (args.t.commands) |c| {
+            switch (c) {
+                .item => {
+                    // eat the first one, as that will be the command argument
+                    _ = try itt.next();
+                },
+                else => {},
+            }
+        }
 
         while (try itt.next()) |arg| {
             if (!args.parseArgForgiving(arg)) {
