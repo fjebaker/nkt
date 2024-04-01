@@ -1,8 +1,12 @@
 const std = @import("std");
 const time = @import("time");
 const chrono = @import("chrono");
+const utils = @import("../utils.zig");
 
 pub const Error = error{DateTooShort};
+
+// singleton
+var global_time_zone: ?TimeZone = null;
 
 /// The type representing times in the topology: an integer counting
 /// miliseconds since epoch in UTC
@@ -14,7 +18,9 @@ pub const Time = struct {
     }
 
     pub fn jsonStringify(t: Time, writer: anytype) !void {
-        try writer.print("{d}", .{t.time});
+        global_time_zone.?.printTimeImpl(writer, t, true) catch {
+            return error.OutOfMemory;
+        };
     }
 
     pub fn jsonParse(
@@ -25,10 +31,19 @@ pub const Time = struct {
         _ = allocator;
         _ = options;
         const token = try source.next();
-        const val = std.fmt.parseInt(u64, token.number, 10) catch {
-            return error.InvalidNumber;
-        };
-        return .{ .time = val };
+
+        switch (token) {
+            .number => |number| {
+                const val = std.fmt.parseInt(u64, number, 10) catch {
+                    return error.InvalidNumber;
+                };
+                return .{ .time = val };
+            },
+            .string => |string| {
+                return timeFromDateString(string) catch error.InvalidNumber;
+            },
+            else => return error.InvalidNumber,
+        }
     }
 };
 
@@ -41,22 +56,45 @@ pub const TimeZone = struct {
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: *TimeZone) void {
-        self.allocator.free(self.tz.name);
+        if (global_time_zone != null) {
+            self.allocator.free(self.tz.name);
+        }
         self.* = undefined;
     }
 
     /// Format a UTC date with the given timezone for saving to disk or
     /// displaying Caller owns memory
     pub fn formatTime(self: TimeZone, allocator: std.mem.Allocator, t: Time) ![]const u8 {
+        var list = std.ArrayList(u8).init(allocator);
+        defer list.deinit();
+        try self.printTime(list.writer(), t);
+        return list.toOwnedSlice();
+    }
+
+    /// Format a UTC date with the given timezone for saving to disk or
+    /// displaying Caller owns memory
+    pub fn printTime(self: TimeZone, writer: anytype, t: Time) !void {
+        try self.printTimeImpl(writer, t, false);
+    }
+
+    fn printTimeImpl(self: TimeZone, writer: anytype, t: Time, comptime quoted: bool) !void {
         const adjusted = self.makeLocal(dateFromTime(t));
         const date_time = try formatDateTimeBuf(adjusted);
         const offset = @divFloor(self.tz.offset, 60);
-        return try std.fmt.allocPrint(allocator, "{s} {s} (GMT{s}{d})", .{
-            date_time,
-            self.tz.name,
-            if (offset > 0) "+" else "-",
-            @abs(offset),
-        });
+
+        const quote = if (quoted) "\"" else "";
+
+        return try writer.print(
+            "{s}{s} {s} (GMT{s}{d}){s}",
+            .{
+                quote,
+                date_time,
+                self.tz.name,
+                if (offset > 0) "+" else "-",
+                @abs(offset),
+                quote,
+            },
+        );
     }
 
     /// Initialize a UTC timezone
@@ -88,6 +126,7 @@ pub const TimeZone = struct {
 
     /// Get the timezone
     pub fn init(allocator: std.mem.Allocator) !TimeZone {
+        if (global_time_zone) |tz| return tz;
         switch (@import("builtin").os.tag) {
             .linux, .macos => {}, // ok
             else => @compileError("Timezone not inferrable for this OS in current version"),
@@ -106,7 +145,9 @@ pub const TimeZone = struct {
             try allocator.dupe(u8, designation),
             @intCast(@divFloor(local_offset, 60)), // convert to minutes
         );
-        return .{ .tz = tz, .allocator = allocator };
+
+        global_time_zone = .{ .tz = tz, .allocator = allocator };
+        return global_time_zone.?;
     }
 };
 
@@ -156,7 +197,7 @@ pub fn dateFromDateString(s: []const u8) !Date {
     );
 
     if (s[tz1] == '+') {
-        date = date.shiftHours(time_zone_shift);
+        date = date.shiftHours(-time_zone_shift);
     } else {
         date = date.shiftHours(-time_zone_shift);
     }
