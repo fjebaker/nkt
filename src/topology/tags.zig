@@ -30,6 +30,10 @@ pub const Tag = struct {
                 .color = colors.randomColor(),
             };
         }
+
+        fn sortAlphabetical(_: void, lhs: Descriptor, rhs: Descriptor) bool {
+            return std.ascii.lessThanIgnoreCase(lhs.name, rhs.name);
+        }
     };
 
     name: []const u8,
@@ -48,6 +52,17 @@ const TagDescriptorWrapper = struct {
 pub const DescriptorList = struct {
     tags: []Tag.Descriptor,
     allocator: std.mem.Allocator,
+
+    pub fn sort(self: *DescriptorList, how: enum { Alphabetical }) void {
+        switch (how) {
+            .Alphabetical => std.sort.insertion(
+                Tag.Descriptor,
+                self.tags,
+                {},
+                Tag.Descriptor.sortAlphabetical,
+            ),
+        }
+    }
 
     pub fn init(
         allocator: std.mem.Allocator,

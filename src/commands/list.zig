@@ -206,11 +206,11 @@ fn listTags(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    _ = opts;
-    const tdl = try root.getTagDescriptorList();
+    var tdl = try root.getTagDescriptorList();
+    tdl.sort(.Alphabetical);
 
     var printer = FormatPrinter.init(allocator, .{
-        .pretty = true,
+        .pretty = !opts.piped,
         .tag_descriptors = tdl.tags,
     });
     defer printer.deinit();
