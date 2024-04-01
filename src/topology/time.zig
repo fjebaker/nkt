@@ -139,9 +139,9 @@ pub const Time = struct {
         );
 
         const hour_shift = if (s[tz1 - 1] == '+')
-            time_zone_shift
+            -time_zone_shift
         else
-            -time_zone_shift;
+            time_zone_shift;
 
         const tz_designation = s[20..23];
         const tz = TimeZone.create(
@@ -198,12 +198,9 @@ pub const Time = struct {
     }
 
     fn migrateOldTime(val: u64) Time {
-        // if before 29 October 2024
-        const tz = if (val < 1698544800000)
+        const tz = if (val < 1698544800000) // 29 October 2024
             TimeZone.create("BST", 60)
-        else
-        // if before 31 March 2024, GMT 0
-        if (val < 1711846800000)
+        else if (val < 1711846800000) // 31 March 2024
             TimeZone.create("UTC", 0)
         else
             getLocalTimeZone();
@@ -251,7 +248,7 @@ pub const TimeZone = struct {
                 quote,
                 date_time,
                 self.tz.name,
-                if (offset > 0) "+" else "-",
+                if (offset >= 0) "+" else "-",
                 @abs(offset),
                 quote,
             },
