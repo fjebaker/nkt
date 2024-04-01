@@ -179,6 +179,10 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
         const name = field.name;
         const descr = @field(field.type, "short_help");
         const has_arguments = @hasDecl(field.type, "arguments");
+
+        const name_or_alias = try nameOrAlias(alloc, field, '|');
+        defer alloc.free(name_or_alias);
+
         if (has_arguments) {
             const args = @field(field.type, "arguments");
 
@@ -191,7 +195,7 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
                 \\            _arguments_{s}
                 \\        ;;
                 \\
-            , .{ name, name });
+            , .{ name_or_alias, name });
         }
 
         const escp_descr = try std.mem.replaceOwned(u8, alloc, descr, "'", "'\\''");
@@ -199,6 +203,21 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
     }
 
     try writer.print(ZSH_TEMPLATE, .{ all_commands.items, case_switches.items });
+}
+
+fn nameOrAlias(alloc: std.mem.Allocator, field: std.builtin.Type.UnionField, sep: u8) ![]const u8 {
+    const name = field.name;
+    if (!@hasDecl(field.type, "alias")) {
+        return try alloc.dupe(u8, name);
+    } else {
+        var list = std.ArrayList(u8).init(alloc);
+
+        try list.writer().writeAll(name);
+        for (@field(field.type, "alias")) |a| {
+            try list.writer().print("{c}{s}", .{ sep, a });
+        }
+        return list.toOwnedSlice();
+    }
 }
 
 const ZSH_TEMPLATE =
