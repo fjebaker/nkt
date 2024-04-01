@@ -77,9 +77,8 @@ fn retrieveFromJournal(
     s: Selector,
     journal: *Journal,
     entry_time: ?[]const u8,
-    tz: time.TimeZone,
 ) !ResolveResult {
-    const now = time.timeNow();
+    const now = time.Time.now();
     const day = switch (s) {
         .ByQualifiedIndex, .ByIndex => b: {
             const index = if (s == .ByIndex)
@@ -101,19 +100,11 @@ fn retrieveFromJournal(
     };
 
     if (entry_time) |t| {
-        // convert to UTC
-        const time_stamp = try time.toTimestamp(t);
-        const utc_seconds = time_stamp.totalSeconds() - tz.tz.offsetSeconds();
-
         const entries = try journal.getEntries(day);
         for (entries) |entry| {
-            const etime = time.Timestamp.fromTimestamp(
-                @intCast(entry.created.time),
-            );
+            const etime = try entry.created.formatTime();
 
-            const entry_seconds = etime.totalSeconds();
-
-            if (utc_seconds == entry_seconds) {
+            if (std.mem.eql(u8, t, &etime)) {
                 return ResolveResult.ok(.{ .Entry = .{
                     .journal = journal.*,
                     .day = day,
@@ -212,7 +203,7 @@ pub const Selection = struct {
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
-    fn resolve(s: Selection, root: *Root, tz: time.TimeZone) !ResolveResult {
+    fn resolve(s: Selection, root: *Root) !ResolveResult {
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
@@ -230,7 +221,6 @@ pub const Selection = struct {
                         selector,
                         &journal,
                         s.modifiers.entry_time,
-                        tz,
                     );
                 },
                 .CollectionDirectory => {
@@ -261,7 +251,7 @@ pub const Selection = struct {
         }) |ct| {
             var canary = s;
             canary.collection_type = ct;
-            const r = try canary.resolve(root, tz);
+            const r = try canary.resolve(root);
             if (r.err) |err| {
                 switch (err) {
                     Error.UnknownSelection,
@@ -286,8 +276,8 @@ pub const Selection = struct {
     /// Resolve the selection from the `Root`. If `NoSuchItem`, returns `null`
     /// instead of raising error. All other errors are reported back as in
     /// `resolveReportError`.
-    pub fn resolveOrNull(s: Selection, root: *Root, tz: time.TimeZone) !?Item {
-        const rr = try s.resolve(root, tz);
+    pub fn resolveOrNull(s: Selection, root: *Root) !?Item {
+        const rr = try s.resolve(root);
         return rr.retrieve() catch |err| {
             switch (err) {
                 Root.Error.NoSuchItem,
@@ -302,8 +292,8 @@ pub const Selection = struct {
 
     /// Resolve the selection from the `Root`. Errors are reported back to the
     /// terminal. Returns an `Item`.
-    pub fn resolveReportError(s: Selection, root: *Root, tz: time.TimeZone) !Item {
-        const rr = try s.resolve(root, tz);
+    pub fn resolveReportError(s: Selection, root: *Root) !Item {
+        const rr = try s.resolve(root);
         return rr.retrieve() catch |err| {
             try reportResolveError(err);
             return err;
@@ -362,10 +352,7 @@ fn testSelectionResolve(
         tasklist,
     )) |_| return Error.IncompatibleSelection;
 
-    var tz = try time.TimeZone.initUTC(std.testing.allocator);
-    defer tz.deinit();
-
-    const rr = try selection.resolve(root, tz);
+    const rr = try selection.resolve(root);
     const item = try rr.retrieve();
     try std.testing.expect(item.eql(expected));
 }
@@ -449,7 +436,7 @@ fn asSelector(arg: []const u8) !Selector {
             .index = try std.fmt.parseInt(usize, arg[1..], 10),
         } };
     } else if (time.isDate(arg)) {
-        return .{ .ByDate = try time.toDate(arg) };
+        return .{ .ByDate = try time.stringToDate(arg) };
     } else {
         return .{ .ByName = arg };
     }
@@ -535,7 +522,7 @@ fn addFlags(
                     // want to allow `ByIndex` selections for directories
                     if (selection.selector) |s| switch (s) {
                         .ByIndex => |i| {
-                            selection.selector = .{ .ByDate = time.shiftBack(time.timeNow(), i) };
+                            selection.selector = .{ .ByDate = time.shiftBack(time.Time.now(), i) };
                             selection.collection_name = directory;
                             selection.collection_type = .CollectionDirectory;
                             return null;

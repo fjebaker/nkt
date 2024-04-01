@@ -19,11 +19,11 @@ pub fn execute(
     _: std.mem.Allocator,
     root: *Root,
     out_writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     // TODO: add a prompt to check if the home directory is correct
     try root.addInitialCollections();
-    try root.createFilesystem(opts.tz);
+    try root.createFilesystem();
     try out_writer.print(
         "Home directory initialized: '{s}'\n",
         .{root.fs.?.root_path},

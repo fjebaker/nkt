@@ -21,7 +21,7 @@ pub fn execute(
     out_writer: anytype,
     opts: commands.Options,
 ) !void {
-    const now = try opts.tz.formatTime(allocator, time.timeNow());
+    const now = try opts.tz.formatTime(allocator, time.Time.now());
     defer allocator.free(now);
     try out_writer.print(
         \\nkt schema version     : {s}

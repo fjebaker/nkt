@@ -126,7 +126,7 @@ pub fn execute(
         self.selection.collection_name = root.info.default_journal;
     }
 
-    var item = try self.selection.resolveReportError(root, opts.tz);
+    var item = try self.selection.resolveReportError(root);
     defer item.deinit();
 
     const selected_tags = try utils.parseAndAssertValidTags(
@@ -158,11 +158,10 @@ pub fn execute(
                 selected_tags,
                 tdl.tags,
                 &bprinter,
-                opts.tz,
             );
         },
         .Task => |*task| {
-            try self.printTask(task.task, &bprinter, opts.tz);
+            try self.printTask(task.task, &bprinter);
         },
         .Collection => |*c| {
             switch (c.*) {
@@ -173,7 +172,6 @@ pub fn execute(
                     selected_tags,
                     tdl.tags,
                     &bprinter,
-                    opts.tz,
                 ),
                 // TODO: handle this better
                 else => unreachable,
@@ -209,7 +207,6 @@ fn readJournal(
     selected_tags: []const tags.Tag,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !void {
     const tasks = try root.getAllTasks(allocator);
     defer allocator.free(tasks);
@@ -217,7 +214,7 @@ fn readJournal(
     var task_events = try abstractions.TaskEventList.init(allocator, tasks);
     defer task_events.deinit();
 
-    const now = time.timeNow();
+    const now = time.Time.now();
     var line_count: usize = 0;
     for (0..j.info.days.len) |i| {
         const day = j.getDayOffsetIndex(now, i) orelse continue;
@@ -233,7 +230,6 @@ fn readJournal(
             selected_tags,
             tag_descriptors,
             printer,
-            tz,
         );
 
         if (printer.format_printer.opts.max_lines) |N| {
@@ -272,7 +268,6 @@ fn readDay(
     selected_tags: []const tags.Tag,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !usize {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -308,7 +303,6 @@ fn readDay(
         filtered,
         tag_descriptors,
         printer,
-        tz,
     );
 }
 
@@ -318,11 +312,9 @@ fn printEntriesOrEvents(
     entries: []const abstractions.EntryOrTaskEvent,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !usize {
-    const local_date = tz.makeLocal(
-        time.dateFromTime(day.created),
-    );
+    const local_date =
+        day.created.toDate();
 
     try printer.addFormatted(
         .Heading,
@@ -354,13 +346,11 @@ fn printEntriesOrEvents(
                 e,
                 tag_descriptors,
                 printer,
-                tz,
             ),
             .task_event => |t| try self.printTaskEvent(
                 t,
                 tag_descriptors,
                 printer,
-                tz,
             ),
         }
 
@@ -376,11 +366,8 @@ fn printEntry(
     entry: Journal.Entry,
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !void {
-    const entry_date = tz.makeLocal(
-        time.dateFromTime(entry.created),
-    );
+    const entry_date = entry.created.toDate();
 
     const long_date = self.args.date;
     const formated: []const u8 = if (!long_date)
@@ -417,11 +404,8 @@ fn printTaskEvent(
     t: abstractions.TaskEvent,
     _: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !void {
-    const entry_date = tz.makeLocal(
-        time.dateFromTime(t.getTime()),
-    );
+    const entry_date = t.getTime().toDate();
 
     const long_date = self.args.date;
     const formated: []const u8 = if (!long_date)
@@ -458,17 +442,16 @@ fn printTask(
     _: *Self,
     t: Tasklist.Task,
     printer: *BlockPrinter,
-    tz: time.TimeZone,
 ) !void {
-    const status = t.getStatus(time.timeNow());
+    const status = t.getStatus(time.Time.now());
 
     const due_s = if (t.due) |due|
-        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(due)))
+        &try time.formatDateTimeBuf(due.toDate())
     else
         "no date set";
 
     const completed_s = if (t.done) |compl|
-        &try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(compl)))
+        &try time.formatDateTimeBuf(compl.toDate())
     else
         "not completed";
 
@@ -486,7 +469,8 @@ fn printTask(
         "Created",
         "|",
         "  {s}\n",
-        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.created)))},
+
+        .{&try time.formatDateTimeBuf(t.created.toDate())},
         null,
     );
     try addInfoLine(
@@ -494,7 +478,7 @@ fn printTask(
         "Modified",
         "|",
         "  {s}\n",
-        .{&try time.formatDateTimeBuf(tz.makeLocal(time.dateFromTime(t.modified)))},
+        .{&try time.formatDateTimeBuf(t.modified.toDate())},
         null,
     );
     try addInfoLine(

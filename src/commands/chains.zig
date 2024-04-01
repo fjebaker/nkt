@@ -57,10 +57,10 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
-    const today = time.dateFromTime(time.timeNow());
+    const today = time.Time.now().toDate();
 
     const all_chains = try root.getChains();
     if (all_chains.len == 0) {
@@ -79,7 +79,6 @@ pub fn execute(
         today,
         self.num_days,
         all_chains[0],
-        opts.tz,
     );
 
     try writer.writeAll("\n");
@@ -91,7 +90,6 @@ pub fn execute(
             today,
             self.num_days,
             chain,
-            opts.tz,
         );
         try printChain(writer, padding, chain.name, items, true);
     }
@@ -102,9 +100,8 @@ const Day = struct {
     weekday: Weekday,
     completed: bool,
 
-    pub fn init(date: time.Date, tz: time.TimeZone) Day {
-        const local_time = tz.makeLocal(date);
-        const weekday = local_time.date.dayOfWeek();
+    pub fn init(date: time.Date) Day {
+        const weekday = date.date.dayOfWeek();
         return .{
             .weekday = weekday,
             .completed = false,
@@ -117,19 +114,18 @@ fn prepareChain(
     today: time.Date,
     days_hence: usize,
     chain: Chain,
-    tz: time.TimeZone,
 ) ![]Day {
     const day_end = time.endOfDay(today);
 
     // populate day slots
     var days = try allocator.alloc(Day, days_hence);
     for (days, 0..) |*day, i| {
-        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))), tz);
+        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))));
     }
 
     var itt = utils.ReverseIterator(time.Time).init(chain.completed);
     while (itt.next()) |item| {
-        const date = time.dateFromTime(item);
+        const date = item.toDate();
         const delta = day_end.sub(date);
 
         if (delta.years == 0 and delta.days < days.len) {

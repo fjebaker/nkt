@@ -55,11 +55,11 @@ pub const Task = struct {
 
     /// Get the `Status` of the task relative to some `Time`.
     pub fn getStatus(t: Task, relative: time.Time) Status {
-        const now = time.dateFromTime(relative);
+        const now = relative.toDate();
         if (t.archived != null) return .Archived;
         if (t.done) |_| return .Done;
         const due = if (t.due) |dm|
-            time.dateFromTime(dm)
+            dm.toDate()
         else
             return .NoStatus;
         if (now.gt(due)) return .PastDue;
@@ -184,7 +184,7 @@ pub fn rename(
     ptr.outcome = new_outcome;
     // recompute hash
     ptr.hash = hash(.{ .outcome = new_outcome, .action = old.action });
-    ptr.modified = time.timeNow();
+    ptr.modified = time.Time.now();
     return ptr.*;
 }
 
@@ -193,20 +193,20 @@ test "get by mini hash" {
         .{
             .outcome = "test outcome",
             .hash = 0xabc123abc1231111,
-            .created = 0,
-            .modified = 0,
+            .created = .{ .time = 0 },
+            .modified = .{ .time = 0 },
         },
         .{
             .outcome = "test outcome",
             .hash = 0xabd123abc1231111,
-            .created = 0,
-            .modified = 0,
+            .created = .{ .time = 0 },
+            .modified = .{ .time = 0 },
         },
         .{
             .outcome = "test outcome",
             .hash = 0x7416f4391c40056a,
-            .created = 0,
-            .modified = 0,
+            .created = .{ .time = 0 },
+            .modified = .{ .time = 0 },
         },
     };
     var info: Info = .{
@@ -218,8 +218,8 @@ test "get by mini hash" {
         .descriptor = .{
             .name = "test_list",
             .path = "test_list",
-            .created = 0,
-            .modified = 0,
+            .created = .{ .time = 0 },
+            .modified = .{ .time = 0 },
         },
         .info = &info,
     };

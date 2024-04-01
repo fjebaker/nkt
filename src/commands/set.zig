@@ -85,7 +85,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             args,
         );
 
-        const now = time.timeNow();
+        const now = time.Time.now();
 
         const due = try utils.parseDue(now, args.due);
         const importance = try utils.parseImportance(args.importance);
@@ -118,7 +118,7 @@ pub fn execute(
     _: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
 
@@ -144,7 +144,7 @@ pub fn execute(
                 );
                 unreachable;
             };
-            if (chains.isChainComplete(index, opts.tz)) {
+            if (chains.isChainComplete(index)) {
                 try cli.throwError(
                     error.ChainAlreadyComplete,
                     "Chain '{s}' has already been marked as complete today.",
@@ -152,13 +152,13 @@ pub fn execute(
                 );
                 unreachable;
             }
-            try chains.addCompletionTime(index, time.timeNow());
-            try root.writeChains(opts.tz);
+            try chains.addCompletionTime(index, time.Time.now());
+            try root.writeChains();
 
             try writer.print("Chain '{s}' marked as complete\n", .{c.name});
         },
         .Item => |*s| {
-            var item = try s.selection.resolveReportError(root, opts.tz);
+            var item = try s.selection.resolveReportError(root);
             defer item.deinit();
             var task = item.Task;
 
@@ -195,7 +195,7 @@ pub fn execute(
                 .alias => unreachable,
             }
             root.markModified(task.tasklist.descriptor, .CollectionTasklist);
-            try root.writeChanges(opts.tz);
+            try root.writeChanges();
         },
     }
 }
@@ -215,7 +215,7 @@ fn updateTaskField(
         unreachable;
     }
 
-    @field(task, field) = time.timeNow();
+    @field(task, field) = time.Time.now();
 
     try writer.print(
         "Set '{s}' (/{x}) marked as '{s}'.\n",

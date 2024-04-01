@@ -42,10 +42,10 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     _: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
-    var item = try self.selection.resolveReportError(root, opts.tz);
+    var item = try self.selection.resolveReportError(root);
     defer item.deinit();
 
     var writer = std.io.getStdOut().writer();
@@ -75,7 +75,7 @@ pub fn execute(
                     d.journal.descriptor,
                     .CollectionJournal,
                 );
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.writeAll("Day removed.\n");
             }
         },
@@ -91,7 +91,7 @@ pub fn execute(
                     t.tasklist.descriptor,
                     .CollectionTasklist,
                 );
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.writeAll("Entry removed.\n");
             }
         },
@@ -107,7 +107,7 @@ pub fn execute(
                     n.directory.descriptor,
                     .CollectionDirectory,
                 );
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.writeAll("Note removed.\n");
             }
         },

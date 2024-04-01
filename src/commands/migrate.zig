@@ -30,7 +30,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     if (self.touch) {
 
@@ -57,14 +57,13 @@ pub fn execute(
             defer tasks.deinit();
             root.markModified(tl, .CollectionTasklist);
         }
-        try root.writeChanges(opts.tz);
-        try root.writeTags(opts.tz);
-        try root.writeChains(opts.tz);
+        try root.writeChanges();
+        try root.writeTags();
+        try root.writeChains();
     } else {
         try migration.migratePath(
             allocator,
             root.fs.?.root_path,
-            opts.tz,
         );
         try writer.writeAll("Migration complete\n");
     }

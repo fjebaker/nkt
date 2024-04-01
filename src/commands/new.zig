@@ -57,7 +57,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
 
@@ -79,7 +79,7 @@ pub fn execute(
         .chain => {
             try root.addNewChain(.{
                 .name = self.name,
-                .created = time.timeNow(),
+                .created = time.Time.now(),
             });
         },
         .tag => {
@@ -93,8 +93,8 @@ pub fn execute(
     );
 
     switch (self.ctype) {
-        .chain => try root.writeChains(opts.tz),
-        .tag => try root.writeTags(opts.tz),
-        else => try root.writeChanges(opts.tz),
+        .chain => try root.writeChains(),
+        .tag => try root.writeTags(),
+        else => try root.writeChanges(),
     }
 }

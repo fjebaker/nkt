@@ -73,7 +73,7 @@ pub fn addNewNoteByName(
 ) !Note {
     if (self.getNote(name)) |_| return Error.DuplicateNote;
 
-    const now = time.timeNow();
+    const now = time.Time.now();
     const note: Note = .{
         .name = name,
         .path = try self.newPathFromName(name, opts.extension),
@@ -164,7 +164,7 @@ pub fn rename(
 
     ptr.name = new_name;
     ptr.path = new_path;
-    ptr.modified = time.timeNow();
+    ptr.modified = time.Time.now();
 
     try fs.move(old_path, new_path);
     return ptr.*;

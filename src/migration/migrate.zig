@@ -10,12 +10,11 @@ pub const Error = error{UnknownVersion};
 pub fn migratePath(
     allocator: std.mem.Allocator,
     root_dir: []const u8,
-    tz: TimeZone,
 ) !void {
     var old = try FileSystem.init(root_dir);
     defer old.deinit();
 
-    try migrateFileSystem(allocator, &old, tz);
+    try migrateFileSystem(allocator, &old);
 }
 
 const SchemaReader = struct {
@@ -29,7 +28,6 @@ const SchemaReader = struct {
 fn migrateFileSystem(
     allocator: std.mem.Allocator,
     old: *FileSystem,
-    tz: TimeZone,
 ) !void {
     var mem = std.heap.ArenaAllocator.init(allocator);
     defer mem.deinit();
@@ -57,8 +55,8 @@ fn migrateFileSystem(
 
     new.fs = old.*;
     // new file system
-    try new.createFilesystem(tz);
-    try new.writeChanges(tz);
+    try new.createFilesystem();
+    try new.writeChanges();
 }
 
 const Topology_0_2_0 = @import("Topology_0_2_0.zig");
@@ -143,7 +141,7 @@ fn migrate_0_2_0(
 
     // migrate the journals
     for (topo.journals) |jr| {
-        const now = Root.timeNow();
+        const now = Root.Time.now();
         var journal = try new.addNewJournal(.{
             .name = jr.name,
             .path = try std.fs.path.join(
@@ -185,7 +183,7 @@ fn migrate_0_2_0(
 
     // migrate directories
     for (topo.directories) |dir| {
-        const now = Root.timeNow();
+        const now = Root.Time.now();
         var directory = try new.addNewDirectory(.{
             .name = dir.name,
             .path = try std.fs.path.join(

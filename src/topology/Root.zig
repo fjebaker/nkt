@@ -8,7 +8,6 @@ const tags = @import("tags.zig");
 pub const Tag = tags.Tag;
 const time = @import("time.zig");
 pub const Time = time.Time;
-pub const timeNow = time.timeNow;
 const FileSystem = @import("../FileSystem.zig");
 
 const Root = @This();
@@ -365,8 +364,8 @@ test "add and get descriptors" {
     const new_directory: Descriptor = .{
         .name = "test",
         .path = "dir.test",
-        .created = 0,
-        .modified = 1,
+        .created = .{ .time = 0 },
+        .modified = .{ .time = 1 },
     };
     try root.addDescriptor(new_directory, .CollectionDirectory);
 
@@ -447,8 +446,8 @@ test "serialize" {
     const new_directory: Descriptor = .{
         .name = "test",
         .path = "dir.test",
-        .created = 0,
-        .modified = 1,
+        .created = .{ .time = 0 },
+        .modified = .{ .time = 1 },
     };
     try root.addDescriptor(new_directory, .CollectionDirectory);
 
@@ -565,7 +564,7 @@ pub fn addNewCollection(
     name: []const u8,
     comptime t: CollectionType,
 ) !t.ToType() {
-    const now = time.timeNow();
+    const now = time.Time.now();
     const descr: Descriptor = .{
         .name = name,
         .created = now,
@@ -757,7 +756,7 @@ pub fn addInitialCollections(self: *Root) !void {
 /// Create the file system. Overwrites any existing files, only to be used for
 /// initalization or migration, else risks deleting existing data if not all
 /// read.
-pub fn createFilesystem(self: *Root, tz: time.TimeZone) !void {
+pub fn createFilesystem(self: *Root) !void {
     var fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
 
     // migration: first we validate that all of the journals / directories /
@@ -774,10 +773,10 @@ pub fn createFilesystem(self: *Root, tz: time.TimeZone) !void {
     }
 
     // create the tags file
-    try self.writeTags(tz);
+    try self.writeTags();
 
     // create the chain file
-    try self.writeChains(tz);
+    try self.writeChains();
 
     // journals
     try self.writeAllDescriptors(fs, .CollectionJournal);
@@ -815,7 +814,7 @@ fn writeCollection(
 
 fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: CollectionType) !void {
     const descrs = @field(self.info, t.toFieldName());
-    const now = time.timeNow();
+    const now = time.Time.now();
     for (descrs) |*descr| {
         // if we have chached changes, read them
         const item = @field(self.cache, t.toFieldName()).getPtr(descr.name) orelse
@@ -833,8 +832,7 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
 }
 
 /// Write only modified collections back to the disk
-pub fn writeChanges(self: *Root, tz: time.TimeZone) !void {
-    _ = tz;
+pub fn writeChanges(self: *Root) !void {
     const fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
@@ -844,8 +842,7 @@ pub fn writeChanges(self: *Root, tz: time.TimeZone) !void {
 }
 
 /// Write the chain changes to the chain file.
-pub fn writeChains(self: *Root, tz: time.TimeZone) !void {
-    _ = tz;
+pub fn writeChains(self: *Root) !void {
     var fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
@@ -857,13 +854,13 @@ pub fn writeChains(self: *Root, tz: time.TimeZone) !void {
 }
 
 /// Write the tag descriptor changes to the tags file
-pub fn writeTags(self: *Root, tz: time.TimeZone) !void {
+pub fn writeTags(self: *Root) !void {
     var fs = self.getFileSystem() orelse
         return Error.NeedsFileSystem;
 
     // create the tags file
     var list = try self.getTagDescriptorListPtr();
-    const tag_content = try list.serialize(self.allocator, tz);
+    const tag_content = try list.serialize(self.allocator);
     defer self.allocator.free(tag_content);
     try fs.overwrite(self.info.tagpath, tag_content);
 }

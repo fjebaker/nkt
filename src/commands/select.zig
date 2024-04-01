@@ -41,10 +41,10 @@ pub fn execute(
     _: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
-    var item = try self.selection.resolveReportError(root, opts.tz);
+    var item = try self.selection.resolveReportError(root);
     defer item.deinit();
     try handleSelection(writer, item);
 }

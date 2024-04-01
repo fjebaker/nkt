@@ -41,7 +41,7 @@ pub fn init(alloc: std.mem.Allocator, opts: PrintOptions) Self {
     return .{
         .entries = list,
         .mem = mem,
-        .now = time.timeNow(),
+        .now = time.Time.now(),
         .opts = opts,
     };
 }
@@ -58,11 +58,11 @@ fn formatDueDate(
     due_time: ?time.Time,
 ) ![]const u8 {
     const due = if (due_time) |t|
-        time.dateFromTime(t)
+        t.toDate()
     else
         return "";
 
-    const now = time.dateFromTime(self.now);
+    const now = self.now.toDate();
 
     const overdue = due.lt(now);
 
@@ -86,22 +86,6 @@ fn formatDueDate(
     );
 }
 
-fn formatTime(tz: time.TimeZone, t: time.Time) ![]const u8 {
-    const local = tz.makeLocal(time.dateFromTime(t));
-    return &try time.formatDateBuf(local);
-}
-
-fn formatTimeAlloc(
-    allocator: std.mem.Allocator,
-    tz: time.TimeZone,
-    t: time.Time,
-) ![]const u8 {
-    return try allocator.dupe(
-        u8,
-        try formatTime(tz, t),
-    );
-}
-
 pub fn add(self: *Self, task: Task, index: ?usize) !void {
     const alloc = self.mem.allocator();
     const due = try self.formatDueDate(alloc, task.due);
@@ -109,9 +93,9 @@ pub fn add(self: *Self, task: Task, index: ?usize) !void {
     // make date pretty
     const pretty_date: ?[]const u8 =
         if (task.done) |cmpl|
-        try formatTimeAlloc(alloc, self.opts.tz, cmpl)
+        try cmpl.formatDate(alloc)
     else if (task.archived) |arch|
-        try formatTimeAlloc(alloc, self.opts.tz, arch)
+        try arch.formatDate(alloc)
     else
         null;
 

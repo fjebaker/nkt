@@ -38,7 +38,7 @@ pub const Day = struct {
     tags: []Tag,
 
     pub fn getDate(day: Day) time.Date {
-        return time.dateFromTime(day.created);
+        return day.created.toDate();
     }
 };
 
@@ -81,7 +81,7 @@ pub fn deinit(self: *Journal) void {
 
 fn timeToName(allocator: std.mem.Allocator, t: Time) ![]const u8 {
     // TODO: timezone conversion?
-    const date = time.dateFromTime(t);
+    const date = t.toDate();
     const fmtd = try time.formatDateBuf(date);
     return try allocator.dupe(u8, &fmtd);
 }
@@ -143,7 +143,7 @@ pub fn getDayOrNew(self: *Journal, name: []const u8) !Day {
 }
 
 fn newDayFromName(self: *Journal, name: []const u8) !Day {
-    const now = time.timeNow();
+    const now = time.Time.now();
     const day = Day{
         .name = name,
         .path = try self.newPathFromName(name),
@@ -374,7 +374,7 @@ pub fn addNewEntryFromText(
     text: []const u8,
     entry_tags: []const Tag,
 ) !Day {
-    const now = time.timeNow();
+    const now = time.Time.now();
     return try self.addEntry(.{
         .text = text,
         .tags = entry_tags,

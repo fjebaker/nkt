@@ -97,9 +97,11 @@ pub fn main() !void {
     // get the output fd
     const out_fd = std.io.getStdOut();
 
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
     // get the local timezone information
-    var tz = try time.TimeZone.init(allocator);
-    defer tz.deinit();
+    const tz = try time.TimeZone.initLeaky(arena.allocator());
 
     try nkt_main(allocator, raw_args, out_fd, tz, fs);
 
@@ -171,8 +173,7 @@ test "end-to-end" {
     defer outfile.close();
 
     // always UTC for tests
-    var tz = try time.TimeZone.initUTC(allocator);
-    defer tz.deinit();
+    const tz = try time.TimeZone.initUTC();
 
     var fs = try FileSystem.init(root_path);
     defer fs.deinit();

@@ -108,7 +108,7 @@ fn editFileAt(
     root: *Root,
     path: []const u8,
     line: usize,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     if (path.len == 0) return;
     const c_name = utils.inferCollectionName(path).?;
@@ -117,9 +117,9 @@ fn editFileAt(
     const note_name = std.fs.path.stem(path);
 
     var note = dir.getNotePtr(note_name).?;
-    note.modified = time.timeNow();
+    note.modified = time.Time.now();
     root.markModified(dir.descriptor, .CollectionDirectory);
-    try root.writeChanges(opts.tz);
+    try root.writeChanges();
 
     const abs_path = try root.fs.?.absPathify(allocator, path);
     defer allocator.free(abs_path);

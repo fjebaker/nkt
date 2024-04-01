@@ -98,7 +98,7 @@ fn editElseMaybeCreate(
     opts: commands.Options,
     e_opts: EditOptions,
 ) !void {
-    var maybe_item = try selection.resolveOrNull(root, opts.tz);
+    var maybe_item = try selection.resolveOrNull(root);
     if (maybe_item) |*item| {
         defer item.deinit();
         // edit the existing item
@@ -124,11 +124,11 @@ fn editElseMaybeCreate(
 
                 var ptr = t.tasklist.getTaskByHashPtr(t.task.hash).?;
                 ptr.details = new_details;
-                ptr.modified = time.timeNow();
+                ptr.modified = time.Time.now();
 
                 root.markModified(t.tasklist.descriptor, .CollectionTasklist);
 
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
 
                 try writer.print(
                     "Task details for '{s}' in '{s}' updated\n",
@@ -153,7 +153,7 @@ fn editElseMaybeCreate(
                     .collection_name = d.journal.descriptor.name,
                     .collection_type = .CollectionDirectory,
                     .selector = .{
-                        .ByDate = time.dateFromTime(d.day.created),
+                        .ByDate = d.day.created.toDate(),
                     },
                 };
 
@@ -219,20 +219,20 @@ fn editElseMaybeCreate(
                 var ptr = try e.journal.getEntryPtr(e.day, e.entry);
                 ptr.text = new_text;
                 ptr.tags = new_tags;
-                ptr.modified = time.timeNow();
+                ptr.modified = time.Time.now();
                 root.markModified(e.journal.descriptor, .CollectionJournal);
 
                 try e.journal.writeDays();
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.print(
                     "Entry '{s}' in day '{s}' updated\n",
                     .{
-                        try time.formatTimeBuf(opts.tz.makeLocal(
-                            time.dateFromTime(ptr.created),
-                        )),
-                        try time.formatDateBuf(opts.tz.makeLocal(
-                            time.dateFromTime(e.day.created),
-                        )),
+                        try time.formatTimeBuf(
+                            ptr.created.toDate(),
+                        ),
+                        try time.formatDateBuf(
+                            e.day.created.toDate(),
+                        ),
                     },
                 );
             },
@@ -277,17 +277,17 @@ fn editNote(
     root: *Root,
     n: Directory.Note,
     dir: *Directory,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     const note = try dir.touchNote(
         n,
-        time.timeNow(),
+        time.Time.now(),
     );
     root.markModified(
         dir.descriptor,
         .CollectionDirectory,
     );
-    try root.writeChanges(opts.tz);
+    try root.writeChanges();
 
     try becomeEditorRelativePath(
         allocator,
@@ -318,7 +318,7 @@ fn createNew(
         .ByDate => |date| {
             const cname = selection.collection_name orelse
                 root.info.default_journal;
-            const local_date = opts.tz.makeLocal(date);
+            const local_date = date;
             const date_string = try time.formatDateBuf(local_date);
             const template = try dateTemplate(allocator, local_date);
             return try createNewNote(
@@ -369,7 +369,7 @@ fn createNewNote(
     root: *Root,
     extension: []const u8,
     template: ?[]const u8,
-    opts: commands.Options,
+    _: commands.Options,
 ) ![]const u8 {
     var dir = (try root.getDirectory(collection_name)) orelse {
         try cli.throwError(
@@ -393,7 +393,7 @@ fn createNewNote(
     }
 
     root.markModified(dir.descriptor, .CollectionDirectory);
-    try root.writeChanges(opts.tz);
+    try root.writeChanges();
 
     return try allocator.dupe(u8, note.path);
 }

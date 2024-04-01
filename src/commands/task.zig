@@ -54,10 +54,10 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     _: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
-    const now = time.timeNow();
+    const now = time.Time.now();
     const tl_name = self.args.tasklist orelse root.info.default_tasklist;
 
     var tl = if (try root.getTasklist(tl_name)) |tl|
@@ -118,5 +118,5 @@ pub fn execute(
         }
         return err;
     };
-    try root.writeChanges(opts.tz);
+    try root.writeChanges();
 }

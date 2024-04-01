@@ -53,14 +53,14 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
 
-    var from_item = try self.from.resolveReportError(root, opts.tz);
+    var from_item = try self.from.resolveReportError(root);
     defer from_item.deinit();
 
-    if (try self.to.resolveOrNull(root, opts.tz)) |to_item| {
+    if (try self.to.resolveOrNull(root)) |to_item| {
         _ = to_item;
         unreachable;
     } else {
@@ -70,7 +70,7 @@ pub fn execute(
                 const old_name = n.note.name;
                 _ = try n.directory.rename(old_name, to_name);
                 root.markModified(n.directory.descriptor, .CollectionDirectory);
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.print(
                     "Moved '{s}' [directory: '{s}'] -> '{s}' [directory: '{s}']\n",
                     .{
@@ -91,7 +91,7 @@ pub fn execute(
                 const old_name = t.task.outcome;
                 _ = try t.tasklist.rename(t.task, to_name);
                 root.markModified(t.tasklist.descriptor, .CollectionTasklist);
-                try root.writeChanges(opts.tz);
+                try root.writeChanges();
                 try writer.print(
                     "Moved '{s}' [tasklist: '{s}'] -> '{s}' [tasklist: '{s}']\n",
                     .{

@@ -26,7 +26,7 @@ pub const Tag = struct {
         pub fn new(name: []const u8) Descriptor {
             return .{
                 .name = name,
-                .created = time.timeNow(),
+                .created = time.Time.now(),
                 .color = colors.randomColor(),
             };
         }
@@ -97,7 +97,6 @@ pub const DescriptorList = struct {
     pub fn serialize(
         self: *const DescriptorList,
         allocator: std.mem.Allocator,
-        _: time.TimeZone,
     ) ![]const u8 {
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
@@ -360,7 +359,7 @@ pub fn parseInlineWithAdditional(
     text: ?[]const u8,
     additional_tags: []const []const u8,
 ) ![]Tag {
-    const now = time.timeNow();
+    const now = time.Time.now();
 
     // parse all the context tags and add them to the given tags
     const inline_tags: []Tag = if (text) |txt|
@@ -403,14 +402,14 @@ test "tag difference" {
         alloc,
         &.{ .{
             .name = "A",
-            .added = 0,
+            .added = .{ .time = 0 },
         }, .{
             .name = "B",
-            .added = 0,
+            .added = .{ .time = 0 },
         } },
         &.{.{
             .name = "A",
-            .added = 0,
+            .added = .{ .time = 0 },
         }},
     );
     defer alloc.free(diff);
@@ -418,7 +417,7 @@ test "tag difference" {
     try std.testing.expectEqualDeep(
         &[_]Tag{.{
             .name = "B",
-            .added = 0,
+            .added = .{ .time = 0 },
         }},
         diff,
     );
@@ -460,14 +459,14 @@ test "tag union" {
         alloc,
         &.{ .{
             .name = "A",
-            .added = 0,
+            .added = .{ .time = 0 },
         }, .{
             .name = "B",
-            .added = 0,
+            .added = .{ .time = 0 },
         } },
         &.{.{
             .name = "A",
-            .added = 0,
+            .added = .{ .time = 0 },
         }},
     );
     defer alloc.free(diff);
@@ -475,10 +474,10 @@ test "tag union" {
     try std.testing.expectEqualDeep(
         &[_]Tag{ .{
             .name = "A",
-            .added = 0,
+            .added = .{ .time = 0 },
         }, .{
             .name = "B",
-            .added = 0,
+            .added = .{ .time = 0 },
         } },
         diff,
     );

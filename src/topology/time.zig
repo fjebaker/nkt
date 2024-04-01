@@ -3,22 +3,119 @@ const time = @import("time");
 const chrono = @import("chrono");
 const utils = @import("../utils.zig");
 
+pub const Timestamp = time.datetime.Time;
+pub const Date = time.datetime.Datetime;
+pub const Weekday = time.datetime.Weekday;
+
 pub const Error = error{DateTooShort};
 
-// singleton
+// singleton for the current time zone
 var global_time_zone: ?TimeZone = null;
 
 /// The type representing times in the topology: an integer counting
 /// miliseconds since epoch in UTC
 pub const Time = struct {
+    /// Time stamp always UTC since epoch
     time: u64,
+    /// Timezone for this time stamp
+    timezone: ?TimeZone = null,
 
+    /// Get the time now as `Time`
+    pub fn now() Time {
+        return .{
+            .time = @intCast(std.time.milliTimestamp()),
+            .timezone = global_time_zone,
+        };
+    }
+
+    /// Get a `Time` from a `Date`
+    pub fn fromDate(date: Date) Time {
+        const utc_date = date.shiftTimezone(&time.timezones.UTC);
+        return .{
+            .time = @intCast(utc_date.toTimestamp()),
+            .timezone = TimeZone.fromDate(date),
+        };
+    }
+
+    /// Turn a `Time` into a `Date`, shifting the timezone if appropriate
+    pub fn toDate(t: Time) Date {
+        const date = Date.fromTimestamp(@intCast(t.time));
+        const tz = t.getTimeZone();
+        return date.shiftTimezone(&tz.tz);
+    }
+
+    /// Get the `TimeZone` of the `Time`
+    pub fn getTimeZone(t: Time) TimeZone {
+        return t.timezone orelse global_time_zone orelse
+            @panic("No Timezone!");
+    }
+
+    // Greater than comparison `t1 > t2`
+    pub fn gt(s: Time, o: Time) bool {
+        return s.time > o.time;
+    }
+
+    // Less than comparison `t1 < t2`
+    pub fn lt(s: Time, o: Time) bool {
+        return s.time < o.time;
+    }
+
+    /// Check whether two times are equal or not
     pub fn eql(s: Time, o: Time) bool {
         return s.time == o.time;
     }
 
+    /// Turn a `YYYY-MM-DD HH:MM:SS TZZ (GMT+H)` into a `Time`
+    pub fn fromString(s: []const u8) !Time {
+        var date = try stringToDate(s[0..10]);
+        const time_of_day = try toTimestamp(s[11..19]);
+        date.time = time_of_day;
+
+        const tz1 = std.mem.indexOfAny(u8, s, "(").? + 4;
+        const tz2 = std.mem.indexOfScalarPos(
+            u8,
+            s,
+            tz1,
+            ')',
+        ).?;
+        const time_zone_shift = try std.fmt.parseInt(
+            i32,
+            s[tz1 + 1 .. tz2],
+            10,
+        );
+
+        const hour_shift = if (s[tz1 - 1] == '+')
+            time_zone_shift
+        else
+            -time_zone_shift;
+
+        const tz_designation = s[20..23];
+        const tz = TimeZone.create(
+            tz_designation,
+            @intCast(hour_shift * 60),
+        );
+
+        date.zone = &tz.tz;
+        return Time.fromDate(date);
+    }
+
+    // TODO: make this a `std.fmt` format function
+
+    /// Format as `YYYY-MM-DD`
+    pub fn formatDate(t: Time, allocator: std.mem.Allocator) ![]const u8 {
+        // TODO: rename this function `formatDateAlloc`
+        const buf = try formatDateBuf(t.toDate());
+        return try allocator.dupe(u8, &buf);
+    }
+
+    /// Format as `HH:MM:SS`
+    pub fn formatTime(t: Time) ![8]u8 {
+        return try formatTimeBuf(t.toDate());
+    }
+
     pub fn jsonStringify(t: Time, writer: anytype) !void {
-        global_time_zone.?.printTimeImpl(writer, t, true) catch {
+        const tz = t.getTimeZone();
+        tz.printTimeImpl(writer, t, true) catch {
             return error.OutOfMemory;
         };
     }
@@ -37,29 +134,23 @@ pub const Time = struct {
                 const val = std.fmt.parseInt(u64, number, 10) catch {
                     return error.InvalidNumber;
                 };
-                return .{ .time = val };
+                return .{ .time = val, .timezone = global_time_zone };
             },
             .string => |string| {
-                return timeFromDateString(string) catch error.InvalidNumber;
+                return Time.fromString(string) catch error.InvalidNumber;
             },
             else => return error.InvalidNumber,
         }
     }
 };
 
-pub const Timestamp = time.datetime.Time;
-pub const Date = time.datetime.Datetime;
-pub const Weekday = time.datetime.Weekday;
-
 pub const TimeZone = struct {
     tz: time.datetime.Timezone,
-    allocator: std.mem.Allocator,
 
-    pub fn deinit(self: *TimeZone) void {
-        if (global_time_zone != null) {
-            self.allocator.free(self.tz.name);
-        }
-        self.* = undefined;
+    pub fn fromDate(date: Date) TimeZone {
+        return .{
+            .tz = date.zone.*,
+        };
     }
 
     /// Format a UTC date with the given timezone for saving to disk or
@@ -78,8 +169,7 @@ pub const TimeZone = struct {
     }
 
     fn printTimeImpl(self: TimeZone, writer: anytype, t: Time, comptime quoted: bool) !void {
-        const adjusted = self.makeLocal(dateFromTime(t));
-        const date_time = try formatDateTimeBuf(adjusted);
+        const date_time = try formatDateTimeBuf(t.toDate());
         const offset = @divFloor(self.tz.offset, 60);
 
         const quote = if (quoted) "\"" else "";
@@ -98,34 +188,26 @@ pub const TimeZone = struct {
     }
 
     /// Initialize a UTC timezone
-    pub fn initUTC(allocator: std.mem.Allocator) !TimeZone {
-        const utc_copy = try allocator.dupe(u8, "UTC");
-        const tz = time.datetime.Timezone.create(utc_copy, 0);
+    pub fn initUTC() !TimeZone {
+        return .{ .tz = time.timezones.UTC };
+    }
+
+    /// Create a timezone with a designation and minute offset
+    pub fn create(name: []const u8, offset_minutes: i16) TimeZone {
+        const tz = time.datetime.Timezone.create(name, offset_minutes);
         return .{
             .tz = tz,
-            .allocator = allocator,
         };
-    }
-
-    /// Convert a given date to a local date
-    pub fn makeLocal(self: TimeZone, date: Date) Date {
-        return date.shiftTimezone(&self.tz);
-    }
-
-    /// Convert a given local date to UTC date
-    pub fn makeUTC(self: TimeZone, date: Date) Date {
-        var to_utc = self.tz;
-        to_utc.offset = -to_utc.offset;
-        return date.shiftTimezone(&to_utc);
     }
 
     /// Get the local time now
     pub fn localTimeNow(self: TimeZone) Date {
-        return self.makeLocal(dateFromTime(timeNow()));
+        return self.makeLocal(Time.now().toDate());
     }
 
-    /// Get the timezone
-    pub fn init(allocator: std.mem.Allocator) !TimeZone {
+    /// Get the current local timezone. Must be given an allocator from an
+    /// `ArenaAllocator`
+    pub fn initLeaky(allocator: std.mem.Allocator) !TimeZone {
         if (global_time_zone) |tz| return tz;
         switch (@import("builtin").os.tag) {
             .linux, .macos => {}, // ok
@@ -142,19 +224,14 @@ pub const TimeZone = struct {
         const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
 
         const tz = time.datetime.Timezone.create(
-            try allocator.dupe(u8, designation),
+            designation,
             @intCast(@divFloor(local_offset, 60)), // convert to minutes
         );
 
-        global_time_zone = .{ .tz = tz, .allocator = allocator };
+        global_time_zone = .{ .tz = tz };
         return global_time_zone.?;
     }
 };
-
-/// Get the time now as `Time`
-pub fn timeNow() Time {
-    return .{ .time = @intCast(std.time.milliTimestamp()) };
-}
 
 /// Get the end of the day `Date` from a `Date`. This is the equivalent to
 /// 23:59:59.
@@ -172,58 +249,20 @@ pub fn startOfDay(day: Date) Date {
     return day.shiftSeconds(-seconds_to_start);
 }
 
-/// Turn a `Time` into a `Date`
-pub fn dateFromTime(t: Time) Date {
-    return Date.fromTimestamp(@intCast(t.time));
-}
-
 /// Turn a `DateString` into a `Date`
 pub fn dateFromDateString(s: []const u8) !Date {
-    var date = try toDate(s[0..10]);
-    const time_of_day = try toTimestamp(s[11..19]);
-    date.time = time_of_day;
-
-    const tz1 = std.mem.indexOfAny(u8, s, "(").? + 4;
-    const tz2 = std.mem.indexOfScalarPos(
-        u8,
-        s,
-        tz1,
-        ')',
-    ).?;
-    const time_zone_shift = try std.fmt.parseInt(
-        i32,
-        s[tz1 + 1 .. tz2],
-        10,
-    );
-
-    if (s[tz1] == '+') {
-        date = date.shiftHours(-time_zone_shift);
-    } else {
-        date = date.shiftHours(-time_zone_shift);
-    }
-    return date;
-}
-
-/// Turn a `DateString` into a `Time`
-pub fn timeFromDateString(s: []const u8) !Time {
-    const date = try dateFromDateString(s);
-    return timeFromDate(date);
-}
-
-/// Get a `Time` from a `Date`
-pub fn timeFromDate(date: Date) Time {
-    return .{ .time = @intCast(date.toTimestamp()) };
+    return Time.fromString(s).toDate();
 }
 
 test "date string conversion" {
-    const t = timeNow();
+    const t = Time.now();
     var tz = try TimeZone.initUTC(std.testing.allocator);
     defer tz.deinit();
 
     const timeDate = try tz.formatTime(std.testing.allocator, t);
     defer std.testing.allocator.free(timeDate);
 
-    _ = try timeFromDateString(timeDate);
+    _ = try Time.fromString(timeDate);
 }
 
 /// Counts the occurances of `spacer` in `string` and ensures all non spacer
@@ -258,8 +297,8 @@ pub fn newDate(year: u16, month: u8, day: u8) !Date {
     return try Date.fromDate(year, month, day);
 }
 
-/// Convert a string to a `Date`
-pub fn toDate(string: []const u8) !Date {
+/// Convert a `YYYY-MM-DD` string to a `Date`
+pub fn stringToDate(string: []const u8) !Date {
     if (string.len < 10) return Error.DateTooShort;
     const year = try std.fmt.parseInt(u16, string[0..4], 10);
     // months and day start at zero
@@ -316,7 +355,7 @@ pub fn monthOfYear(date: Date) ![]const u8 {
 
 /// Shift back a `Time` to a `Date`.
 pub fn shiftBack(t: Time, index: usize) Date {
-    return dateFromTime(t).shiftDays(
+    return t.toDate().shiftDays(
         -@as(i32, @intCast(index)),
     );
 }
@@ -371,7 +410,7 @@ pub const Colloquial = struct {
         var arg = try c.next();
 
         if (_eq(arg, "soon")) {
-            var prng = std.rand.DefaultPrng.init(timeNow().time);
+            var prng = std.rand.DefaultPrng.init(Time.now().time);
             const days_different = prng.random().intRangeAtMost(
                 i32,
                 3,
@@ -401,7 +440,7 @@ pub const Colloquial = struct {
                     try c.optionalTime(),
                 );
             } else if (isDate(arg)) {
-                const date = try toDate(arg);
+                const date = try stringToDate(arg);
                 return c.setTime(date, try c.optionalTime());
             }
         }
@@ -423,7 +462,7 @@ pub const Colloquial = struct {
     fn parseDate(c: *Colloquial) !Date {
         const arg = c.next();
         if (isDate(arg)) {
-            return try toDate(arg);
+            return try stringToDate(arg);
         } else if (std.mem.eql(u8, arg, "today")) {
             return Date.now();
         } else if (std.mem.eql(u8, arg, "tomorrow")) {
@@ -498,11 +537,11 @@ fn parseTimelikeDate(relative: Date, timelike: []const u8) !Date {
 
 /// Parse a time-like string into a time. See also `Colloquial`. Any relative time-like will be relative to the time in `relative`.
 pub fn parseTimelike(relative: Time, timelike: []const u8) !Time {
-    const now = dateFromTime(relative);
+    const now = relative.toDate();
     const itt = std.mem.tokenize(u8, timelike, " ");
     var col = Colloquial{ .tkn = itt, .now = now };
     const parsed = try col.parse();
-    return timeFromDate(parsed);
+    return Time.fromDate(parsed);
 }
 
 test "time selection parsing" {
