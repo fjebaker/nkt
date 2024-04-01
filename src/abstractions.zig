@@ -234,19 +234,16 @@ pub const TaskEventList = struct {
     }
 
     /// Returns all events that take place between the start and end of a day
-    /// from a given time.
+    /// on a given `Date`.
     pub fn eventsOnDay(self: *TaskEventList, date: time.Date) []const TaskEvent {
-        const start_time = time.Time.fromDate(time.startOfDay(date));
-        const end_time = time.Time.fromDate(time.endOfDay(date));
-
         const start = for (self.events, 0..) |e, i| {
-            if (e.getTime().time >= start_time.time) break i;
+            if (e.getTime().toDate().date.eql(date.date)) break i;
         } else self.events.len;
 
         if (start == self.events.len) return &.{};
 
         const end = for (self.events[start..], start..) |e, i| {
-            if (e.getTime().time >= end_time.time) break i;
+            if (!e.getTime().toDate().date.eql(date.date)) break i;
         } else self.events.len;
 
         return self.events[start..end];

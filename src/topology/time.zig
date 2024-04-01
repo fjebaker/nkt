@@ -288,22 +288,6 @@ pub const TimeZone = struct {
     }
 };
 
-/// Get the end of the day `Date` from a `Date`. This is the equivalent to
-/// 23:59:59.
-pub fn endOfDay(day: Date) Date {
-    const second_to_day_end = std.time.s_per_day - @as(
-        i64,
-        @intFromFloat(day.time.toSeconds()),
-    );
-    return day.shiftSeconds(second_to_day_end - 1);
-}
-/// Get the start of the day `Date` from a `Date`. This is the equivalent to
-/// 00:00:00.
-pub fn startOfDay(day: Date) Date {
-    const seconds_to_start: i64 = @intFromFloat(day.time.toSeconds());
-    return day.shiftSeconds(-seconds_to_start);
-}
-
 /// Turn a `DateString` into a `Date`
 pub fn dateFromDateString(s: []const u8) !Date {
     return Time.fromString(s).toDate();

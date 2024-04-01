@@ -51,14 +51,12 @@ pub const ChainList = struct {
     /// Checks whether the chain has been marked as complete for today
     pub fn isChainComplete(self: *const ChainList, i: usize) bool {
         const chain = self.chains[i];
-
         if (chain.completed.len == 0) return false;
 
-        const day_end = time.endOfDay(time.Time.now().toDate());
         const latest = chain.completed[chain.completed.len - 1];
+        const today = time.Time.now().toDate();
 
-        const delta = day_end.sub(latest.toDate());
-        return (delta.years == 0 and delta.days == 0);
+        return today.date.eql(latest.toDate().date);
     }
 
     /// Add a new `Chain` to the chain list.

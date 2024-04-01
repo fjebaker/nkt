@@ -115,18 +115,19 @@ fn prepareChain(
     days_hence: usize,
     chain: Chain,
 ) ![]Day {
-    const day_end = time.endOfDay(today);
-
     // populate day slots
     var days = try allocator.alloc(Day, days_hence);
     for (days, 0..) |*day, i| {
-        day.* = Day.init(day_end.shiftDays(-@as(i32, @intCast(i))));
+        day.* = Day.init(today.shiftDays(-@as(i32, @intCast(i))));
     }
 
     var itt = utils.ReverseIterator(time.Time).init(chain.completed);
     while (itt.next()) |item| {
-        const date = item.toDate();
-        const delta = day_end.sub(date);
+        var date = item.toDate();
+        // for the purposes of chains, use the same timezones
+        date.zone = today.zone;
+        date.time = today.time;
+        const delta = today.sub(date);
 
         if (delta.years == 0 and delta.days < days.len) {
             const index: usize = @intCast(delta.days);
