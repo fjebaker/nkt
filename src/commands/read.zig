@@ -214,10 +214,10 @@ fn readJournal(
     var task_events = try abstractions.TaskEventList.init(allocator, tasks);
     defer task_events.deinit();
 
-    const now = time.Time.now();
     var line_count: usize = 0;
     for (0..j.info.days.len) |i| {
-        const day = j.getDayOffsetIndex(now, i) orelse continue;
+        const day_info = j.info.days[j.info.days.len - 1 - i];
+        const day = j.getDay(day_info.name).?;
 
         const events = task_events.eventsOnDay(day.getDate());
 
@@ -233,7 +233,10 @@ fn readJournal(
         );
 
         if (printer.format_printer.opts.max_lines) |N| {
-            if (line_count >= N) break;
+            if (line_count >= N) {
+                std.log.default.debug("Out of lines {d} >= {d}", .{ line_count, N });
+                break;
+            }
         }
     }
 }
