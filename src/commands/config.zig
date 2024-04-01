@@ -26,13 +26,11 @@ pub fn execute(
     try out_writer.print(
         \\nkt schema version     : {s}
         \\root directory         : {s}
-        \\timezone               : {s}
         \\local time             : {s}
         \\
     , .{
         Root.schemaVersion(),
         root.fs.?.root_path,
-        opts.tz.tz.name,
         now,
     });
 }
