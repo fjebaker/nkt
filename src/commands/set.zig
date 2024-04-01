@@ -28,7 +28,7 @@ pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
     .{
         .arg = "-c/--chain chain",
         .help = "The chain to apply to",
-        .completion = "{compadd $(nkt completion --list chains)}",
+        .completion = "{compadd $(nkt completion list --collection chains)}",
     },
     .{
         .arg = "--due datelike",

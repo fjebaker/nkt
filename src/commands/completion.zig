@@ -11,19 +11,42 @@ const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-pub const arguments = cli.Arguments(&.{.{
-    .arg = "--list collection",
-    .help = "For internal use only.",
-}});
+pub const arguments = cli.Commands(
+    .{
+        .commands = &.{
+            .{
+                .name = "list",
+                .args = cli.Arguments(&.{
+                    .{
+                        .arg = "--collection name",
+                        .help = "List all collection names of type `name`.",
+                    },
+                }),
+            },
+            .{
+                .name = "item",
+                .args = cli.Arguments(selections.selectHelp(
+                    "item",
+                    "Completion for an item selection.",
+                    .{ .required = false },
+                )),
+            },
+        },
+    },
+);
 
 pub const short_help = "Shell completion helper";
 pub const long_help = short_help;
 
-args: arguments.Parsed,
+args: ?arguments.Parsed,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
-    return .{ .args = args };
+    if (itt.argCount() > 2) {
+        const args = try arguments.parseAll(itt);
+        return .{ .args = args };
+    } else {
+        return .{ .args = null };
+    }
 }
 
 pub fn execute(
@@ -33,40 +56,61 @@ pub fn execute(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    try root.load();
-    _ = opts;
-
-    if (self.args.list) |collection| {
-        if (std.mem.eql(u8, collection, "journal")) {
-            for (root.info.journals) |c| {
-                try writer.writeAll(c.name);
-                try writer.writeAll(" ");
-            }
-        } else if (std.mem.eql(u8, collection, "directory")) {
-            for (root.info.directories) |c| {
-                try writer.writeAll(c.name);
-                try writer.writeAll(" ");
-            }
-        } else if (std.mem.eql(u8, collection, "tasklist")) {
-            for (root.info.tasklists) |c| {
-                try writer.writeAll(c.name);
-                try writer.writeAll(" ");
-            }
-        } else if (std.mem.eql(u8, collection, "chains")) {
-            const chainlist = try root.getChainList();
-            for (chainlist.chains) |c| {
-
-                // try writer.print("\"{s}\" ", .{c.name});
-                if (c.alias) |alias| {
-                    try writer.writeAll(alias);
-                    try writer.writeAll(" ");
-                }
-            }
-        } else {
-            try cli.throwError(error.UnknownSelection, "Invalid completion collection '{s}'", .{collection});
-        }
+    if (self.args) |args| {
+        try executeInternal(args, allocator, root, writer, opts);
     } else {
         try writeTemplate(allocator, writer);
+    }
+}
+
+fn executeInternal(
+    parsed_args: arguments.Parsed,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    try root.load();
+    _ = opts;
+    _ = allocator;
+
+    switch (parsed_args.commands) {
+        .list => |args| {
+            const collection = args.collection.?;
+            if (std.mem.eql(u8, collection, "journal")) {
+                for (root.info.journals) |c| {
+                    try writer.writeAll(c.name);
+                    try writer.writeAll(" ");
+                }
+            } else if (std.mem.eql(u8, collection, "directory")) {
+                for (root.info.directories) |c| {
+                    try writer.writeAll(c.name);
+                    try writer.writeAll(" ");
+                }
+            } else if (std.mem.eql(u8, collection, "tasklist")) {
+                for (root.info.tasklists) |c| {
+                    try writer.writeAll(c.name);
+                    try writer.writeAll(" ");
+                }
+            } else if (std.mem.eql(u8, collection, "chains")) {
+                const chainlist = try root.getChainList();
+                for (chainlist.chains) |c| {
+
+                    // try writer.print("\"{s}\" ", .{c.name});
+                    if (c.alias) |alias| {
+                        try writer.writeAll(alias);
+                        try writer.writeAll(" ");
+                    }
+                }
+            } else {
+                try cli.throwError(
+                    error.UnknownSelection,
+                    "Invalid completion collection '{s}'",
+                    .{collection},
+                );
+            }
+        },
+        .item => {},
     }
 }
 
