@@ -41,16 +41,27 @@ pub const short_help = "Shell completion helper";
 pub const long_help = short_help;
 
 args: ?arguments.Parsed,
+unused: []const []const u8 = &.{},
 
-pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     if (itt.argCount() > 2) {
+        var list = std.ArrayList([]const u8).init(alloc);
+        defer list.deinit();
+
         var args = arguments.init(itt);
+
+        const cmd = (try itt.next()).?;
+        _ = try args.parseArg(cmd);
+        // eat the first one, as that will be the command argument
+        _ = try itt.next();
+
         while (try itt.next()) |arg| {
             if (!args.parseArgForgiving(arg)) {
-                // ignore unparseable args
+                try list.append(arg.string);
             }
         }
-        return .{ .args = try args.getParsed() };
+
+        return .{ .args = try args.getParsed(), .unused = try list.toOwnedSlice() };
     } else {
         return .{ .args = null };
     }
@@ -63,8 +74,8 @@ pub fn execute(
     writer: anytype,
     opts: commands.Options,
 ) !void {
-    if (self.args) |args| {
-        executeInternal(args, allocator, root, writer, opts) catch |err| {
+    if (self.args != null) {
+        self.executeInternal(allocator, root, writer, opts) catch |err| {
             std.log.default.debug("completion error: {any}", .{err});
         };
     } else {
@@ -73,7 +84,7 @@ pub fn execute(
 }
 
 fn executeInternal(
-    parsed_args: arguments.Parsed,
+    self: Self,
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
@@ -82,7 +93,7 @@ fn executeInternal(
     try root.load();
     _ = opts;
 
-    switch (parsed_args.commands) {
+    switch (self.args.?.commands) {
         .list => |args| {
             const collection = args.collection.?;
             if (std.mem.eql(u8, collection, "journal")) {
@@ -119,7 +130,7 @@ fn executeInternal(
             }
         },
         .item => |args| {
-            const selection = try selections.fromArgs(
+            const selection = try selections.fromArgsForgiving(
                 SelectArgs.Parsed,
                 args.item,
                 args,
@@ -132,12 +143,65 @@ fn executeInternal(
                         selection.collection_name,
                         allocator,
                     ),
+                    .CollectionJournal => {
+                        // are we generating completion for the times?
+                        if (isSelectingTime(self.unused, selection)) {
+                            try listTimesFor(writer, root, selection, allocator);
+                            return;
+                        }
+
+                        // if (selection.selector) |_| {};
+                    },
                     else => {},
                 }
             } else {
+                if (isSelectingTime(self.unused, selection)) {
+                    try listTimesFor(writer, root, selection, allocator);
+                    return;
+                }
+                // TODO: if it's date-like, list from diary
                 try listNotesInDirectory(writer, root, null, allocator);
             }
         },
+    }
+}
+
+fn isSelectingTime(
+    unused: []const []const u8,
+    selection: selections.Selection,
+) bool {
+    return (selection.modifiers.entry_time != null or
+        utils.contains([]const u8, unused, "time"));
+}
+
+fn listTimesFor(
+    writer: anytype,
+    root: *Root,
+    selection: selections.Selection,
+    _: std.mem.Allocator,
+) !void {
+    var s = selection;
+    const tstring = s.modifiers.entry_time;
+    s.modifiers.entry_time = null;
+
+    std.log.default.debug("Listing times for: '{s}'", .{tstring orelse ""});
+
+    var item = try s.resolveOrNull(root);
+    defer if (item) |*i| i.deinit();
+
+    if (item) |*day_collection| {
+        var day = &day_collection.Day;
+        const entries = try day.journal.getEntries(day.day);
+        for (entries) |entry| {
+            const etime = try entry.created.formatTime();
+            if (tstring) |t| {
+                if (std.mem.startsWith(u8, &etime, t)) {
+                    try writer.print("{s} ", .{etime});
+                }
+            } else {
+                try writer.print("{s} ", .{etime});
+            }
+        }
     }
 }
 

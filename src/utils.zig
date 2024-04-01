@@ -10,6 +10,22 @@ pub const Error = error{
     InvalidHash,
 };
 
+/// Returns true if haystack contains needle
+pub fn contains(comptime T: type, haystack: []const T, needle: T) bool {
+    for (haystack) |item| {
+        const is_contained = switch (@typeInfo(T)) {
+            .Vector, .Pointer, .Array => std.mem.eql(
+                std.meta.Elem(T),
+                item,
+                needle,
+            ),
+            else => item == needle,
+        };
+        if (is_contained) return true;
+    }
+    return false;
+}
+
 /// Get the name of a collection from its path
 pub fn inferCollectionName(s: []const u8) ?[]const u8 {
     const end = std.mem.indexOfScalar(u8, s, '/') orelse return null;

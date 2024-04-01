@@ -773,6 +773,32 @@ pub fn fromArgs(
     );
 }
 
+/// Just like `fromArgs` but will not throw any errors.
+pub fn fromArgsForgiving(
+    comptime T: type,
+    selector_string: ?[]const u8,
+    args: T,
+) !Selection {
+    var selection: Selection = .{};
+    if (selector_string) |ss| {
+        const selector = try asSelector(ss);
+        try addSelector(&selection, selector);
+    }
+
+    if (try addFlags(
+        &selection,
+        args.journal,
+        args.directory,
+        args.tasklist,
+    )) |_| {}
+
+    if (args.time) |t| {
+        selection.modifiers.entry_time = t;
+    }
+
+    return selection;
+}
+
 /// Like `fromArgs` but with the flags prefixed with a given string.
 pub fn fromArgsPrefixed(
     comptime T: type,
@@ -819,6 +845,7 @@ pub fn selectHelp(
         .{
             .arg = "--" ++ opts.flag_prefix ++ "time HH:MM:SS",
             .help = "Augments a given selection with a given time, used for selecting e.g. individual entries.",
+            .completion = "{compadd $(nkt completion item $words)}",
         },
         .{
             .arg = "--" ++ opts.flag_prefix ++ "directory directory",
