@@ -10,7 +10,62 @@ pub const Weekday = time.datetime.Weekday;
 pub const Error = error{DateTooShort};
 
 // singleton for the current time zone
-var global_time_zone: ?TimeZone = null;
+var global_time_zone: ?struct {
+    tz: TimeZone,
+    mem: std.heap.ArenaAllocator,
+} = null;
+
+fn getTimeZoneAllocator() std.mem.Allocator {
+    if (global_time_zone) |*gtz| {
+        return gtz.mem.allocator();
+    } else {
+        @panic("No timezone allocator");
+    }
+}
+
+fn getLocalTimeZone() TimeZone {
+    if (global_time_zone) |gtz| {
+        return gtz.tz;
+    } else {
+        @panic("No local timezone");
+    }
+}
+
+/// Deinitialize the timezone memory
+pub fn deinitTimeZone() void {
+    if (global_time_zone) |gtz| {
+        gtz.mem.deinit();
+    }
+    global_time_zone = null;
+}
+
+/// Initialize the global time zone
+pub fn initTimeZone(allocator: std.mem.Allocator) !TimeZone {
+    var mem = std.heap.ArenaAllocator.init(allocator);
+    errdefer mem.deinit();
+
+    switch (@import("builtin").os.tag) {
+        .linux, .macos => {}, // ok
+        else => @compileError("Timezone not inferrable for this OS in current version"),
+    }
+
+    var tzdb = try chrono.tz.DataBase.init(mem.allocator());
+    defer tzdb.deinit();
+
+    const timezone = try tzdb.getLocalTimeZone();
+
+    const timestamp_utc = std.time.timestamp();
+    const local_offset = timezone.offsetAtTimestamp(timestamp_utc) orelse 0;
+    const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
+
+    const tz = time.datetime.Timezone.create(
+        try mem.allocator().dupe(u8, designation),
+        @intCast(@divFloor(local_offset, 60)), // convert to minutes
+    );
+
+    global_time_zone = .{ .tz = .{ .tz = tz }, .mem = mem };
+    return getLocalTimeZone();
+}
 
 /// The type representing times in the topology: an integer counting
 /// miliseconds since epoch in UTC
@@ -24,7 +79,7 @@ pub const Time = struct {
     pub fn now() Time {
         return .{
             .time = @intCast(std.time.milliTimestamp()),
-            .timezone = global_time_zone,
+            .timezone = getLocalTimeZone(),
         };
     }
 
@@ -46,8 +101,7 @@ pub const Time = struct {
 
     /// Get the `TimeZone` of the `Time`
     pub fn getTimeZone(t: Time) TimeZone {
-        return t.timezone orelse global_time_zone orelse
-            @panic("No Timezone!");
+        return t.timezone orelse getLocalTimeZone();
     }
 
     // Greater than comparison `t1 > t2`
@@ -194,7 +248,12 @@ pub const TimeZone = struct {
 
     /// Create a timezone with a designation and minute offset
     pub fn create(name: []const u8, offset_minutes: i16) TimeZone {
-        const tz = time.datetime.Timezone.create(name, offset_minutes);
+        const dupe_name = getTimeZoneAllocator().dupe(u8, name) catch
+            @panic("Out of memory");
+        const tz = time.datetime.Timezone.create(
+            dupe_name,
+            offset_minutes,
+        );
         return .{
             .tz = tz,
         };
@@ -203,33 +262,6 @@ pub const TimeZone = struct {
     /// Get the local time now
     pub fn localTimeNow(self: TimeZone) Date {
         return self.makeLocal(Time.now().toDate());
-    }
-
-    /// Get the current local timezone. Must be given an allocator from an
-    /// `ArenaAllocator`
-    pub fn initLeaky(allocator: std.mem.Allocator) !TimeZone {
-        if (global_time_zone) |tz| return tz;
-        switch (@import("builtin").os.tag) {
-            .linux, .macos => {}, // ok
-            else => @compileError("Timezone not inferrable for this OS in current version"),
-        }
-
-        var tzdb = try chrono.tz.DataBase.init(allocator);
-        defer tzdb.deinit();
-
-        const timezone = try tzdb.getLocalTimeZone();
-
-        const timestamp_utc = std.time.timestamp();
-        const local_offset = timezone.offsetAtTimestamp(timestamp_utc) orelse 0;
-        const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
-
-        const tz = time.datetime.Timezone.create(
-            designation,
-            @intCast(@divFloor(local_offset, 60)), // convert to minutes
-        );
-
-        global_time_zone = .{ .tz = tz };
-        return global_time_zone.?;
     }
 };
 

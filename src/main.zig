@@ -97,11 +97,9 @@ pub fn main() !void {
     // get the output fd
     const out_fd = std.io.getStdOut();
 
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-
     // get the local timezone information
-    const tz = try time.TimeZone.initLeaky(arena.allocator());
+    const tz = try time.initTimeZone(allocator);
+    defer time.deinitTimeZone();
 
     try nkt_main(allocator, raw_args, out_fd, tz, fs);
 
