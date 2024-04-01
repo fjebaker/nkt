@@ -29,7 +29,7 @@ pub const Error = error{
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
     .major = 0,
-    .minor = 3,
+    .minor = 4,
     .patch = 0,
 };
 
