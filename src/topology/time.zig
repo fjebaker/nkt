@@ -104,8 +104,7 @@ pub const Time = struct {
     /// Turn a `Time` into a `Date`, shifting the timezone if appropriate
     pub fn toDate(t: Time) Date {
         const date = Date.fromTimestamp(@intCast(t.time));
-        const tz = t.getTimeZone();
-        return date.shiftTimezone(&tz.tz);
+        return date.shiftTimezone(&t.getTimeZone().tz);
     }
 
     /// Get the `TimeZone` of the `Time`
@@ -487,6 +486,7 @@ pub const Colloquial = struct {
 
         // mutual
         if (c.parseWeekday(arg)) |date| {
+            std.log.default.debug("Colloquial offset to '{s}'", .{arg});
             return c.setTime(date, try c.optionalTime());
         }
 
@@ -577,11 +577,18 @@ fn parseTimelikeDate(relative: Date, timelike: []const u8) !Date {
 
 /// Parse a time-like string into a time. See also `Colloquial`. Any relative time-like will be relative to the time in `relative`.
 pub fn parseTimelike(relative: Time, timelike: []const u8) !Time {
-    const now = relative.toDate();
     const itt = std.mem.tokenize(u8, timelike, " ");
-    var col = Colloquial{ .tkn = itt, .now = now };
+
+    var col = Colloquial{ .tkn = itt, .now = relative.toDate() };
     const parsed = try col.parse();
-    return Time.fromDate(parsed);
+
+    var t = Time.fromDate(parsed);
+    t.timezone = relative.timezone;
+    std.log.default.debug(
+        "parsed time like as {d} + {d}",
+        .{ t.time, t.timezone.?.tz.offset },
+    );
+    return t;
 }
 
 test "time selection parsing" {
