@@ -1,8 +1,10 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const coverage = b.option(bool, "coverage", "Generate test coverage") orelse false;
 
     const time = b.dependency("time", .{
         .target = target,
@@ -60,8 +62,14 @@ pub fn build(b: *std.Build) void {
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
+    const kcov = b.addSystemCommand(&.{ "kcov", "--include-path", ".", "kcov-out" });
+    kcov.addArtifactArg(unit_tests);
 
-    // b.installArtifact(unit_tests);
+    const test_step = b.step("test", "Run unit tests");
+
+    if (coverage) {
+        test_step.dependOn(&kcov.step);
+    } else {
+        test_step.dependOn(&run_unit_tests.step);
+    }
 }
