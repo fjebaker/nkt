@@ -503,22 +503,6 @@ fn getPathPrefix(t: CollectionType) []const u8 {
     };
 }
 
-// TODO: verify the extension is actually a valid one / we have a text compiler
-// for it
-fn getExtension(_: *const Root, comptime t: CollectionType, opts: NewCollectionOptions) error{InvalidExtension}![]const u8 {
-    const ext = switch (t) {
-        .CollectionDirectory => opts.extension orelse "md",
-        .CollectionTasklist, .CollectionJournal => "json",
-    };
-
-    // trim the period
-    if (ext[0] == '.') {
-        return ext[1..];
-    } else {
-        return ext;
-    }
-}
-
 fn newPathFrom(
     self: *Root,
     name: []const u8,
@@ -555,10 +539,6 @@ fn newPathFrom(
         &.{ base_dir, t.getTopologyName() },
     );
 }
-
-const NewCollectionOptions = struct {
-    extension: ?[]const u8 = null,
-};
 
 /// Add a new collection of type `CollectionType`. Returns the corresponding
 /// collection instance.
