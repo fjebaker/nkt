@@ -254,7 +254,7 @@ fn editElseMaybeCreate(
             try becomeEditorRelativePath(allocator, &root.fs.?, path);
         } else {
             // make sure was trying to select a note
-            if (selection.collection_type != null and selection.collection_type.? == .CollectionDirectory) {
+            if (selection.collection_type == null) {
                 try cli.throwError(
                     Root.Error.NoSuchItem,
                     "Use `--new` to allow new items to be created.",
