@@ -207,6 +207,8 @@ fn readJournal(
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !void {
+    std.log.default.debug("Reading journal '{s}'", .{j.descriptor.name});
+
     const tasks = try root.getAllTasks(allocator);
     defer allocator.free(tasks);
 
@@ -271,6 +273,8 @@ fn readDay(
     tag_descriptors: []const tags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !usize {
+    std.log.default.debug("Reading day '{s}'", .{day.name});
+
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     // read the entries of that day

@@ -14,6 +14,11 @@ const Root = @This();
 
 test "other topologies" {
     _ = Tasklist;
+    _ = Directory;
+    _ = Journal;
+    _ = FileSystem;
+    _ = tags;
+    _ = time;
 }
 
 /// The filename of the root topology file
