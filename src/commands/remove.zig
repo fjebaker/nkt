@@ -46,7 +46,6 @@ pub fn execute(
 ) !void {
     try root.load();
     var item = try self.selection.resolveReportError(root);
-    defer item.deinit();
 
     var writer = std.io.getStdOut().writer();
 

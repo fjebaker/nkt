@@ -55,28 +55,12 @@ allocator: std.mem.Allocator,
 tag_list: ?*tags.DescriptorList = null,
 staged_entries: ?StagedEntries = null,
 fs: ?FileSystem = null,
-mem: ?std.heap.ArenaAllocator = null,
 
 fn getStagedEntries(self: *Journal) *StagedEntries {
     if (self.staged_entries == null) {
         self.staged_entries = StagedEntries.init(self.allocator);
     }
     return &self.staged_entries.?;
-}
-
-fn getTmpAllocator(self: *Journal) std.mem.Allocator {
-    if (self.mem == null) {
-        self.mem = std.heap.ArenaAllocator.init(self.allocator);
-    }
-    return self.mem.?.allocator();
-}
-
-pub fn deinit(self: *Journal) void {
-    if (self.staged_entries) |*se| {
-        se.deinit();
-    }
-    if (self.mem) |*mem| mem.deinit();
-    self.* = undefined;
 }
 
 fn timeToName(allocator: std.mem.Allocator, t: Time) ![]const u8 {
@@ -90,7 +74,7 @@ fn timeToName(allocator: std.mem.Allocator, t: Time) ![]const u8 {
 /// assumed the contents of the `day` will outlive the `Journal`.
 pub fn addNewDay(self: *Journal, day: Day) !void {
     var list = std.ArrayList(Day).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.days,
     );
     try list.append(day);
@@ -157,14 +141,14 @@ fn newDayFromName(self: *Journal, name: []const u8) !Day {
     var map = self.getStagedEntries();
     try map.put(
         day.path,
-        std.ArrayList(Entry).init(self.getTmpAllocator()),
+        std.ArrayList(Entry).init(self.allocator),
     );
     return day;
 }
 
 fn newPathFromName(self: *Journal, name: []const u8) ![]const u8 {
     const dirname = std.fs.path.dirname(self.descriptor.path).?;
-    const alloc = self.getTmpAllocator();
+    const alloc = self.allocator;
     return std.fs.path.join(
         alloc,
         &.{ dirname, try std.mem.join(
@@ -196,7 +180,7 @@ pub fn removeEntryFromDay(self: *Journal, day: Day, entry: Entry) !void {
 /// filesystem is given.
 pub fn removeDay(self: *Journal, day: Day) !void {
     var list = std.ArrayList(Day).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.days,
     );
 
@@ -239,7 +223,7 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
 
     // add to the chache
     try map.put(day.path, std.ArrayList(Entry).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         entries,
     ));
     return entries;
@@ -250,7 +234,7 @@ fn readDayFromPath(
     fs: *FileSystem,
     path: []const u8,
 ) ![]Entry {
-    var alloc = self.getTmpAllocator();
+    var alloc = self.allocator;
     const content = fs.readFileAlloc(alloc, path) catch |err| {
         if (err == error.FileNotFound) {
             std.log.default.warn(
@@ -289,7 +273,7 @@ fn addDayToStage(
     map: *StagedEntries,
     path: []const u8,
 ) !void {
-    const alloc = self.getTmpAllocator();
+    const alloc = self.allocator;
     if (self.fs) |*fs| {
         // read entries and init owned list
         const entries = try self.readDayFromPath(fs, path);
@@ -341,7 +325,7 @@ pub fn addNewEntryToDay(
 /// Add a new entry to the appropriate day as given by the `created` timestamp
 /// in the entry.
 pub fn addEntry(self: *Journal, entry: Entry) !Day {
-    const alloc = self.getTmpAllocator();
+    const alloc = self.allocator;
     // get the day this entry belongs to
     const day_name = try timeToName(alloc, entry.created);
     const day = try self.getDayOrNew(day_name);

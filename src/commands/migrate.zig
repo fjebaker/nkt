@@ -38,7 +38,6 @@ pub fn execute(
         try root.load();
         for (root.info.journals) |jrnl| {
             var journal = (try root.getJournal(jrnl.name)).?;
-            defer journal.deinit();
             for (journal.info.days) |day| {
                 const d = journal.getDay(day.name).?;
                 _ = try journal.getEntries(d);
@@ -48,13 +47,11 @@ pub fn execute(
             root.markModified(jrnl, .CollectionJournal);
         }
         for (root.info.directories) |dir| {
-            var directory = (try root.getDirectory(dir.name)).?;
-            defer directory.deinit();
+            _ = (try root.getDirectory(dir.name)).?;
             root.markModified(dir, .CollectionDirectory);
         }
         for (root.info.tasklists) |tl| {
-            var tasks = (try root.getTasklist(tl.name)).?;
-            defer tasks.deinit();
+            _ = (try root.getTasklist(tl.name)).?;
             root.markModified(tl, .CollectionTasklist);
         }
         try root.writeChanges();

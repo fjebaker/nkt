@@ -30,26 +30,13 @@ info: *Info,
 descriptor: Descriptor,
 allocator: std.mem.Allocator,
 fs: ?FileSystem = null,
-mem: ?std.heap.ArenaAllocator = null,
-
-fn getTmpAllocator(self: *Directory) std.mem.Allocator {
-    if (self.mem == null) {
-        self.mem = std.heap.ArenaAllocator.init(self.allocator);
-    }
-    return self.mem.?.allocator();
-}
-
-pub fn deinit(self: *Directory) void {
-    if (self.mem) |*mem| mem.deinit();
-    self.* = undefined;
-}
 
 /// Add a new day to the journal. No strings are copied, so it is
 /// assumed the contents of the `day` will outlive the `Directory`.
 /// If a `FileSystem` is given, will create an empty file if none exists.
 pub fn addNewNote(self: *Directory, note: Note) !void {
     var list = std.ArrayList(Note).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.notes,
     );
     try list.append(note);
@@ -92,7 +79,7 @@ fn newPathFromName(
     extension: []const u8,
 ) ![]const u8 {
     const dirname = std.fs.path.dirname(self.descriptor.path).?;
-    const alloc = self.getTmpAllocator();
+    const alloc = self.allocator;
     return std.fs.path.join(
         alloc,
         &.{ dirname, try std.mem.join(
@@ -180,7 +167,7 @@ pub fn touchNote(self: *Directory, note: Note, t: time.Time) !Note {
 /// Remove a note from the directory. Will attempt to remove the associated file in the filesystem.
 pub fn removeNote(self: *Directory, note: Note) !void {
     var list = std.ArrayList(Note).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.notes,
     );
 

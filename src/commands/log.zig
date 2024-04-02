@@ -88,7 +88,6 @@ pub fn execute(
         );
         unreachable;
     };
-    defer j.deinit();
 
     root.markModified(j.descriptor, .CollectionJournal);
 

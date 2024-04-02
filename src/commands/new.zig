@@ -65,16 +65,13 @@ pub fn execute(
 
     switch (self.ctype) {
         .journal => {
-            var c = try root.addNewCollection(self.name, .CollectionJournal);
-            defer c.deinit();
+            _ = try root.addNewCollection(self.name, .CollectionJournal);
         },
         .directory => {
-            var c = try root.addNewCollection(self.name, .CollectionDirectory);
-            defer c.deinit();
+            _ = try root.addNewCollection(self.name, .CollectionDirectory);
         },
         .tasklist => {
-            var c = try root.addNewCollection(self.name, .CollectionTasklist);
-            defer c.deinit();
+            _ = try root.addNewCollection(self.name, .CollectionTasklist);
         },
         .chain => {
             try root.addNewChain(.{

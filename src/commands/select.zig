@@ -44,8 +44,7 @@ pub fn execute(
     _: commands.Options,
 ) !void {
     try root.load();
-    var item = try self.selection.resolveReportError(root);
-    defer item.deinit();
+    const item = try self.selection.resolveReportError(root);
     try handleSelection(writer, item);
 }
 

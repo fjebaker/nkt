@@ -195,7 +195,6 @@ fn listTimesFor(
     std.log.default.debug("Listing times for: '{s}'", .{tstring orelse ""});
 
     var item = try s.resolveOrNull(root);
-    defer if (item) |*i| i.deinit();
 
     if (item) |*day_collection| {
         var day = &day_collection.Day;
@@ -221,8 +220,7 @@ fn listNotesInDirectory(
 ) !void {
     _ = allocator;
     const dir_name = name orelse root.info.default_directory;
-    var dir = (try root.getDirectory(dir_name)) orelse return;
-    defer dir.deinit();
+    const dir = (try root.getDirectory(dir_name)) orelse return;
 
     for (dir.info.notes) |note| {
         try writer.print("{s} ", .{note.name});

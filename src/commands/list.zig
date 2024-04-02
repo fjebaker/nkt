@@ -261,7 +261,6 @@ fn listTasklist(
         );
         unreachable;
     };
-    defer tasklist.deinit();
 
     // TODO: apply sorting: get user selection
     const index_map = try tasklist.makeIndexMap();
@@ -319,7 +318,7 @@ fn listDirectory(
     opts: commands.Options,
 ) !void {
     const maybe_dir = try root.getDirectory(d.name);
-    var dir = maybe_dir orelse {
+    const dir = maybe_dir orelse {
         try cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory named '{s}'",
@@ -327,7 +326,6 @@ fn listDirectory(
         );
         unreachable;
     };
-    defer dir.deinit();
 
     if (dir.info.notes.len == 0) {
         try writer.writeAll(" -- Directory Empty -- \n");

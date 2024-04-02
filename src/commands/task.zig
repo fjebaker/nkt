@@ -70,7 +70,6 @@ pub fn execute(
         );
         unreachable;
     };
-    defer tl.deinit();
 
     root.markModified(tl.descriptor, .CollectionTasklist);
 

@@ -96,21 +96,6 @@ info: *Info,
 descriptor: Descriptor,
 allocator: std.mem.Allocator,
 index_map: ?[]?usize = null,
-mem: ?std.heap.ArenaAllocator = null,
-
-/// Get a temporary allocator that has the same lifetime as the tasklist.
-pub fn getTmpAllocator(self: *Tasklist) std.mem.Allocator {
-    if (self.mem == null) {
-        self.mem = std.heap.ArenaAllocator.init(self.allocator);
-    }
-    return self.mem.?.allocator();
-}
-
-pub fn deinit(self: *Tasklist) void {
-    if (self.index_map) |im| self.allocator.free(im);
-    if (self.mem) |*mem| mem.deinit();
-    self.* = undefined;
-}
 
 /// Add a new task to the current task list No strings are copied, so it is
 /// assumed the contents of the `task` will outlive the `Tasklist`. Asserts no
@@ -120,7 +105,7 @@ pub fn addNewTask(self: *Tasklist, task: Task) !void {
         return Error.DuplicateTask;
 
     var list = std.ArrayList(Task).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.tasks,
     );
     try list.append(task);
@@ -241,7 +226,7 @@ test "get by mini hash" {
 /// Remove a task from the tasklist.
 pub fn removeTask(self: *Tasklist, task: Task) !void {
     var list = std.ArrayList(Task).fromOwnedSlice(
-        self.getTmpAllocator(),
+        self.allocator,
         self.info.tasks,
     );
 

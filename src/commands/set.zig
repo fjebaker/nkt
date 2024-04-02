@@ -158,8 +158,7 @@ pub fn execute(
             try writer.print("Chain '{s}' marked as complete\n", .{c.name});
         },
         .Item => |*s| {
-            var item = try s.selection.resolveReportError(root);
-            defer item.deinit();
+            const item = try s.selection.resolveReportError(root);
             var task = item.Task;
 
             var ptr = task.tasklist.getTaskByHashPtr(task.task.hash).?;

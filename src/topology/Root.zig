@@ -604,18 +604,18 @@ fn collectionFromInfoPtr(
             .descriptor = descr,
             .tag_list = tag_list,
             .fs = self.fs,
-            .allocator = self.allocator,
+            .allocator = self.arena.allocator(),
         },
         .CollectionDirectory => .{
             .info = info_ptr,
             .descriptor = descr,
             .fs = self.fs,
-            .allocator = self.allocator,
+            .allocator = self.arena.allocator(),
         },
         .CollectionTasklist => .{
             .info = info_ptr,
             .descriptor = descr,
-            .allocator = self.allocator,
+            .allocator = self.arena.allocator(),
         },
     };
 }

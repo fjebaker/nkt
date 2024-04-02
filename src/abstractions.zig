@@ -31,14 +31,6 @@ pub const Item = union(enum) {
         tasklist: Tasklist,
         // TODO: chains, etc.
 
-        /// Call the relevant destructor irrelevant of active field.
-        pub fn deinit(self: *@This()) void {
-            switch (self.*) {
-                inline else => |*i| i.deinit(),
-            }
-            self.* = undefined;
-        }
-
         fn eql(i: @This(), j: @This()) bool {
             if (std.meta.activeTag(i) != std.meta.activeTag(j))
                 return false;
@@ -56,18 +48,6 @@ pub const Item = union(enum) {
             }
         }
     },
-
-    /// Call the relevant destructor irrelevant of active field.
-    pub fn deinit(self: *Item) void {
-        switch (self.*) {
-            .Entry => |*i| i.journal.deinit(),
-            .Day => |*i| i.journal.deinit(),
-            .Note => |*i| i.directory.deinit(),
-            .Task => |*i| i.tasklist.deinit(),
-            .Collection => |*i| i.deinit(),
-        }
-        self.* = undefined;
-    }
 
     /// Are the items equal?
     pub fn eql(i: Item, j: Item) bool {

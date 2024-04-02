@@ -368,7 +368,6 @@ test "resolve selections" {
     try root.addInitialCollections();
 
     var j = (try root.getJournal(root.info.default_journal)).?;
-    defer j.deinit();
     const day = try j.addNewEntryFromText("hello world", &.{});
     try testSelectionResolve(
         &root,
@@ -399,7 +398,6 @@ test "resolve selections" {
     );
 
     var d = (try root.getDirectory(root.info.default_directory)).?;
-    defer d.deinit();
     const note = try d.addNewNoteByName("stuff", .{});
     try testSelectionResolve(
         &root,

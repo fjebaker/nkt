@@ -127,7 +127,6 @@ pub fn execute(
     }
 
     var item = try self.selection.resolveReportError(root);
-    defer item.deinit();
 
     const selected_tags = try utils.parseAndAssertValidTags(
         allocator,

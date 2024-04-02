@@ -100,7 +100,6 @@ fn editElseMaybeCreate(
 ) !void {
     var maybe_item = try selection.resolveOrNull(root);
     if (maybe_item) |*item| {
-        defer item.deinit();
         // edit the existing item
         switch (item.*) {
             .Note => |*n| {
@@ -379,7 +378,6 @@ fn createNewNote(
         );
         unreachable;
     };
-    defer dir.deinit();
     const note = try dir.addNewNoteByName(
         name,
         .{ .extension = extension },

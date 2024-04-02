@@ -58,7 +58,6 @@ pub fn execute(
     try root.load();
 
     var from_item = try self.from.resolveReportError(root);
-    defer from_item.deinit();
 
     if (try self.to.resolveOrNull(root)) |to_item| {
         _ = to_item;
