@@ -4,6 +4,7 @@ const tags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
+const colors = @import("../colors.zig");
 
 const commands = @import("../commands.zig");
 const Journal = @import("../topology/Journal.zig");
@@ -31,7 +32,7 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "what",
-        .help = "Can be 'tags' or when directory is selected, can be used to subselect hiearchies",
+        .help = "Can be 'tags', 'compilers', or when directory is selected, can be used to subselect hiearchies",
     },
     .{
         .arg = "--directory name",
@@ -78,6 +79,7 @@ const ListSelection = union(enum) {
     },
     Collections: void,
     Tags: void,
+    Compilers: void,
 };
 
 selection: ListSelection,
@@ -101,6 +103,7 @@ pub fn execute(
     switch (self.selection) {
         .Collections => try listCollections(root, writer, opts),
         .Tags => try listTags(allocator, root, writer, opts),
+        .Compilers => try listCompilers(allocator, root, writer, opts),
         .Directory => |i| try listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
@@ -169,6 +172,14 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
                 "tags",
             );
             return .{ .Tags = {} };
+        } else if (std.mem.eql(u8, what, "compilers")) {
+            try utils.ensureOnly(
+                arguments.Parsed,
+                args,
+                (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
+                "compilers",
+            );
+            return .{ .Compilers = {} };
         }
         try cli.throwError(
             cli.CLIErrors.BadArgument,
@@ -201,6 +212,30 @@ fn listCollections(
     try printDescriptors(writer, root.info.tasklists);
     try writer.writeAll("\n");
     _ = opts;
+}
+
+fn listCompilers(
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    var printer = FormatPrinter.init(allocator, .{
+        .pretty = !opts.piped,
+    });
+    defer printer.deinit();
+
+    for (root.info.text_compilers) |cmp| {
+        try printer.addText("Compiler:         ", .{});
+        try printer.addFmtText("{s}\n", .{cmp.name}, .{ .fmt = colors.YELLOW.fixed() });
+        try printer.addText(" - Extensions:    ", .{});
+        for (cmp.extensions) |ext| {
+            try printer.addFmtText("{s} ", .{ext}, .{ .fmt = colors.CYAN.fixed() });
+        }
+        try printer.addText("\n\n", .{});
+    }
+
+    try printer.drain(writer);
 }
 
 fn listTags(
