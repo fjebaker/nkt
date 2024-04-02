@@ -378,6 +378,17 @@ fn createNewNote(
         );
         unreachable;
     };
+
+    // assert the extension is a valid one
+    if (!root.isKnownExtension(extension)) {
+        try cli.throwError(
+            Root.Error.UnknownExtension,
+            "No text environment / compiler known for extension '{s}'. Consider adding one with `new`.",
+            .{extension},
+        );
+        unreachable;
+    }
+
     const note = try dir.addNewNoteByName(
         name,
         .{ .extension = extension },

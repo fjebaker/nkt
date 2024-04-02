@@ -26,10 +26,11 @@ pub const ROOT_FILEPATH = "topology.json";
 
 pub const Error = error{
     DuplicateItem,
-    NeedsFileSystem,
     InvalidExtension,
+    NeedsFileSystem,
     NoSuchCollection,
     NoSuchItem,
+    UnknownExtension,
 };
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
@@ -65,6 +66,16 @@ pub const TextCompiler = struct {
     command: ?[]const []const u8 = null,
     /// File extensions that it is applicable for
     extensions: []const []const u8,
+
+    /// Returns true if the given extension is supported by this compiler
+    pub fn supports(tc: TextCompiler, ext: []const u8) bool {
+        for (tc.extensions) |e| {
+            if (std.mem.eql(u8, e, ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
 pub const CollectionType = enum {
@@ -115,7 +126,7 @@ const Info = struct {
     // different text compilers
     text_compilers: []const TextCompiler = &.{
         // include the default markdown compiler
-        .{ .name = "markdown", .extensions = &.{".md"} },
+        .{ .name = "markdown", .extensions = &.{"md"} },
     },
 
     tasklists: []Descriptor,
@@ -440,7 +451,7 @@ test "serialize" {
         \\            "name": "markdown",
         \\            "command": null,
         \\            "extensions": [
-        \\                ".md"
+        \\                "md"
         \\            ]
         \\        }
         \\    ],
@@ -481,7 +492,7 @@ test "serialize" {
         \\            "name": "markdown",
         \\            "command": null,
         \\            "extensions": [
-        \\                ".md"
+        \\                "md"
         \\            ]
         \\        }
         \\    ],
@@ -867,4 +878,19 @@ pub fn getAllTasks(
     }
 
     return try list.toOwnedSlice();
+}
+
+/// Check whether the file extension has an associated environment / compiler.
+pub fn isKnownExtension(self: *const Root, ext: []const u8) bool {
+    if (self.getTextCompiler(ext)) |_| return true;
+    return false;
+}
+
+/// Get the text compiler environment for the given extension.
+/// Returns null if extension is unknown.
+pub fn getTextCompiler(self: *const Root, ext: []const u8) ?TextCompiler {
+    for (self.info.text_compilers) |cmp| {
+        if (cmp.supports(ext)) return cmp;
+    }
+    return null;
 }
