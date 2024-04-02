@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli.zig");
 const selections = @import("selections.zig");
 const utils = @import("utils.zig");
+const processing = @import("processing.zig");
 
 const Root = @import("topology/Root.zig");
 const time = @import("topology/time.zig");
@@ -19,6 +20,7 @@ test "main" {
     _ = selections;
     _ = commands;
     _ = time;
+    _ = processing;
 }
 
 // configure logging

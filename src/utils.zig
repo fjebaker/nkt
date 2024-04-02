@@ -222,11 +222,19 @@ pub fn Iterator(comptime T: type) type {
         pub fn init(items: []const T) @This() {
             return .{ .items = items };
         }
+
+        /// Get the next item and advance the counter.
         pub fn next(self: *@This()) ?T {
             if (self.index >= self.items.len) return null;
             const item = self.items[self.index];
             self.index += 1;
             return item;
+        }
+
+        /// Get at the next item without advancing the counter.
+        pub fn peek(self: *@This()) ?T {
+            if (self.index >= self.items.len) return null;
+            return self.items[self.index];
         }
     };
 }
