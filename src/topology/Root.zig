@@ -84,6 +84,37 @@ pub const TextCompiler = struct {
         }
         return false;
     }
+
+    /// Substitute blocks and write into `writer`.
+    pub fn processText(
+        tc: TextCompiler,
+        writer: anytype,
+        text: []const u8,
+        root: *Root,
+    ) !void {
+        const fragments = try processing.splitTextFragments(
+            root.allocator,
+            text,
+        );
+        defer root.allocator.free(fragments);
+
+        for (fragments) |f| {
+            switch (f.type) {
+                .link => {
+                    // find the item
+                    if (try root.selectFromString(f.inner())) |item| {
+                        const path = item.getPath();
+                        const name = try item.getName();
+                        try writer.print("[{s}]({s})", .{ name, path });
+                        continue;
+                    }
+                },
+                else => {},
+            }
+            try writer.writeAll(f.text);
+        }
+        _ = tc;
+    }
 };
 
 pub const CollectionType = enum {

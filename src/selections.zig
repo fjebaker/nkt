@@ -771,7 +771,7 @@ pub fn fromArgs(
     );
 }
 
-/// Just like `fromArgs` but will not throw any errors.
+/// Just like `fromArgs` but will not throw any errors from validation.
 pub fn fromArgsForgiving(
     comptime T: type,
     selector_string: ?[]const u8,

@@ -31,6 +31,12 @@ pub const Item = union(enum) {
         tasklist: Tasklist,
         // TODO: chains, etc.
 
+        pub fn getDescriptor(self: @This()) Root.Descriptor {
+            return switch (self) {
+                inline else => |i| i.descriptor,
+            };
+        }
+
         fn eql(i: @This(), j: @This()) bool {
             if (std.meta.activeTag(i) != std.meta.activeTag(j))
                 return false;
@@ -93,7 +99,7 @@ pub const Item = union(enum) {
     }
 
     fn getAttributeOfItem(
-        self: *Item,
+        self: *const Item,
         comptime attr: []const u8,
         comptime RetType: type,
     ) RetType {
@@ -106,19 +112,32 @@ pub const Item = union(enum) {
         }
     }
 
-    fn getCollectionDescriptor(self: *Item) Root.Descriptor {
-        switch (self.*) {
-            .Note => |i| i.directory.descriptor,
-            .Task => |i| i.tasklist.descriptor,
-            .Entry => |i| i.journal.descriptor,
-            .Day => |i| i.journal.descriptor,
-            .Collection => |i| i.descriptor,
-        }
-    }
-
     /// Get the creation date
     pub fn getCreated(self: *const Item) time.Time {
         return self.getAttributeOfItem("created", time.Time);
+    }
+
+    /// Get path to the item
+    pub fn getPath(self: *const Item) []const u8 {
+        switch (self.*) {
+            .Note => |i| return i.note.path,
+            .Day => |i| return i.day.path,
+            .Entry => |i| return i.journal.descriptor.path,
+            .Task => |i| return i.tasklist.descriptor.path,
+            .Collection => |i| return i.getDescriptor().path,
+        }
+        return self.getAttributeOfItem("path", []const u8);
+    }
+
+    /// Get the name of the item. Returns the formatted timestamp for an entry.
+    pub fn getName(self: *const Item) ![]const u8 {
+        switch (self.*) {
+            .Note => |i| return i.note.name,
+            .Day => |i| return i.day.name,
+            .Entry => |i| return &(try i.entry.created.formatTime()),
+            .Task => |i| return i.task.outcome,
+            .Collection => |i| return i.getDescriptor().name,
+        }
     }
 
     /// For sorting by creation date
