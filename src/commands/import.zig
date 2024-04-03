@@ -17,7 +17,7 @@ pub const alias = [_][]const u8{"imp"};
 
 pub const short_help = "Import a note.";
 pub const long_help =
-    \\Import a note, journal, or tasklist. Creates te appropriate entries in
+    \\Import a note or asset. Creates the appropriate entries in
     \\the topology file
 ;
 
@@ -31,6 +31,14 @@ pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--directory name",
         .help = "The directory to import the note into. Default: default directory.",
+    },
+    .{
+        .arg = "--asset",
+        .help = "Import the file only. Do not add to the topolgy. Used to import into the assets directory instead. Assets will ignore 'name' specifications in the paths. Will raise an error if asset by the same name exists.",
+    },
+    .{
+        .arg = "--force",
+        .help = "Force overwriting the asset.",
     },
     .{
         .arg = "--ext extension",
@@ -52,6 +60,7 @@ directory: ?[]const u8,
 move: bool = false,
 ext: ?[]const u8,
 note_type: ?[]const u8,
+asset: bool,
 
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);
@@ -96,6 +105,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .move = parsed.move,
         .ext = parsed.ext,
         .note_type = parsed.type,
+        .asset = parsed.asset,
     };
 }
 
@@ -119,36 +129,89 @@ pub fn execute(
         unreachable;
     };
 
-    const nt = parseNoteType(self.note_type) catch {
-        try cli.throwError(
-            Error.UnknownNoteType,
-            "Note type to import unknown: '{s}'",
-            .{dir_name},
-        );
-        unreachable;
-    };
-
-    root.markModified(dir.descriptor, .CollectionDirectory);
-    for (self.paths, self.names) |path, name| {
-        const ext = self.ext orelse std.fs.path.extension(path);
-        try self.importNote(
+    if (self.asset) {
+        // do the assets and return
+        const asset_dir = try std.fs.path.join(
             allocator,
-            name,
-            path,
-            &dir,
-            root,
-            ext,
-            nt,
+            &.{ std.fs.path.dirname(dir.descriptor.path).?, "assets" },
         );
+        defer allocator.free(asset_dir);
+        try self.importAssets(allocator, writer, root, asset_dir, opts);
+    } else {
+        const nt = parseNoteType(self.note_type) catch {
+            try cli.throwError(
+                Error.UnknownNoteType,
+                "Note type to import unknown: '{s}'",
+                .{dir_name},
+            );
+            unreachable;
+        };
+
+        root.markModified(dir.descriptor, .CollectionDirectory);
+        for (self.paths, self.names) |path, name| {
+            const ext = self.ext orelse std.fs.path.extension(path);
+            try self.importNote(
+                allocator,
+                name,
+                path,
+                &dir,
+                root,
+                ext,
+                nt,
+            );
+
+            try writer.print(
+                "Imported '{s}' to '{s}'\n",
+                .{ name, dir.descriptor.name },
+            );
+            try opts.flushOutput();
+        }
+
+        try root.writeChanges();
+    }
+}
+
+fn importAssets(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    writer: anytype,
+    root: *Root,
+    dir_path: []const u8,
+    opts: commands.Options,
+) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const alloc = arena.allocator();
+
+    var d = try root.fs.?.openDirElseCreate(dir_path);
+    defer d.close();
+
+    for (self.paths) |path| {
+        const name = std.fs.path.basename(path);
+        const new_path = try std.fs.path.join(alloc, &.{ dir_path, name });
+
+        if (self.move) {
+            const abs_path = try root.fs.?.absPathify(alloc, new_path);
+            try std.fs.cwd().rename(
+                path,
+                abs_path,
+            );
+        } else {
+            try std.fs.cwd().copyFile(
+                path,
+                root.fs.?.dir,
+                new_path,
+                .{},
+            );
+        }
 
         try writer.print(
-            "Imported '{s}' to '{s}'\n",
-            .{ name, dir.descriptor.name },
+            "Imported '{s}' as asset in '{s}'\n",
+            .{ name, dir_path },
         );
         try opts.flushOutput();
     }
-
-    try root.writeChanges();
 }
 
 const NoteType = enum {

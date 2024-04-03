@@ -94,6 +94,11 @@ pub fn makeDirIfNotExists(self: *const Self, path: []const u8) !void {
     };
 }
 
+pub fn openDirElseCreate(self: *const Self, path: []const u8) !std.fs.Dir {
+    try self.makeDirIfNotExists(path);
+    return try self.dir.openDir(path, .{});
+}
+
 /// Initialize the home directory with requisite sub paths.
 pub fn setupDefaultDirectory(self: *const Self) !void {
     try self.makeDirIfNotExists(DIARY_DIRECTORY);
