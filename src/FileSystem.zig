@@ -104,7 +104,7 @@ pub fn setupDefaultDirectory(self: *const Self) !void {
 /// Will raise error on permissions etc.
 pub fn fileExists(self: *const Self, path: []const u8) !bool {
     self.dir.access(path, .{}) catch |err| {
-        if (err == std.fs.Dir.AccessError.FileNotFound) return false;
+        if (err == error.FileNotFound) return false;
         return err;
     };
     return true;
