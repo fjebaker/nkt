@@ -32,7 +32,7 @@ pub const arguments = cli.Arguments(selections.selectHelp(
         .help = "Allow new notes to be created.",
     },
     .{
-        .arg = "-e/--ext extension",
+        .arg = "--ext extension",
         .help = "The file extension for the new note (default: 'md').",
     },
 });
