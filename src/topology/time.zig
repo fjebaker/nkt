@@ -196,7 +196,7 @@ pub const Time = struct {
                 const val = std.fmt.parseInt(u64, number, 10) catch {
                     return error.InvalidNumber;
                 };
-                return migrateOldTime(val);
+                return timeFromMilisUK(val);
             },
             .string => |string| {
                 return Time.fromString(string) catch error.InvalidNumber;
@@ -205,7 +205,9 @@ pub const Time = struct {
         }
     }
 
-    fn migrateOldTime(val: u64) Time {
+    /// `Time` from milis, assuming the time stamp is from the UK.
+    /// This is very specific to my needs.
+    pub fn timeFromMilisUK(val: u64) Time {
         const tz = if (val < 1698544800000) // 29 October 2024
             TimeZone.create("BST", 60)
         else if (val < 1711846800000) // 31 March 2024
