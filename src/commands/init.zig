@@ -58,7 +58,7 @@ pub fn execute(
         }
 
         try root.load();
-        try root.writeChanges();
+        try root.writeRoot();
         return;
     }
 

@@ -782,20 +782,14 @@ pub fn addInitialCollections(self: *Root) !void {
 /// initalization or migration, else risks deleting existing data if not all
 /// read.
 pub fn createFilesystem(self: *Root) !void {
-    var fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
+    const fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
 
     // migration: first we validate that all of the journals / directories /
     // tasklists we are holding onto actually have directories, and that
     // all the notes that we are tracking actually exist
 
     // TODO: exactly that
-
-    {
-        // create the main topology file
-        const own_content = try self.serialize(self.allocator);
-        defer self.allocator.free(own_content);
-        try fs.overwrite(ROOT_FILEPATH, own_content);
-    }
+    try self.writeRoot();
 
     // create the tags file
     try self.writeTags();
@@ -807,6 +801,15 @@ pub fn createFilesystem(self: *Root) !void {
     try self.writeAllDescriptors(fs, .CollectionJournal);
     try self.writeAllDescriptors(fs, .CollectionDirectory);
     try self.writeAllDescriptors(fs, .CollectionTasklist);
+}
+
+/// Overwrite the root topology file
+pub fn writeRoot(self: *Root) !void {
+    var fs = self.getFileSystem() orelse return Error.NeedsFileSystem;
+    // create the main topology file
+    const own_content = try self.serialize(self.allocator);
+    defer self.allocator.free(own_content);
+    try fs.overwrite(ROOT_FILEPATH, own_content);
 }
 
 fn writeAllDescriptors(

@@ -25,6 +25,7 @@ command: []const []const u8 = &.{
     "-o",
     OUTFILE_SYMBOL,
 },
+link: []const u8 = "[%NAME](%LINK)",
 /// File extensions that it is applicable for
 extensions: []const []const u8,
 
@@ -36,6 +37,18 @@ pub fn supports(tc: TextCompiler, ext: []const u8) bool {
         }
     }
     return false;
+}
+
+/// Format a note link. Caller owns the memory.
+pub fn formatLink(
+    tc: TextCompiler,
+    allocator: std.mem.Allocator,
+    link: []const u8,
+    name: []const u8,
+) ![]const u8 {
+    const sub1 = try std.mem.replaceOwned(u8, allocator, tc.link, "%NAME", name);
+    defer allocator.free(sub1);
+    return try std.mem.replaceOwned(u8, allocator, sub1, "%LINK", link);
 }
 
 /// Substitute blocks and write into `writer`.
@@ -75,6 +88,7 @@ fn processTextImpl(
         // leaky allocator
         allocator: std.mem.Allocator,
         opts: ProcessingOptions,
+        tc: TextCompiler,
 
         fn handle(self: @This(), f: processing.Fragment) !void {
             switch (f.type) {
@@ -91,12 +105,14 @@ fn processTextImpl(
                             )
                         else
                             path;
-                        try self.writer.print("[{s}]({s})", .{ name, link_path });
+                        const link = try self.tc.formatLink(self.allocator, link_path, name);
+                        try self.writer.writeAll(link);
                     }
                 },
-                else => {},
+                else => {
+                    try self.writer.writeAll(f.text);
+                },
             }
-            try self.writer.writeAll(f.text);
         }
     };
     const P = processing.Processor(Ctx, Ctx.handle);
@@ -109,6 +125,7 @@ fn processTextImpl(
         .root = root,
         .allocator = arena.allocator(),
         .opts = opts,
+        .tc = tc,
     });
 
     try processor.processText(text);
