@@ -20,9 +20,15 @@ pub const arguments = cli.Arguments(selections.selectHelp(
     "The item to edit (see `help select`).",
     .{ .required = true },
 ) ++
-    &[_]cli.ArgumentDescriptor{});
+    &[_]cli.ArgumentDescriptor{
+    .{
+        .arg = "--open",
+        .help = "Open the file after compilation in the configured viewer.",
+    },
+});
 
 selection: selections.Selection,
+open: bool,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
@@ -35,6 +41,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     return .{
         .selection = selection,
+        .open = args.open,
     };
 }
 
@@ -64,9 +71,32 @@ pub fn execute(
                 "Compiled '{s}' to '{s}'\n",
                 .{ n.note.name, outpath },
             );
+
+            try opts.flushOutput();
+
+            if (self.open) {
+                try viewFile(allocator, root, outpath);
+            }
         },
     }
-    _ = opts;
+}
+
+fn viewFile(allocator: std.mem.Allocator, root: *Root, outpath: []const u8) !void {
+    const cmd = root.info.pdf_viewer;
+    var list = try std.ArrayList([]const u8).initCapacity(allocator, cmd.len + 1);
+    defer list.deinit();
+
+    for (cmd) |c| {
+        try list.append(c);
+    }
+    try list.append(outpath);
+
+    var env_map = try std.process.getEnvMap(allocator);
+    defer env_map.deinit();
+
+    std.log.default.debug("Viewing: '{s}'", .{list.items});
+
+    return std.process.execve(allocator, cmd, &env_map);
 }
 
 fn compileNote(

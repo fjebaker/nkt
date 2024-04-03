@@ -102,6 +102,7 @@ const Info = struct {
     // configuration variables
     editor: []const []const u8 = &.{"vim"},
     pager: []const []const u8 = &.{"less"},
+    pdf_viewer: []const []const u8 = &.{"okular"},
 
     compiled_directory: []const u8 = "_compiled",
 
@@ -431,6 +432,9 @@ test "serialize" {
         \\    "pager": [
         \\        "less"
         \\    ],
+        \\    "pdf_viewer": [
+        \\        "okular"
+        \\    ],
         \\    "compiled_directory": "_compiled",
         \\    "default_tasklist": "todo",
         \\    "default_directory": "notes",
@@ -446,6 +450,7 @@ test "serialize" {
         \\                "-o",
         \\                "%@"
         \\            ],
+        \\            "link": "[%NAME](%LINK)",
         \\            "extensions": [
         \\                "md"
         \\            ]
@@ -478,6 +483,9 @@ test "serialize" {
         \\    "pager": [
         \\        "less"
         \\    ],
+        \\    "pdf_viewer": [
+        \\        "okular"
+        \\    ],
         \\    "compiled_directory": "_compiled",
         \\    "default_tasklist": "todo",
         \\    "default_directory": "notes",
@@ -493,6 +501,7 @@ test "serialize" {
         \\                "-o",
         \\                "%@"
         \\            ],
+        \\            "link": "[%NAME](%LINK)",
         \\            "extensions": [
         \\                "md"
         \\            ]

@@ -15,6 +15,12 @@ pub const Options = struct {
 
     /// The local timezone for converting dates
     tz: time.TimeZone,
+
+    buffered_writer: *std.io.BufferedWriter(4096, std.fs.File.Writer),
+    // Flush the buffered writer
+    pub fn flushOutput(opts: Options) !void {
+        try opts.buffered_writer.flush();
+    }
 };
 
 pub const Commands = union(enum) {
@@ -56,6 +62,7 @@ pub const Commands = union(enum) {
         const opts: Options = .{
             .piped = !out_fd.isTty(),
             .tz = tz,
+            .buffered_writer = &out_buffered,
         };
 
         switch (self.*) {
