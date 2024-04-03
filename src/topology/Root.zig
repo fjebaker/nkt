@@ -3,11 +3,11 @@ const std = @import("std");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
-const processing = @import("../processing.zig");
 
 pub const Directory = @import("Directory.zig");
 pub const Journal = @import("Journal.zig");
 pub const Tasklist = @import("Tasklist.zig");
+pub const TextCompiler = @import("TextCompiler.zig");
 
 const chains = @import("chains.zig");
 const tags = @import("tags.zig");
@@ -27,6 +27,7 @@ test "other topologies" {
     _ = FileSystem;
     _ = tags;
     _ = time;
+    _ = TextCompiler;
 }
 
 /// The filename of the root topology file
@@ -65,59 +66,6 @@ pub const Descriptor = struct {
     modified: Time,
 };
 
-/// Struct representing the different methods for compiling and exporting
-/// notes.
-pub const TextCompiler = struct {
-    /// Name for internal use
-    name: []const u8,
-    /// Command used to compile / export the text
-    command: ?[]const []const u8 = null,
-    /// File extensions that it is applicable for
-    extensions: []const []const u8,
-
-    /// Returns true if the given extension is supported by this compiler
-    pub fn supports(tc: TextCompiler, ext: []const u8) bool {
-        for (tc.extensions) |e| {
-            if (std.mem.eql(u8, e, ext)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// Substitute blocks and write into `writer`.
-    pub fn processText(
-        tc: TextCompiler,
-        writer: anytype,
-        text: []const u8,
-        root: *Root,
-    ) !void {
-        const fragments = try processing.splitTextFragments(
-            root.allocator,
-            text,
-        );
-        defer root.allocator.free(fragments);
-
-        for (fragments) |f| {
-            switch (f.type) {
-                .link => {
-                    // find the item
-                    if (try root.selectFromString(f.inner())) |item| {
-                        const path = item.getPath();
-                        const name = try item.getName(root.allocator);
-                        defer root.allocator.free(name);
-                        try writer.print("[{s}]({s})", .{ name, path });
-                        continue;
-                    }
-                },
-                else => {},
-            }
-            try writer.writeAll(f.text);
-        }
-        _ = tc;
-    }
-};
-
 pub const CollectionType = enum {
     CollectionJournal,
     CollectionDirectory,
@@ -154,6 +102,8 @@ const Info = struct {
     // configuration variables
     editor: []const []const u8 = &.{"vim"},
     pager: []const []const u8 = &.{"less"},
+
+    compiled_directory: []const u8 = "_compiled",
 
     default_tasklist: []const u8 = "todo",
     default_directory: []const u8 = "notes",
@@ -957,4 +907,11 @@ pub fn getTextCompiler(self: *const Root, ext: []const u8) ?TextCompiler {
         if (cmp.supports(ext)) return cmp;
     }
     return null;
+}
+
+/// Ensure the compiled directory exists, else makes it.
+pub fn ensureCompiledDirectory(self: *Root) !void {
+    const fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+    try fs.makeDirIfNotExists(self.info.compiled_directory);
 }

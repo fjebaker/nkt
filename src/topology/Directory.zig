@@ -19,6 +19,13 @@ pub const Note = struct {
     created: Time,
     modified: Time,
     tags: []Tag,
+
+    /// Get the file extension of the note
+    pub fn getExtension(n: Note) []const u8 {
+        const ext = std.fs.path.extension(n.path);
+        if (ext[0] == '.') return ext[1..];
+        return ext;
+    }
 };
 
 pub const Info = struct {

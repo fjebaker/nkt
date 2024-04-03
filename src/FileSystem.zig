@@ -111,9 +111,11 @@ pub fn fileExists(self: *const Self, path: []const u8) !bool {
 }
 
 pub fn removeFile(self: *const Self, path: []const u8) !void {
+    std.log.default.debug("Removing file '{s}'", .{path});
     try self.dir.deleteFile(path);
 }
 
+/// Overwrite the contents of a file. Will create the file if it does not exist.
 pub fn overwrite(self: *const Self, rel_path: []const u8, content: []const u8) !void {
     std.log.default.debug("Overwriting '{s}'", .{rel_path});
     var fs = try self.openElseCreate(rel_path);
@@ -160,6 +162,40 @@ pub fn copyFromCwd(
     const abs_from = try std.fs.cwd().realpathAlloc(allocator, cwd_rel_from);
     defer allocator.free(abs_from);
     try std.fs.copyFileAbsolute(abs_from, abs_to, .{});
+}
+
+/// Get a path to a temporary file. Needs an allocator to generate the
+/// filename. Zeros any existing file by the same name before returning.
+pub fn tmpFile(allocator: std.mem.Allocator) ![]const u8 {
+    const path = try tmpFilePath(allocator);
+    errdefer allocator.free(path);
+
+    std.log.default.debug("Making tmp file '{s}'", .{path});
+
+    var f = std.fs.openFileAbsolute(
+        path,
+        .{ .mode = .write_only },
+    ) catch |err| b: {
+        if (isFileNotFound(err)) {
+            break :b try std.fs.createFileAbsolute(path, .{});
+        }
+        return err;
+    };
+    defer f.close();
+    try f.seekTo(0);
+
+    return path;
+}
+
+fn tmpFilePath(allocator: std.mem.Allocator) ![]const u8 {
+    var prng = std.rand.DefaultPrng.init(0);
+    const id_num = prng.random().int(u16);
+
+    var list = std.ArrayList(u8).init(allocator);
+    errdefer list.deinit();
+
+    try std.fmt.format(list.writer(), "/tmp/.nkt_tmp_file{d:0}", .{id_num});
+    return list.toOwnedSlice();
 }
 
 pub fn move(

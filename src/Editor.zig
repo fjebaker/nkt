@@ -1,4 +1,5 @@
 const std = @import("std");
+const FileSystem = @import("FileSystem.zig");
 const Editor = @This();
 
 pub const EditorErrors = error{BadExit};
@@ -20,17 +21,6 @@ pub fn init(allocator: std.mem.Allocator) !Editor {
 pub fn deinit(self: *Editor) void {
     self.allocator.free(self.editor);
     self.* = undefined;
-}
-
-fn tmpFilePath(allocator: std.mem.Allocator) ![]u8 {
-    var prng = std.rand.DefaultPrng.init(0);
-    const id_num = prng.random().int(u16);
-
-    var list = std.ArrayList(u8).init(allocator);
-    errdefer list.deinit();
-
-    try std.fmt.format(list.writer(), "/tmp/.nkt_tmp_file{d:0}", .{id_num});
-    return list.toOwnedSlice();
 }
 
 fn edit(self: *Editor, filename: []const u8) !void {
@@ -103,7 +93,7 @@ fn deleteFile(path: []const u8) !void {
 
 const MAX_BYTES = @import("FileSystem.zig").MAXIMUM_BYTES_READ;
 pub fn editTemporaryContent(self: *Editor, alloc: std.mem.Allocator, content: []const u8) ![]u8 {
-    const file_path = try tmpFilePath(alloc);
+    const file_path = try FileSystem.tmpFile(alloc);
     defer alloc.free(file_path);
 
     try writeToFile(file_path, content);

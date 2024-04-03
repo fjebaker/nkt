@@ -180,7 +180,7 @@ pub fn execute(
             const content = try root.fs.?.readFileAlloc(allocator, n.note.path);
             defer allocator.free(content);
 
-            const ext = std.fs.path.extension(n.note.path)[1..];
+            const ext = n.note.getExtension();
             if (root.getTextCompiler(ext)) |cmp| {
                 try cmp.processText(writer, content, root);
             } else {
