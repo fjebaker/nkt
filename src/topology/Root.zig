@@ -1,4 +1,10 @@
 const std = @import("std");
+
+const cli = @import("../cli.zig");
+const utils = @import("../utils.zig");
+const selections = @import("../selections.zig");
+const processing = @import("../processing.zig");
+
 pub const Directory = @import("Directory.zig");
 pub const Journal = @import("Journal.zig");
 pub const Tasklist = @import("Tasklist.zig");
@@ -9,6 +15,8 @@ pub const Tag = tags.Tag;
 const time = @import("time.zig");
 pub const Time = time.Time;
 const FileSystem = @import("../FileSystem.zig");
+
+const Item = @import("../abstractions.zig").Item;
 
 const Root = @This();
 
@@ -718,6 +726,30 @@ pub fn getDirectory(self: *Root, name: []const u8) !?Directory {
 /// be called on the journal by the caller.
 pub fn getTasklist(self: *Root, name: []const u8) !?Tasklist {
     return self.getCollection(name, .CollectionTasklist);
+}
+
+const select_args = @import("../commands/select.zig").arguments;
+
+/// Attempt to select an item from a string, i.e. like using
+///
+///     nkt select STRING
+///
+/// from the command line. Uses the forgiving parsers to avoid validating.
+pub fn selectFromString(self: *Root, selection: []const u8) !?Item {
+    const tokens = try utils.split(self.allocator, selection);
+    defer self.allocator.free(tokens);
+
+    var itt = cli.ArgIterator.init(tokens);
+    const args = select_args.parseAllForgiving(&itt) orelse
+        return null;
+
+    const s = try selections.fromArgsForgiving(
+        select_args.Parsed,
+        args.item,
+        args,
+    );
+
+    return try s.resolveOrNull(self);
 }
 
 /// Add all of the default collections to the root

@@ -170,6 +170,22 @@ pub fn ListIterator(comptime T: type) type {
     };
 }
 
+/// Split a string into tokens.
+pub fn split(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+) ![]const []const u8 {
+    var list = std.ArrayList([]const u8).init(allocator);
+    defer list.deinit();
+
+    var itt = std.mem.tokenizeAny(u8, text, "\n\r\t =");
+    while (itt.next()) |tkn| {
+        try list.append(tkn);
+    }
+
+    return list.toOwnedSlice();
+}
+
 /// Parses all tags using `tags.parseInlineWithAdditional`, and validates the
 /// tags against the taglist in `Root`. Caller owns the memory.
 pub fn parseAndAssertValidTags(
