@@ -122,7 +122,7 @@ pub const Item = union(enum) {
         switch (self.*) {
             .Note => |i| return i.note.path,
             .Day => |i| return i.day.path,
-            .Entry => |i| return i.journal.descriptor.path,
+            .Entry => |i| return i.day.path,
             .Task => |i| return i.tasklist.descriptor.path,
             .Collection => |i| return i.getDescriptor().path,
         }
@@ -130,13 +130,20 @@ pub const Item = union(enum) {
     }
 
     /// Get the name of the item. Returns the formatted timestamp for an entry.
-    pub fn getName(self: *const Item) ![]const u8 {
+    /// Caller owns the memory.
+    pub fn getName(self: *const Item, allocator: std.mem.Allocator) ![]const u8 {
         switch (self.*) {
-            .Note => |i| return i.note.name,
-            .Day => |i| return i.day.name,
-            .Entry => |i| return &(try i.entry.created.formatTime()),
-            .Task => |i| return i.task.outcome,
-            .Collection => |i| return i.getDescriptor().name,
+            .Note => |i| return try allocator.dupe(u8, i.note.name),
+            .Day => |i| return try allocator.dupe(u8, i.day.name),
+            .Entry => |i| return try allocator.dupe(
+                u8,
+                &(try time.formatDateTimeBuf(i.entry.created.toDate())),
+            ),
+            .Task => |i| return try allocator.dupe(u8, i.task.outcome),
+            .Collection => |i| return try allocator.dupe(
+                u8,
+                i.getDescriptor().name,
+            ),
         }
     }
 

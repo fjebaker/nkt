@@ -104,7 +104,8 @@ pub const TextCompiler = struct {
                     // find the item
                     if (try root.selectFromString(f.inner())) |item| {
                         const path = item.getPath();
-                        const name = try item.getName();
+                        const name = try item.getName(root.allocator);
+                        defer root.allocator.free(name);
                         try writer.print("[{s}]({s})", .{ name, path });
                         continue;
                     }
