@@ -11,7 +11,7 @@ const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
 
 const Self = @This();
-const Error = error{UnknownNoteType};
+const Error = error{ AssetExists, UnknownNoteType };
 
 pub const alias = [_][]const u8{"imp"};
 
@@ -61,6 +61,7 @@ move: bool = false,
 ext: ?[]const u8,
 note_type: ?[]const u8,
 asset: bool,
+force: bool,
 
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);
@@ -106,6 +107,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .ext = parsed.ext,
         .note_type = parsed.type,
         .asset = parsed.asset,
+        .force = parsed.force,
     };
 }
 
@@ -190,6 +192,20 @@ fn importAssets(
     for (self.paths) |path| {
         const name = std.fs.path.basename(path);
         const new_path = try std.fs.path.join(alloc, &.{ dir_path, name });
+
+        const exists = try root.fs.?.fileExists(new_path);
+        if (exists) {
+            if (self.force) {
+                std.log.default.warn("Overwriting '{s}'", .{new_path});
+            } else {
+                try cli.throwError(
+                    Error.AssetExists,
+                    "File exists '{s}'",
+                    .{new_path},
+                );
+                unreachable;
+            }
+        }
 
         if (self.move) {
             const abs_path = try root.fs.?.absPathify(alloc, new_path);
