@@ -107,6 +107,13 @@ fn nextFragment(text: []const u8, search_start: usize) ?FragmentOrOffset {
     return null;
 }
 
+fn addFragmentToList(
+    list: *std.ArrayList(Fragment),
+    fragment: Fragment,
+) !void {
+    try list.append(fragment);
+}
+
 /// Split the text into a series of `Fragment` for processing.  Identifies
 /// links via `[[LINK TEXT]]`
 pub fn splitTextFragments(
@@ -116,32 +123,10 @@ pub fn splitTextFragments(
     var list = std.ArrayList(Fragment).init(allocator);
     defer list.deinit();
 
-    var start: usize = 0;
-    var search_start: usize = 0;
-    while (true) {
-        if (nextFragment(text, search_start)) |f| {
-            switch (f) {
-                .f => |fragment| {
-                    if (start != fragment.start) {
-                        try list.append(
-                            .{ .text = text[start..fragment.start] },
-                        );
-                    }
-                    try list.append(fragment.fragment);
+    const P = Processor(*@TypeOf(list), addFragmentToList);
+    var processor = P.init(&list);
+    try processor.processText(text);
 
-                    const end = fragment.end();
-                    search_start = end;
-                    start = end;
-                },
-                .offset => |off| search_start += off,
-            }
-        } else {
-            if (start != text.len) {
-                try list.append(.{ .text = text[start..] });
-            }
-            break;
-        }
-    }
     return try list.toOwnedSlice();
 }
 
@@ -185,4 +170,58 @@ test "text fragments" {
         .{ .text = "hello ", .type = .normal },
         .{ .text = "@world", .type = .tag },
     });
+}
+
+pub fn Processor(
+    comptime Ctx: type,
+    comptime fragment_handler: fn (Ctx, Fragment) anyerror!void,
+) type {
+    //
+    return struct {
+        ctx: Ctx,
+
+        const Self = @This();
+
+        fn processFragment(
+            self: *Self,
+            fragment: Fragment,
+        ) anyerror!void {
+            return fragment_handler(self.ctx, fragment);
+        }
+
+        pub fn init(ctx: Ctx) Self {
+            return .{ .ctx = ctx };
+        }
+
+        /// Process the text, calling the `fragment_handler` function for each
+        /// fragment in the text.
+        pub fn processText(self: *Self, text: []const u8) !void {
+            var start: usize = 0;
+            var search_start: usize = 0;
+            while (true) {
+                if (nextFragment(text, search_start)) |f| {
+                    switch (f) {
+                        .f => |fragment| {
+                            if (start != fragment.start) {
+                                try self.processFragment(
+                                    .{ .text = text[start..fragment.start] },
+                                );
+                            }
+                            try self.processFragment(fragment.fragment);
+
+                            const end = fragment.end();
+                            search_start = end;
+                            start = end;
+                        },
+                        .offset => |off| search_start += off,
+                    }
+                } else {
+                    if (start != text.len) {
+                        try self.processFragment(.{ .text = text[start..] });
+                    }
+                    break;
+                }
+            }
+        }
+    };
 }

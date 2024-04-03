@@ -69,40 +69,49 @@ fn processTextImpl(
 ) !void {
     std.log.default.debug("Processing text with '{s}' compiler", .{tc.name});
 
-    const fragments = try processing.splitTextFragments(
-        allocator,
-        text,
-    );
-    defer allocator.free(fragments);
+    const Ctx = struct {
+        writer: @TypeOf(writer),
+        root: *Root,
+        // leaky allocator
+        allocator: std.mem.Allocator,
+        opts: ProcessingOptions,
 
-    for (fragments) |f| {
-        switch (f.type) {
-            .link => {
-                // find the item
-                if (try root.selectFromString(f.inner())) |item| {
-                    const path = item.getPath();
-                    const name = try item.getName(allocator);
-                    defer allocator.free(name);
-
-                    if (opts.compiled_links) {
-                        const compiled_path = try makeCompiledPath(
-                            allocator,
-                            root,
-                            path,
-                        );
-                        defer allocator.free(compiled_path);
-                        try writer.print("[{s}]({s})", .{ name, compiled_path });
-                    } else {
-                        try writer.print("[{s}]({s})", .{ name, path });
+        fn handle(self: @This(), f: processing.Fragment) !void {
+            switch (f.type) {
+                .link => {
+                    // find the item
+                    if (try self.root.selectFromString(f.inner())) |item| {
+                        const path = item.getPath();
+                        const name = try item.getName(self.allocator);
+                        const link_path = if (self.opts.compiled_links)
+                            try makeCompiledPath(
+                                self.allocator,
+                                self.root,
+                                path,
+                            )
+                        else
+                            path;
+                        try self.writer.print("[{s}]({s})", .{ name, link_path });
                     }
-
-                    continue;
-                }
-            },
-            else => {},
+                },
+                else => {},
+            }
+            try self.writer.writeAll(f.text);
         }
-        try writer.writeAll(f.text);
-    }
+    };
+    const P = processing.Processor(Ctx, Ctx.handle);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    var processor = P.init(.{
+        .writer = writer,
+        .root = root,
+        .allocator = arena.allocator(),
+        .opts = opts,
+    });
+
+    try processor.processText(text);
 }
 
 const CompilerFile = struct {
