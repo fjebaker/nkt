@@ -25,10 +25,20 @@ pub const arguments = cli.Arguments(selections.selectHelp(
         .arg = "--open",
         .help = "Open the file after compilation in the configured viewer.",
     },
+    .{
+        .arg = "--strict",
+        .help = "If multiple compilers are available, fail with error.",
+    },
+    .{
+        .arg = "--compiler name",
+        .help = "Specify a specific compiler to use.",
+    },
 });
 
 selection: selections.Selection,
 open: bool,
+strict: bool,
+compiler: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
@@ -42,6 +52,8 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return .{
         .selection = selection,
         .open = args.open,
+        .strict = args.strict,
+        .compiler = args.compiler,
     };
 }
 
@@ -108,17 +120,67 @@ fn compileNote(
 ) ![]const u8 {
     std.log.default.debug("Compiling note: '{s}'", .{note.path});
 
-    _ = self;
     _ = dir;
     const ext = note.getExtension();
-    const compiler = root.getTextCompiler(ext) orelse {
+
+    const compiler = try self.getCompiler(allocator, root, ext);
+    return try compiler.compileNote(allocator, note, root, .{});
+}
+
+fn getCompiler(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    ext: []const u8,
+) !Root.TextCompiler {
+    if (self.compiler) |name| {
+        const compiler = root.getTextCompilerByName(name) orelse {
+            try cli.throwError(
+                Root.Error.UnknownCompiler,
+                "No compiler known with name '{s}'",
+                .{name},
+            );
+            unreachable;
+        };
+
+        if (compiler.supports(ext)) {
+            return compiler;
+        } else {
+            try cli.throwError(
+                Root.Error.InvalidCompiler,
+                "Compiler '{s}' does not support extension '{s}'",
+                .{ name, ext },
+            );
+            unreachable;
+        }
+    }
+
+    const compilers = try root.getAllTextCompiler(allocator, ext);
+    defer allocator.free(compilers);
+
+    if (compilers.len == 0) {
         try cli.throwError(
             Root.Error.UnknownExtension,
             "No text compiler for '{s}'",
             .{ext},
         );
         unreachable;
-    };
+    }
 
-    return try compiler.compileNote(allocator, note, root, .{});
+    if (self.strict and compilers.len > 1) {
+        var list = std.ArrayList(u8).init(allocator);
+        defer list.deinit();
+
+        for (compilers) |cmp| {
+            try list.writer().print("{s} ", .{cmp.name});
+        }
+
+        try cli.throwError(
+            Root.Error.AmbigousCompiler,
+            "Use the `--compiler name` flag to disambiguate.\nAvailable options:\n{s}",
+            .{list.items},
+        );
+        unreachable;
+    }
+    return compilers[0];
 }

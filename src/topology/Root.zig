@@ -34,11 +34,14 @@ test "other topologies" {
 pub const ROOT_FILEPATH = "topology.json";
 
 pub const Error = error{
+    AmbigousCompiler,
     DuplicateItem,
+    InvalidCompiler,
     InvalidExtension,
     NeedsFileSystem,
     NoSuchCollection,
     NoSuchItem,
+    UnknownCompiler,
     UnknownExtension,
 };
 
@@ -931,6 +934,32 @@ pub fn getTextCompiler(self: *const Root, ext: []const u8) ?TextCompiler {
         if (cmp.supports(ext)) return cmp;
     }
     return null;
+}
+
+/// Get the text compiler environment by name.
+/// Returns null if none by that name exists.
+pub fn getTextCompilerByName(self: *const Root, name: []const u8) ?TextCompiler {
+    for (self.info.text_compilers) |cmp| {
+        if (std.mem.eql(u8, cmp.name, name)) return cmp;
+    }
+    return null;
+}
+
+/// Get all the possible `TextCompiler`.
+/// Caller owns the memory.
+pub fn getAllTextCompiler(
+    self: *const Root,
+    allocator: std.mem.Allocator,
+    ext: []const u8,
+) ![]const TextCompiler {
+    var list = std.ArrayList(TextCompiler).init(allocator);
+    defer list.deinit();
+    for (self.info.text_compilers) |cmp| {
+        if (cmp.supports(ext)) {
+            try list.append(cmp);
+        }
+    }
+    return try list.toOwnedSlice();
 }
 
 /// Ensure the compiled directory exists, else makes it.
