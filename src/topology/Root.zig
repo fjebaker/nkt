@@ -431,6 +431,7 @@ test "serialize" {
         \\    "pager": [
         \\        "less"
         \\    ],
+        \\    "compiled_directory": "_compiled",
         \\    "default_tasklist": "todo",
         \\    "default_directory": "notes",
         \\    "default_journal": "diary",
@@ -439,7 +440,12 @@ test "serialize" {
         \\    "text_compilers": [
         \\        {
         \\            "name": "markdown",
-        \\            "command": null,
+        \\            "command": [
+        \\                "pandoc",
+        \\                "%<",
+        \\                "-o",
+        \\                "%@"
+        \\            ],
         \\            "extensions": [
         \\                "md"
         \\            ]
@@ -472,6 +478,7 @@ test "serialize" {
         \\    "pager": [
         \\        "less"
         \\    ],
+        \\    "compiled_directory": "_compiled",
         \\    "default_tasklist": "todo",
         \\    "default_directory": "notes",
         \\    "default_journal": "diary",
@@ -480,7 +487,12 @@ test "serialize" {
         \\    "text_compilers": [
         \\        {
         \\            "name": "markdown",
-        \\            "command": null,
+        \\            "command": [
+        \\                "pandoc",
+        \\                "%<",
+        \\                "-o",
+        \\                "%@"
+        \\            ],
         \\            "extensions": [
         \\                "md"
         \\            ]
