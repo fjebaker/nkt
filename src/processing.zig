@@ -3,14 +3,33 @@ const utils = @import("utils.zig");
 const tags = @import("topology/tags.zig");
 
 pub const Fragment = struct {
+    pub const Type = enum { normal, link, tag };
+
     text: []const u8,
-    type: enum { normal, link, tag } = .normal,
+    type: Type = .normal,
+
+    pub fn inner(f: Fragment) []const u8 {
+        const end = f.text.len;
+        return switch (f.type) {
+            .normal => f.text,
+            .tag => f.text[1..],
+            .link => f.text[2 .. end - 2],
+        };
+    }
 };
+
+test "fragment inner" {
+    const f1 = Fragment{ .text = "[[hello]]", .type = .link };
+    try std.testing.expectEqualStrings(
+        "hello",
+        f1.inner(),
+    );
+}
 
 const LINK_OPEN = "[[";
 const LINK_CLOSE = "]]";
 
-fn isLink(text: []const u8) ?[]const u8 {
+fn getNoteLink(text: []const u8) ?[]const u8 {
     var itt = utils.Iterator(u8).init(text);
 
     var is_link: bool = false;
@@ -30,8 +49,8 @@ fn isLink(text: []const u8) ?[]const u8 {
             else => {},
         }
     }
-    if (!is_link) return null;
 
+    if (!is_link) return null;
     const end = itt.index;
     return text[0..end];
 }
@@ -44,9 +63,7 @@ const FragmentOrOffset = union(enum) {
 
         fn end(i: @This()) usize {
             return switch (i.fragment.type) {
-                .link => i.start + i.fragment.text.len + 4,
-                .tag => i.start + i.fragment.text.len + 1,
-                .normal => i.start + i.fragment.text.len,
+                inline else => i.start + i.fragment.text.len,
             };
         }
     },
@@ -60,10 +77,10 @@ fn nextFragment(text: []const u8, search_start: usize) ?FragmentOrOffset {
             '[' => {
                 if (itt.peek()) |n| if (n != '[') continue;
                 const loc = itt.index - 1;
-                if (isLink(text[loc + 2 ..])) |link| {
-                    const end = loc + link.len;
+                if (getNoteLink(text[loc + 2 ..])) |link| {
+                    const end = loc + link.len + 2;
                     const fragment: Fragment = .{
-                        .text = text[loc + 2 .. end],
+                        .text = text[loc..end],
                         .type = .link,
                     };
 
@@ -76,7 +93,7 @@ fn nextFragment(text: []const u8, search_start: usize) ?FragmentOrOffset {
                 if (tags.getTagString(text[loc..]) catch null) |tag_name| {
                     const end = loc + 1 + tag_name.len;
                     const fragment: Fragment = .{
-                        .text = text[loc + 1 .. end],
+                        .text = text[loc..end],
                         .type = .tag,
                     };
 
@@ -141,23 +158,23 @@ test "text fragments" {
 
     try testFragments("hello [[thing]] world", &.{
         .{ .text = "hello ", .type = .normal },
-        .{ .text = "thing", .type = .link },
+        .{ .text = "[[thing]]", .type = .link },
         .{ .text = " world", .type = .normal },
     });
 
     try testFragments("[[thing]] world", &.{
-        .{ .text = "thing", .type = .link },
+        .{ .text = "[[thing]]", .type = .link },
         .{ .text = " world", .type = .normal },
     });
 
     try testFragments("world [[thing]]", &.{
         .{ .text = "world ", .type = .normal },
-        .{ .text = "thing", .type = .link },
+        .{ .text = "[[thing]]", .type = .link },
     });
 
     try testFragments("world [[thing  ]]", &.{
         .{ .text = "world ", .type = .normal },
-        .{ .text = "thing  ", .type = .link },
+        .{ .text = "[[thing  ]]", .type = .link },
     });
 
     try testFragments("world [[thi\nng]]", &.{
@@ -166,6 +183,6 @@ test "text fragments" {
 
     try testFragments("hello @world", &.{
         .{ .text = "hello ", .type = .normal },
-        .{ .text = "world", .type = .tag },
+        .{ .text = "@world", .type = .tag },
     });
 }
