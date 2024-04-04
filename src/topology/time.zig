@@ -175,6 +175,11 @@ pub const Time = struct {
         return try formatTimeBuf(t.toDate());
     }
 
+    /// Format as `YYYY-MM-DD HH:MM:SS`
+    pub fn formatDateTime(t: Time) ![19]u8 {
+        return try formatDateTimeBuf(t.toDate());
+    }
+
     pub fn jsonStringify(t: Time, writer: anytype) !void {
         const tz = t.getTimeZone();
         tz.printTimeImpl(writer, t, true) catch {

@@ -26,6 +26,18 @@ pub const Note = struct {
         if (ext[0] == '.') return ext[1..];
         return ext;
     }
+
+    pub fn sortAlphabetical(_: void, lhs: Note, rhs: Note) bool {
+        return std.ascii.lessThanIgnoreCase(lhs.name, rhs.name);
+    }
+
+    pub fn sortCreated(_: void, lhs: Note, rhs: Note) bool {
+        return lhs.created.time < rhs.created.time;
+    }
+
+    pub fn sortModified(_: void, lhs: Note, rhs: Note) bool {
+        return lhs.modified.time < rhs.modified.time;
+    }
 };
 
 pub const Info = struct {

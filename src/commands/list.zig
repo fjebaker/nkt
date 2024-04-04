@@ -28,7 +28,7 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
-        .help = "How to sort the item lists. Possible values are 'modified' or 'created'",
+        .help = "How to sort the item lists. Possible values are 'alphabetical', 'modified' or 'created'. Defaults to created.",
     },
     .{
         .arg = "what",
@@ -82,12 +82,30 @@ const ListSelection = union(enum) {
     Compilers: void,
 };
 
+const SortingMethods = enum {
+    alphabetical,
+    modified,
+    created,
+};
+
 selection: ListSelection,
+sort: SortingMethods,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
     return .{
         .selection = try processArguments(args),
+        .sort = std.meta.stringToEnum(
+            SortingMethods,
+            args.sort orelse "created",
+        ) orelse {
+            try cli.throwError(
+                error.UnknownSort,
+                "Sorting method '{s}' is unknown",
+                .{args.sort.?},
+            );
+            unreachable;
+        },
     };
 }
 
@@ -104,7 +122,7 @@ pub fn execute(
         .Collections => try listCollections(root, writer, opts),
         .Tags => try listTags(allocator, root, writer, opts),
         .Compilers => try listCompilers(allocator, root, writer, opts),
-        .Directory => |i| try listDirectory(i, root, writer, opts),
+        .Directory => |i| try self.listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
     }
@@ -362,6 +380,7 @@ fn listTasks(
 }
 
 fn listDirectory(
+    self: *Self,
     d: utils.TagType(ListSelection, "Directory"),
     root: *Root,
     writer: anytype,
@@ -382,9 +401,46 @@ fn listDirectory(
     }
 
     // TODO: sorting
+    const pad = b: {
+        var max: usize = 0;
+        for (dir.info.notes) |n| {
+            max = @max(max, n.name.len);
+        }
+        break :b max;
+    };
+
+    switch (self.sort) {
+        .alphabetical => {
+            std.sort.insertion(
+                Root.Directory.Note,
+                dir.info.notes,
+                {},
+                Root.Directory.Note.sortAlphabetical,
+            );
+        },
+        .created => {
+            std.sort.insertion(
+                Root.Directory.Note,
+                dir.info.notes,
+                {},
+                Root.Directory.Note.sortCreated,
+            );
+        },
+        .modified => {
+            std.sort.insertion(
+                Root.Directory.Note,
+                dir.info.notes,
+                {},
+                Root.Directory.Note.sortModified,
+            );
+        },
+    }
 
     for (dir.info.notes) |note| {
-        try writer.print("- {s}\n", .{note.name});
+        try writer.writeAll(note.name);
+        try writer.writeByteNTimes(' ', pad - note.name.len);
+        try writer.print(" - {s}", .{try note.modified.formatDateTime()});
+        try writer.writeAll("\n");
     }
     _ = opts;
 }
