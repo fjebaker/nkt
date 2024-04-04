@@ -26,11 +26,13 @@ pub const arguments = cli.Arguments(&.{
         .arg = "path",
         .help = "Path(s) to the files to import, seperated by spaces. Can optionally specify a new name for each note by appending `:name`, such as `recipe.cake.md:recipe.chocolate-cake`.",
         .display_name = "paths[:name] [path[:name] ...]",
-        .parse = false,
+        .required = true,
+        .completion = "_files",
     },
     .{
         .arg = "--directory name",
         .help = "The directory to import the note into. Default: default directory.",
+        .completion = "{compadd $(nkt completion list --collection directory)}",
     },
     .{
         .arg = "--asset",
@@ -63,6 +65,19 @@ note_type: ?[]const u8,
 asset: bool,
 force: bool,
 
+fn splitPath(itt: *cli.ArgIterator, arg: []const u8) !struct { name: []const u8, path: []const u8 } {
+    if (std.mem.indexOfScalar(u8, arg, ':')) |i| {
+        const path = arg[0..i];
+        const name = arg[i + 1 ..];
+        if (name.len < 1) {
+            try itt.throwBadArgument("Note name too short");
+        }
+        return .{ .name = name, .path = path };
+    } else {
+        return .{ .name = std.fs.path.stem(arg), .path = arg };
+    }
+}
+
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);
 
@@ -77,27 +92,18 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             if (arg.flag) {
                 try itt.throwUnknownFlag();
             } else {
-                if (std.mem.indexOfScalar(u8, arg.string, ':')) |i| {
-                    const path = arg.string[0..i];
-                    const name = arg.string[i + 1 ..];
-                    if (name.len < 1) {
-                        try itt.throwBadArgument("Note name too short");
-                    }
-                    try names_list.append(name);
-                    try paths_list.append(path);
-                } else {
-                    try names_list.append(std.fs.path.stem(arg.string));
-                    try paths_list.append(arg.string);
-                }
+                const x = try splitPath(itt, arg.string);
+                try names_list.append(x.name);
+                try paths_list.append(x.path);
             }
         }
     }
 
-    if (paths_list.items.len == 0) {
-        try itt.throwTooFewArguments("path");
-    }
-
     const parsed = try parser.getParsed();
+
+    const x = try splitPath(itt, parsed.path);
+    try names_list.insert(0, x.name);
+    try paths_list.insert(0, x.path);
 
     return .{
         .paths = try paths_list.toOwnedSlice(),
@@ -151,7 +157,11 @@ pub fn execute(
 
         root.markModified(dir.descriptor, .CollectionDirectory);
         for (self.paths, self.names) |path, name| {
-            const ext = self.ext orelse std.fs.path.extension(path);
+            var ext = self.ext orelse std.fs.path.extension(path);
+            if (ext[0] == '.') {
+                ext = ext[1..];
+            }
+
             try self.importNote(
                 allocator,
                 name,
