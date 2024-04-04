@@ -205,11 +205,32 @@ fn listCollections(
     opts: commands.Options,
 ) !void {
     try writer.writeAll("Directories:\n");
-    try printDescriptors(writer, root.info.directories);
+    for (root.info.directories) |d| {
+        const dir = (try root.getDirectory(d.name)).?;
+        const n = dir.info.notes.len;
+        try writer.print(
+            "- {s: <15} ({d} {s})\n",
+            .{ d.name, n, if (n == 1) "note" else "notes" },
+        );
+    }
     try writer.writeAll("\nJournals:\n");
-    try printDescriptors(writer, root.info.journals);
+    for (root.info.journals) |j| {
+        const journal = (try root.getJournal(j.name)).?;
+        const n = journal.info.days.len;
+        try writer.print(
+            "- {s: <15} ({d} {s})\n",
+            .{ j.name, n, if (n == 1) "day" else "days" },
+        );
+    }
     try writer.writeAll("\nTasklists:\n");
-    try printDescriptors(writer, root.info.tasklists);
+    for (root.info.tasklists) |t| {
+        const tasklist = (try root.getTasklist(t.name)).?;
+        const n = tasklist.info.tasks.len;
+        try writer.print(
+            "- {s: <15} ({d} {s})\n",
+            .{ t.name, n, if (n == 1) "task" else "tasks" },
+        );
+    }
     try writer.writeAll("\n");
     _ = opts;
 }
@@ -260,12 +281,6 @@ fn listTags(
     try printer.addText("\n", .{});
 
     try printer.drain(writer);
-}
-
-fn printDescriptors(writer: anytype, descrs: []const Root.Descriptor) !void {
-    for (descrs) |descr| {
-        try writer.print("- {s}\n", .{descr.name});
-    }
 }
 
 fn listJournal(
