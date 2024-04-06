@@ -5,6 +5,8 @@ const Journal = @import("topology/Journal.zig");
 const Directory = @import("topology/Directory.zig");
 const Tasklist = @import("topology/Tasklist.zig");
 
+const FileSystem = @import("FileSystem.zig");
+
 /// Structure representing the abstraction of an item along with its parent
 /// colleciton.
 pub const Item = union(enum) {
@@ -150,6 +152,24 @@ pub const Item = union(enum) {
     /// For sorting by creation date
     pub fn createdDescending(_: void, lhs: Item, rhs: Item) bool {
         return lhs.getCreated() < rhs.getCreated();
+    }
+
+    /// Get a string representing the content of this item
+    pub fn getContent(
+        self: *Item,
+        allocator: std.mem.Allocator,
+        fs: FileSystem,
+    ) ![]const u8 {
+        switch (self.*) {
+            .Note => |note| {
+                const content = try fs.readFileAlloc(allocator, note.note.path);
+                return content;
+            },
+            .Entry => |entry| {
+                return entry.entry.text;
+            },
+            else => unreachable,
+        }
     }
 };
 

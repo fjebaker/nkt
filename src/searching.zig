@@ -2,6 +2,8 @@ const std = @import("std");
 const termui = @import("termui");
 const fuzzig = @import("fuzzig");
 
+const color = @import("colors.zig");
+
 const NEEDLE_MAX = 128;
 
 pub fn Searcher(comptime Item: type) type {
@@ -23,20 +25,63 @@ pub fn Searcher(comptime Item: type) type {
                 }
                 return lhs.score.? < rhs.score.?;
             }
+
+            /// Print the matches highlighted in the search string with some
+            /// context lines and a maximal width
+            pub fn printMatched(
+                r: Result,
+                writer: anytype,
+                ctx: usize,
+                maxlen: usize,
+            ) !void {
+                var start = r.matches[0] -| ctx;
+                const last_match_index = r.matches[r.matches.len - 1];
+                var end = @min(
+                    start + maxlen,
+                    @min(last_match_index + ctx, r.string.len),
+                );
+
+                const f = color.RED;
+
+                if (start > 0) {
+                    try color.DIM.write(writer, "...", .{});
+                    start += 3;
+                }
+                if (end < r.string.len) {
+                    end -|= 3;
+                }
+
+                const slice = r.string[start..end];
+
+                var m_i: usize = 0;
+                for (slice, start..) |c, i| {
+                    if (m_i < r.matches.len and r.matches[m_i] == i) {
+                        try f.write(writer, "{c}", .{c});
+                        m_i += 1;
+                    } else {
+                        try writer.writeByte(c);
+                    }
+                }
+
+                if (end < r.string.len) {
+                    try color.DIM.write(writer, "...", .{});
+                }
+            }
         };
 
         pub const ResultList = struct {
             results: []const Result,
+            runtime: u64,
 
-            fn nonNull(results: []const Result) ResultList {
+            fn nonNull(results: []const Result, runtime: u64) ResultList {
                 var index: usize = 0;
                 for (results, 0..) |r, i| {
                     if (r.score != null) {
                         index = i;
                         break;
                     }
-                } else return .{ .results = results };
-                return .{ .results = results[index..] };
+                } else return .{ .results = results, .runtime = runtime };
+                return .{ .results = results[index..], .runtime = runtime };
             }
         };
 
@@ -66,7 +111,7 @@ pub fn Searcher(comptime Item: type) type {
                 // matches can only be as long as the longest needle
                 res.matches = try allocator.alloc(usize, NEEDLE_MAX);
                 res.num_matches = 0;
-                res.score = null;
+                res.score = 0;
 
                 max_content_length = @max(max_content_length, string.len);
             }
@@ -78,16 +123,19 @@ pub fn Searcher(comptime Item: type) type {
             allocator: std.mem.Allocator,
             items: []const Item,
             strings: []const []const u8,
+            opts: fuzzig.AsciiOptions,
         ) !Self {
             var heap = std.heap.ArenaAllocator.init(allocator);
             errdefer heap.deinit();
             const info = try initResultsBuffer(heap.allocator(), items, strings);
+
             const finder = try fuzzig.Ascii.init(
                 heap.allocator(),
                 info.max_content_length,
                 128,
-                .{},
+                opts,
             );
+
             return .{
                 .heap = heap,
                 .items = items,
@@ -101,7 +149,10 @@ pub fn Searcher(comptime Item: type) type {
             self.* = undefined;
         }
 
-        pub fn search(self: *Self, needle: []const u8) ResultList {
+        /// Search for needle in all strings
+        pub fn search(self: *Self, needle: []const u8) !ResultList {
+            var timer = std.time.Timer.start() catch null;
+
             for (self.result_buffer) |*result| {
                 const r = self.finder.scoreMatches(result.string, needle);
                 result.num_matches = r.matches.len;
@@ -109,10 +160,12 @@ pub fn Searcher(comptime Item: type) type {
                 result.score = r.score;
             }
 
+            const runtime = if (timer) |*tmr| tmr.lap() else 0;
+
             self.previous_needle = needle;
 
             std.sort.insertion(Result, self.result_buffer, {}, Result.lessThan);
-            return ResultList.nonNull(self.result_buffer);
+            return ResultList.nonNull(self.result_buffer, runtime);
         }
     };
 }
@@ -138,7 +191,7 @@ test "simple search" {
     );
     defer searcher.deinit();
 
-    const res_list = searcher.search("ae");
+    const res_list = try searcher.search("ae");
 
     try std.testing.expectEqual(res_list.results.len, 3);
     try std.testing.expectEqual(res_list.results[0].item.*, 3);

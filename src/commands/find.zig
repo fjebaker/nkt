@@ -9,7 +9,8 @@ const commands = @import("../commands.zig");
 const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
 
-const Finder = @import("../search.zig").Finder;
+// const Finder = @import("../search.zig").Finder;
+const Searcher = @import("../searching.zig").Searcher;
 const Editor = @import("../Editor.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
 
@@ -39,10 +40,9 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
-    _ = writer;
 
     const dirname = root.info.default_directory;
 
@@ -65,14 +65,89 @@ pub fn execute(
         try getAllPaths(allocator, root);
     defer allocator.free(paths);
 
-    var finder = Finder.init(allocator, root.fs.?.root_path, paths);
-    defer finder.deinit();
+    var heap = std.heap.ArenaAllocator.init(allocator);
+    defer heap.deinit();
 
-    const selected = try finder.find() orelse return;
+    const tmp_alloc = heap.allocator();
 
-    std.log.default.debug("Selected: {s}:{d}", .{ selected.path, selected.line_number });
+    var items = std.ArrayList([]const u8).init(allocator);
+    defer items.deinit();
 
-    try editFileAt(allocator, root, selected.path, selected.line_number, opts);
+    var contents = std.ArrayList([]const u8).init(allocator);
+    defer contents.deinit();
+
+    // read all note contents into buffers, split into individual lines
+    for (paths) |p| {
+        const content = try root.fs.?.readFileAlloc(tmp_alloc, p);
+        var line_itt = std.mem.tokenizeAny(u8, content, "\n");
+        while (line_itt.next()) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t");
+            // skip excessively short lines
+            if (trimmed.len <= 3) continue;
+            try items.append(p);
+            try contents.append(trimmed);
+        }
+    }
+
+    var searcher = try Searcher([]const u8).initItems(
+        allocator,
+        items.items,
+        contents.items,
+        .{
+            .case_sensitive = false,
+            .case_penalize = false,
+        },
+    );
+    defer searcher.deinit();
+
+    var display = try cli.TextAndDisplay.init(20);
+    defer display.deinit();
+
+    try display.clear(false);
+    try display.draw();
+
+    const display_writer = display.display.ctrl.writer();
+    while (try display.getText()) |needle| {
+        try display.clear(false);
+        if (needle.len > 0) {
+            const results = try searcher.search(needle);
+            const max_rows = display.display.max_rows - 2;
+
+            const start = results.results.len -| max_rows;
+            const slice = results.results[start..];
+
+            const first_row = max_rows -| slice.len;
+
+            for (first_row.., slice) |row, res| {
+                try display.moveAndClear(row);
+                try display_writer.print("[{d: >4}] ", .{res.score.?});
+                try res.printMatched(display_writer, 14, 70);
+            }
+
+            try display.display.printToRowC(
+                max_rows,
+                "---- {s} ({d} / {d}) ---",
+                .{
+                    std.fmt.fmtDuration(results.runtime),
+                    results.results.len,
+                    items.items.len,
+                },
+            );
+        }
+
+        try display.draw();
+    }
+
+    try writer.writeByte('\n');
+
+    // var finder = Finder.init(allocator, root.fs.?.root_path, paths);
+    // defer finder.deinit();
+
+    // const selected = try finder.find() orelse return;
+
+    // std.log.default.debug("Selected: {s}:{d}", .{ selected.path, selected.line_number });
+
+    // try editFileAt(allocator, root, selected.path, selected.line_number, opts);
 }
 
 fn directoryNotesUnder(

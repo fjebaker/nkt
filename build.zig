@@ -22,6 +22,14 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     }).module("clippy");
+    const termui = b.dependency("termui", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("termui");
+    const fuzzig = b.dependency("fuzzig", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("fuzzig");
 
     const exe = b.addExecutable(.{
         .name = "nkt",
@@ -34,6 +42,8 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("farbe", farbe);
     exe.root_module.addImport("chrono", chrono);
     exe.root_module.addImport("clippy", clippy);
+    exe.root_module.addImport("termui", termui);
+    exe.root_module.addImport("fuzzig", fuzzig);
 
     b.installArtifact(exe);
 
@@ -59,6 +69,8 @@ pub fn build(b: *std.Build) !void {
     unit_tests.root_module.addImport("farbe", farbe);
     unit_tests.root_module.addImport("chrono", chrono);
     unit_tests.root_module.addImport("clippy", clippy);
+    unit_tests.root_module.addImport("termui", termui);
+    unit_tests.root_module.addImport("fuzzig", fuzzig);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 

@@ -19,5 +19,13 @@
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
             .hash = "1220fddbe569e7ff44d4fa48738bc7030ccdca34e52785b0293259327d36c326e108",
         },
+        .termui = .{
+            .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
+            .hash = "1220fa200e22690622dc70a0ce568907cf5116f31ce44b5c3bf5fcc5ac6e7b3c871b",
+        },
+        .fuzzig = .{
+            .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
+            .hash = "12209d5b016f0821130094099068cdb3b3c90e8465d7b95687d642a69a41798e099d",
+        },
     },
 }
