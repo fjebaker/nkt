@@ -3,6 +3,7 @@ const cli = @import("cli.zig");
 const selections = @import("selections.zig");
 const utils = @import("utils.zig");
 const processing = @import("processing.zig");
+const searching = @import("searching.zig");
 
 const Root = @import("topology/Root.zig");
 const time = @import("topology/time.zig");
@@ -21,6 +22,7 @@ test "main" {
     _ = commands;
     _ = time;
     _ = processing;
+    _ = searching;
 }
 
 // configure logging
