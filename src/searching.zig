@@ -372,7 +372,7 @@ pub const PreviewDisplay = struct {
                 return try writer.writeAll("   ");
             }
         }
-        try writer.print("{d: >3}", .{i});
+        try writer.print("{d: >3}", .{i + 1});
     }
 
     pub fn writeNext(p: *PreviewDisplay, writer: anytype) !void {
