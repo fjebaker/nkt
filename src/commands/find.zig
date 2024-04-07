@@ -187,6 +187,7 @@ pub fn execute(
                 best_match,
                 selected_item.line_no,
                 slice[index].matches,
+                slice[index].item.start,
                 preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
 

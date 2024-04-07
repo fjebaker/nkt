@@ -12,12 +12,13 @@ pub fn writeHighlightMatched(
     writer: anytype,
     text: []const u8,
     match_itt: *MatchIterator,
-    offset: usize,
+    text_offset: usize,
+    match_offset: usize,
 ) !void {
     const f = color.RED.bold();
-    for (text, offset..) |c, i| {
+    for (text, text_offset..) |c, i| {
         if (match_itt.peek()) |mi| {
-            if (mi == i) {
+            if (mi + match_offset == i) {
                 try f.write(writer, "{c}", .{c});
                 _ = match_itt.next();
                 continue;
@@ -93,7 +94,7 @@ pub fn Searcher(comptime Item: type) type {
                 const slice = r.string[start..end];
 
                 var match_itt = MatchIterator.init(matches);
-                try writeHighlightMatched(writer, slice, &match_itt, start);
+                try writeHighlightMatched(writer, slice, &match_itt, start, 0);
 
                 if (end < r.string.len) {
                     try color.DIM.write(writer, "...", .{});
@@ -284,14 +285,14 @@ pub const ChunkMachine = struct {
         value: []const u8,
         index: usize,
     ) !void {
-        var each_line = std.mem.tokenizeAny(u8, value, "\n");
+        var each_line = std.mem.splitScalar(u8, value, '\n');
         var line_number: usize = 0;
         while (each_line.next()) |line| {
             defer line_number += 1;
             // skip short lines
-            if (line.len < 4) continue;
+            if (std.mem.trim(u8, line, " \t").len < 4) continue;
 
-            const end = each_line.index;
+            const end = utils.getSplitIndex(each_line);
             const start = end - line.len;
 
             try self.chunks.append(line);
@@ -306,7 +307,7 @@ pub const ChunkMachine = struct {
 
     pub fn getValueFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
         std.debug.assert(key.index < self.values.items.len);
-        return self.values.items[key.index][key.start..];
+        return self.values.items[key.index];
     }
 
     pub fn getKeyFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
@@ -362,9 +363,13 @@ pub const ChunkMachine = struct {
 
 pub const PreviewDisplay = struct {
     itt: utils.LineWindowIterator,
+
     match_itt: MatchIterator,
+    match_offset: usize,
+    match_line_no: usize,
+
     offset: usize = 0,
-    last_line_no: ?usize = 0,
+    last_line_no: ?usize = null,
 
     fn writeLineNum(p: *const PreviewDisplay, writer: anytype, i: usize) !void {
         if (p.last_line_no) |last| {
@@ -375,11 +380,23 @@ pub const PreviewDisplay = struct {
         try writer.print("{d: >3}", .{i + 1});
     }
 
+    fn getNext(p: *PreviewDisplay) ?utils.LineWindowIterator.LineSlice {
+        while (p.itt.next()) |next| {
+            if (next.line_no <= p.match_line_no) {
+                const diff = p.match_line_no - next.line_no;
+                if (diff > 4) continue;
+            }
+            return next;
+        }
+        return null;
+    }
+
     pub fn writeNext(p: *PreviewDisplay, writer: anytype) !void {
-        const next = p.itt.next() orelse {
+        const next = p.getNext() orelse {
             try writer.writeByte('~');
             return;
         };
+
         try p.writeLineNum(writer, next.line_no);
         try writer.writeByteNTimes(' ', 1);
 
@@ -387,24 +404,25 @@ pub const PreviewDisplay = struct {
             writer,
             next.slice,
             &p.match_itt,
-            p.offset,
+            p.itt.end_index - next.slice.len,
+            p.match_offset,
         );
 
-        p.offset += next.slice.len;
         p.last_line_no = next.line_no;
     }
 };
 
 pub fn previewDisplay(
     text: []const u8,
-    starting_line_no: usize,
+    match_line_no: usize,
     matches: []const usize,
+    match_offset: usize,
     size: usize,
 ) PreviewDisplay {
-    var itt = utils.lineWindow(text, size, size);
-    itt.current_line = starting_line_no;
     return .{
-        .itt = itt,
+        .itt = utils.lineWindow(text, size, size),
         .match_itt = MatchIterator.init(matches),
+        .match_offset = match_offset,
+        .match_line_no = match_line_no,
     };
 }

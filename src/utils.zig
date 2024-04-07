@@ -5,22 +5,37 @@ const Tasklist = @import("topology/Tasklist.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
+/// Get the index pointing to the end of the current slice returned by a
+/// standard library split iterator
+pub fn getSplitIndex(itt: std.mem.SplitIterator(u8, .scalar)) usize {
+    if (itt.index) |ind| {
+        return ind - 1;
+    } else {
+        return itt.buffer.len;
+    }
+}
+
 pub const LineWindowIterator = struct {
     pub const LineSlice = struct {
         line_no: usize,
         slice: []const u8,
     };
-    itt: std.mem.SplitIterator(u8, .any),
+    itt: std.mem.SplitIterator(u8, .scalar),
     chunk: ?std.mem.WindowIterator(u8) = null,
 
     size: usize,
     stride: usize,
     current_line: usize = 0,
 
-    fn getNextLine(w: *LineWindowIterator) ?[]const u8 {
+    end_index: usize = 0,
+
+    fn getNextWindow(w: *LineWindowIterator) ?[]const u8 {
         if (w.chunk) |*chunk| {
             const line = chunk.next();
-            if (line) |l| return l;
+            if (line) |l| {
+                w.end_index += l.len;
+                return l;
+            }
         }
         return null;
     }
@@ -31,15 +46,17 @@ pub const LineWindowIterator = struct {
 
     /// Returns the next `LineSlice`
     pub fn next(w: *LineWindowIterator) ?LineSlice {
-        if (w.getNextLine()) |line| {
+        if (w.getNextWindow()) |line| {
             return w.package(line);
         }
 
         while (w.itt.next()) |section| {
-            w.current_line += 1;
+            w.end_index = getSplitIndex(w.itt) - section.len;
             w.chunk = std.mem.window(u8, section, w.size, w.stride);
-            if (w.getNextLine()) |line| {
-                return w.package(line);
+            if (w.getNextWindow()) |line| {
+                const pkg = w.package(line);
+                w.current_line += 1;
+                return pkg;
             }
         }
         return null;
@@ -47,7 +64,7 @@ pub const LineWindowIterator = struct {
 };
 
 pub fn lineWindow(text: []const u8, size: usize, stride: usize) LineWindowIterator {
-    const itt = std.mem.splitAny(u8, text, "\n");
+    const itt = std.mem.splitScalar(u8, text, '\n');
     return .{ .itt = itt, .size = size, .stride = stride };
 }
 
