@@ -9,7 +9,7 @@ const colors = @import("../colors.zig");
 const commands = @import("../commands.zig");
 const Root = @import("../topology/Root.zig");
 
-const BlockPrinter = @import("../BlockPrinter.zig");
+const BlockPrinter = @import("../printers.zig").BlockPrinter;
 
 const chains = @import("../topology/chains.zig");
 

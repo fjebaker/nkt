@@ -1,7 +1,7 @@
 const std = @import("std");
-const tags = @import("topology/tags.zig");
-const utils = @import("utils.zig");
-const colors = @import("colors.zig");
+const tags = @import("../topology/tags.zig");
+const utils = @import("../utils.zig");
+const colors = @import("../colors.zig");
 
 const FormatPrinter = @import("FormatPrinter.zig");
 

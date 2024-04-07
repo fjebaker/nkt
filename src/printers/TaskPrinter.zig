@@ -1,11 +1,11 @@
 const std = @import("std");
-const colors = @import("colors.zig");
-const utils = @import("utils.zig");
+const colors = @import("../colors.zig");
+const utils = @import("../utils.zig");
 const Farbe = colors.Farbe;
 
-const time = @import("topology/time.zig");
-const tags = @import("topology/tags.zig");
-const Tasklist = @import("topology/Tasklist.zig");
+const time = @import("../topology/time.zig");
+const tags = @import("../topology/tags.zig");
+const Tasklist = @import("../topology/Tasklist.zig");
 const Task = Tasklist.Task;
 
 const FormatPrinter = @import("FormatPrinter.zig");

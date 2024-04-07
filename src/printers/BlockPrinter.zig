@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const FormatPrinter = @import("FormatPrinter.zig");
-const colors = @import("colors.zig");
+const colors = @import("../colors.zig");
 const Farbe = colors.Farbe;
 
 const BlockPrinter = @import("BlockPrinter.zig");

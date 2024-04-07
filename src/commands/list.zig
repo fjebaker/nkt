@@ -11,8 +11,8 @@ const Journal = @import("../topology/Journal.zig");
 const Tasklist = @import("../topology/Tasklist.zig");
 const Root = @import("../topology/Root.zig");
 
-const FormatPrinter = @import("../FormatPrinter.zig");
-const TaskPrinter = @import("../TaskPrinter.zig");
+const FormatPrinter = @import("../printers.zig").FormatPrinter;
+const TaskPrinter = @import("../printers.zig").TaskPrinter;
 
 const Self = @This();
 

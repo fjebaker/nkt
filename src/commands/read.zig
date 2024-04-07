@@ -13,8 +13,8 @@ const Root = @import("../topology/Root.zig");
 
 const colors = @import("../colors.zig");
 
-const FormatPrinter = @import("../FormatPrinter.zig");
-const BlockPrinter = @import("../BlockPrinter.zig");
+const FormatPrinter = @import("../printers.zig").FormatPrinter;
+const BlockPrinter = @import("../printers.zig").BlockPrinter;
 
 const Self = @This();
 
