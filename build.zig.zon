@@ -21,7 +21,7 @@
         },
         .termui = .{
             .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
-            .hash = "1220fa200e22690622dc70a0ce568907cf5116f31ce44b5c3bf5fcc5ac6e7b3c871b",
+            .hash = "12201bcd34bfab98a1b02c97bee8b9727a336bdc4a62c8417a084d63eaf81b8fbf5d",
         },
         .fuzzig = .{
             .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
