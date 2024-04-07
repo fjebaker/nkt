@@ -190,7 +190,7 @@ pub fn Searcher(comptime Item: type) type {
 
             self.previous_needle = needle;
 
-            std.sort.insertion(Result, self.result_buffer, {}, Result.lessThan);
+            std.sort.heap(Result, self.result_buffer, {}, Result.lessThan);
             const runtime = timer.lap();
             return ResultList.nonNull(self.result_buffer, runtime);
         }
