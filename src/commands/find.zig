@@ -93,10 +93,7 @@ pub fn execute(
         allocator,
         items.items,
         contents.items,
-        .{
-            .case_sensitive = false,
-            .case_penalize = false,
-        },
+        .{},
     );
     defer searcher.deinit();
 

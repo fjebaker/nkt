@@ -2,6 +2,16 @@ const std = @import("std");
 const termui = @import("termui");
 const fuzzig = @import("fuzzig");
 
+/// Default ASCII Fuzzy Finder
+pub const FuzzyFinder = fuzzig.Algorithm(
+    u8,
+    i32,
+    .{
+        .score_gap_extension = -4,
+    },
+    fuzzig.AsciiOptions,
+);
+
 const color = @import("colors.zig");
 const utils = @import("utils.zig");
 const ThreadPoolT = @import("threads.zig").ThreadPool;
@@ -92,7 +102,7 @@ pub fn Searcher(comptime Item: type) type {
         };
 
         const ThreadCtx = struct {
-            finder: fuzzig.Ascii,
+            finder: FuzzyFinder,
             needle: []const u8 = "",
         };
 
@@ -101,7 +111,7 @@ pub fn Searcher(comptime Item: type) type {
         fn threadWork(result: *Result, ctx: *ThreadCtx) void {
             const r = ctx.finder.scoreMatches(result.string, ctx.needle);
             result.num_matches = r.matches.len;
-            @memcpy(result.matches[0..result.num_matches], r.matches);
+            std.mem.copyBackwards(usize, result.matches, r.matches);
             result.score = r.score;
         }
 
@@ -123,13 +133,15 @@ pub fn Searcher(comptime Item: type) type {
         ) !ResultBufferInfo {
             const results = try allocator.alloc(Result, items.len);
 
+            const match_buffer = try allocator.alloc(usize, items.len * NEEDLE_MAX);
+
             var max_content_length: usize = 0;
             // asign each result an item and a string to search in
-            for (results, items, strings) |*res, *item, string| {
+            for (results, items, strings, 0..) |*res, *item, string, i| {
                 res.item = item;
                 res.string = string;
                 // matches can only be as long as the longest needle
-                res.matches = try allocator.alloc(usize, NEEDLE_MAX);
+                res.matches = match_buffer[i * NEEDLE_MAX .. (i + 1) * NEEDLE_MAX];
                 res.num_matches = 0;
                 res.score = 0;
 
@@ -151,11 +163,14 @@ pub fn Searcher(comptime Item: type) type {
 
             const n_threads = std.Thread.getCpuCount() catch 1;
 
-            var threads = try ThreadPool.init(allocator, n_threads);
+            var threads = try ThreadPool.init(
+                allocator,
+                .{ .num_threads = n_threads },
+            );
             errdefer threads.deinit();
 
             for (threads.ctxs) |*ctx| {
-                ctx.finder = try fuzzig.Ascii.init(
+                ctx.finder = try FuzzyFinder.init(
                     heap.allocator(),
                     info.max_content_length,
                     128,

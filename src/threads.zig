@@ -5,7 +5,11 @@ pub fn ThreadPool(
     comptime Ctx: type,
     comptime WorkFunc: fn (*RetType, *Ctx) void,
 ) type {
-    const Shared = struct { output: []RetType };
+    const Shared = struct {
+        output: []RetType,
+        batch_size: usize,
+    };
+
     const ThreadLocal = struct {
         const Self = @This();
 
@@ -32,7 +36,7 @@ pub fn ThreadPool(
             s.lock.lock();
             defer s.lock.unlock();
             const index = s.index.*;
-            s.index.* += 1;
+            s.index.* += s.shared.batch_size;
             return index;
         }
 
@@ -43,10 +47,11 @@ pub fn ThreadPool(
             s.main_barrier.signal();
         }
 
-        fn getReturnSlot(s: Self) ?*RetType {
+        fn getReturnSlot(s: Self) ?[]RetType {
             const index = s.getIndex();
-            if (index >= s.shared.output.len) return null;
-            return &s.shared.output[index];
+            const len = s.shared.output.len;
+            if (index >= len) return null;
+            return s.shared.output[index..@min(len, index + s.shared.batch_size)];
         }
 
         fn workAvailable(s: Self) bool {
@@ -57,8 +62,10 @@ pub fn ThreadPool(
         }
 
         inline fn doWork(s: Self) void {
-            while (s.getReturnSlot()) |rptr| {
-                WorkFunc(rptr, s.ctx);
+            while (s.getReturnSlot()) |ret_slots| {
+                for (ret_slots) |*rptr| {
+                    WorkFunc(rptr, s.ctx);
+                }
             }
             s.markComplete();
         }
@@ -73,7 +80,14 @@ pub fn ThreadPool(
 
     return struct {
         const Self = @This();
+
+        pub const Options = struct {
+            num_threads: usize,
+            batch_size: usize = 64,
+        };
+
         allocator: std.mem.Allocator,
+        opts: Options,
         threads: []?std.Thread,
 
         shared: *Shared,
@@ -151,6 +165,7 @@ pub fn ThreadPool(
                 self.index = 0;
                 self.completed = 0;
                 self.shared.output = outputs;
+                self.shared.batch_size = self.opts.batch_size;
             }
 
             if (self.threads[0] == null) {
@@ -174,12 +189,12 @@ pub fn ThreadPool(
             }
         }
 
-        pub fn init(allocator: std.mem.Allocator, num_threads: usize) !Self {
-            const threads = try allocator.alloc(?std.Thread, num_threads);
+        pub fn init(allocator: std.mem.Allocator, opts: Options) !Self {
+            const threads = try allocator.alloc(?std.Thread, opts.num_threads);
             errdefer allocator.free(threads);
             for (threads) |*t| t.* = null;
 
-            const ctxs = try allocator.alloc(Ctx, num_threads);
+            const ctxs = try allocator.alloc(Ctx, opts.num_threads);
             errdefer allocator.free(ctxs);
 
             return .{
@@ -187,6 +202,7 @@ pub fn ThreadPool(
                 .threads = threads,
                 .ctxs = ctxs,
                 .shared = try allocator.create(Shared),
+                .opts = opts,
             };
         }
     };
