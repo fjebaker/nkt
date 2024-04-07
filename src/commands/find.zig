@@ -102,6 +102,7 @@ pub fn execute(
     var needle: []const u8 = "";
     var results: ?searching.ChunkMachine.SearcherType.ResultList = null;
     var runtime: u64 = 0;
+    var choice: ?searching.ChunkMachine.SearcherType.Result = null;
     while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
@@ -122,6 +123,15 @@ pub fn execute(
                     results = null;
                 }
             },
+            .Enter => {
+                if (results) |rs| {
+                    const start = rs.results.len -| max_rows;
+                    const slice = rs.results[start..];
+                    const index = slice.len - display.selected_index - 1;
+                    choice = slice[index];
+                    break;
+                }
+            },
             else => {},
         }
 
@@ -134,15 +144,17 @@ pub fn execute(
             display.setMaxSelection(slice.len - 1);
 
             // offset which row we are pointing at
-            const selected_row = (slice.len + first_row) - display.selected_index - 1;
+            const index = slice.len - display.selected_index - 1;
+            const selected_row = index + first_row;
 
             const best_match =
                 if (slice.len > 0)
                 chunk_machine.getValueFromChunk(
-                    slice[slice.len - 1].item.*,
+                    slice[index].item.*,
                 )
             else
                 "";
+
             var itt = utils.lineWindow(
                 best_match,
                 preview_columns - PREVIEW_SIZE_PADDING - 13,
@@ -158,7 +170,10 @@ pub fn execute(
                 }
 
                 if (res.score) |scr| {
-                    try display_writer.print("[{d: >4}] ", .{scr});
+                    try display_writer.print(
+                        "[{d: >4}] ",
+                        .{@as(usize, @intCast(@abs(scr)))},
+                    );
 
                     const max_len = term_size.ws_col -
                         preview_columns -
@@ -195,7 +210,13 @@ pub fn execute(
         try display.draw();
     }
 
-    try writer.writeByte('\n');
+    try writer.writeByteNTimes('\n', 2);
+
+    if (choice) |c| {
+        const path = chunk_machine.getKeyFromChunk(c.item.*);
+        std.debug.print("Selected: '{s}'\n", .{path});
+        std.debug.print("Selected: '{s}'\n", .{c.string});
+    }
 
     // var finder = Finder.init(allocator, root.fs.?.root_path, paths);
     // defer finder.deinit();

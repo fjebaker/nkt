@@ -294,6 +294,11 @@ pub const ChunkMachine = struct {
         return self.values.items[key.index][key.start..];
     }
 
+    pub fn getKeyFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
+        std.debug.assert(key.index < self.keys.items.len);
+        return self.keys.items[key.index];
+    }
+
     /// Get a searcher for the chunks. Searcher will use the passed allocator
     /// instead of the ChunkMachine's allocator
     pub fn searcher(

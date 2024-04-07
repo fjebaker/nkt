@@ -63,8 +63,8 @@ pub const SearchDisplay = struct {
             std.io.getStdIn(),
             std.io.getStdOut(),
         );
-        // tui.out.original.lflag.ISIG = true;
-        // tui.in.original.lflag.ISIG = true;
+        tui.out.original.lflag.ISIG = true;
+        tui.in.original.lflag.ISIG = true;
         errdefer tui.deinit();
         return .{
             .display = try tui.rowDisplay(rows),
