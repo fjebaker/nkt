@@ -214,7 +214,6 @@ pub fn execute(
                         14,
                         max_len,
                     );
-
                     try display_writer.writeByteNTimes(
                         ' ',
                         PREVIEW_SIZE_PADDING - 1 + max_len - written,
@@ -222,7 +221,13 @@ pub fn execute(
                     try display_writer.writeByte('|');
                     try display_writer.writeByteNTimes(' ', 1);
 
-                    try preview.writeNext(display_writer);
+                    if (row == first_row) {
+                        const path = chunk_machine.getKeyFromChunk(selected_item);
+                        try display_writer.print("File: {s}", .{path});
+                        //
+                    } else if (row > first_row + 1) {
+                        try preview.writeNext(display_writer);
+                    }
                 }
             }
         }
@@ -240,7 +245,10 @@ pub fn execute(
         try display.draw();
     }
 
-    try writer.writeByteNTimes('\n', 2);
+    // cleanup
+    try display.clear(false);
+    try display.display.moveToRow(0);
+    try display.display.draw();
 
     if (choice) |c| {
         const path = chunk_machine.getKeyFromChunk(c.item.*);

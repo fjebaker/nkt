@@ -65,6 +65,7 @@ pub const SearchDisplay = struct {
         );
         tui.out.original.lflag.ISIG = true;
         tui.in.original.lflag.ISIG = true;
+        tui.in.original.iflag.ICRNL = true;
         errdefer tui.deinit();
         return .{
             .display = try tui.rowDisplay(rows),
