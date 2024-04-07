@@ -1,10 +1,25 @@
 const std = @import("std");
 
+pub fn addTracy(step: *std.Build.Step.Compile) !void {
+    step.want_lto = false;
+    step.addCSourceFile(
+        .{
+            .file = .{ .path = "../tracy/public/TracyClient.cpp" },
+            .flags = &.{
+                "-DTRACY_ENABLE=1",
+                "-fno-sanitize=undefined",
+            },
+        },
+    );
+    step.linkLibCpp();
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const coverage = b.option(bool, "coverage", "Generate test coverage") orelse false;
+    const tracy = b.option(bool, "tracy", "Generate test coverage") orelse false;
 
     const time = b.dependency("time", .{
         .target = target,
@@ -44,6 +59,10 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("clippy", clippy);
     exe.root_module.addImport("termui", termui);
     exe.root_module.addImport("fuzzig", fuzzig);
+
+    if (tracy) {
+        try addTracy(exe);
+    }
 
     b.installArtifact(exe);
 
