@@ -89,7 +89,7 @@ pub fn execute(
     var searcher = try chunk_machine.searcher(allocator, .{});
     defer searcher.deinit();
 
-    var display = try cli.SearchDisplay.init(20);
+    var display = try cli.SearchDisplay.init(30);
     defer display.deinit();
 
     try display.clear(false);
@@ -146,20 +146,23 @@ pub fn execute(
             // offset which row we are pointing at
             const index = slice.len - display.selected_index - 1;
             const selected_row = index + first_row;
+            const selected_item = slice[index].item.*;
 
             const best_match =
                 if (slice.len > 0)
                 chunk_machine.getValueFromChunk(
-                    slice[index].item.*,
+                    selected_item,
                 )
             else
                 "";
 
             var itt = utils.lineWindow(
                 best_match,
-                preview_columns - PREVIEW_SIZE_PADDING - 13,
-                preview_columns - PREVIEW_SIZE_PADDING - 13,
+                preview_columns - PREVIEW_SIZE_PADDING - 14,
+                preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
+            itt.current_line = selected_item.line_no;
+            var last_line_no: ?usize = null;
 
             for (first_row.., slice) |row, res| {
                 try display.moveAndClear(row);
@@ -191,19 +194,29 @@ pub fn execute(
                     );
                     try display_writer.writeByte('|');
                     try display_writer.writeByteNTimes(' ', 1);
-                    const line = itt.next() orelse "";
-                    try display_writer.writeAll(line);
+                    if (itt.next()) |line| {
+                        if (last_line_no != null and last_line_no.? == line.line_no) {
+                            try display_writer.writeAll("   ");
+                        } else {
+                            try display_writer.print("{d: >3}", .{line.line_no});
+                        }
+                        try display_writer.writeByteNTimes(' ', 1);
+                        try display_writer.writeAll(line.slice);
+                        last_line_no = line.line_no;
+                    } else {
+                        try display_writer.writeAll("~");
+                    }
                 }
             }
         }
 
         try display.display.printToRowC(
             max_rows,
-            "---- {s} ({d} / {d}) = {d} ---",
+            " (matched {d} / {d} :: search {d} total {d}) ",
             .{
-                std.fmt.fmtDuration(if (results) |rs| rs.runtime else 0),
                 if (results) |rs| rs.results.len else chunk_machine.numItems(),
                 chunk_machine.numItems(),
+                std.fmt.fmtDuration(if (results) |rs| rs.runtime else 0),
                 std.fmt.fmtDuration(runtime),
             },
         );

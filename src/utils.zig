@@ -6,11 +6,16 @@ const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
 pub const LineWindowIterator = struct {
+    pub const LineSlice = struct {
+        line_no: usize,
+        slice: []const u8,
+    };
     itt: std.mem.SplitIterator(u8, .any),
     chunk: ?std.mem.WindowIterator(u8) = null,
 
     size: usize,
     stride: usize,
+    current_line: usize = 0,
 
     fn getNextLine(w: *LineWindowIterator) ?[]const u8 {
         if (w.chunk) |*chunk| {
@@ -20,15 +25,21 @@ pub const LineWindowIterator = struct {
         return null;
     }
 
-    pub fn next(w: *LineWindowIterator) ?[]const u8 {
+    fn package(w: *LineWindowIterator, line: []const u8) LineSlice {
+        return .{ .line_no = w.current_line, .slice = line };
+    }
+
+    /// Returns the next `LineSlice`
+    pub fn next(w: *LineWindowIterator) ?LineSlice {
         if (w.getNextLine()) |line| {
-            return line;
+            return w.package(line);
         }
 
         while (w.itt.next()) |section| {
+            w.current_line += 1;
             w.chunk = std.mem.window(u8, section, w.size, w.stride);
             if (w.getNextLine()) |line| {
-                return line;
+                return w.package(line);
             }
         }
         return null;

@@ -250,6 +250,7 @@ pub const ChunkMachine = struct {
         index: usize,
         start: usize,
         end: usize,
+        line_no: usize,
     };
 
     pub const SearcherType = Searcher(SearchKey);
@@ -272,8 +273,10 @@ pub const ChunkMachine = struct {
         index: usize,
     ) !void {
         var each_line = std.mem.tokenizeAny(u8, value, "\n");
+        var line_number: usize = 0;
         while (each_line.next()) |line| {
             const trimmed = std.mem.trim(u8, line, " \t");
+            defer line_number += 1;
             // skip short lines
             if (trimmed.len < 4) continue;
 
@@ -285,6 +288,7 @@ pub const ChunkMachine = struct {
                 .index = index,
                 .start = start,
                 .end = end,
+                .line_no = line_number,
             });
         }
     }
