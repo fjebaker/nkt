@@ -110,7 +110,10 @@ pub fn execute(
     while (try display.getText()) |needle| {
         try display.clear(false);
         if (needle.len > 0) {
+            var timer = try std.time.Timer.start();
             const results = try searcher.search(needle);
+            const runtime = timer.lap();
+
             const max_rows = display.display.max_rows - 2;
 
             const start = results.results.len -| max_rows;
@@ -120,17 +123,20 @@ pub fn execute(
 
             for (first_row.., slice) |row, res| {
                 try display.moveAndClear(row);
-                try display_writer.print("[{d: >4}] ", .{res.score.?});
-                try res.printMatched(display_writer, 14, 70);
+                if (res.score) |scr| {
+                    try display_writer.print("[{d: >4}] ", .{scr});
+                    try res.printMatched(display_writer, 14, 70);
+                }
             }
 
             try display.display.printToRowC(
                 max_rows,
-                "---- {s} ({d} / {d}) ---",
+                "---- {s} ({d} / {d}) = {d} ---",
                 .{
                     std.fmt.fmtDuration(results.runtime),
                     results.results.len,
                     items.items.len,
+                    std.fmt.fmtDuration(runtime),
                 },
             );
         }

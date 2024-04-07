@@ -3,6 +3,8 @@ const termui = @import("termui");
 const fuzzig = @import("fuzzig");
 
 const color = @import("colors.zig");
+const utils = @import("utils.zig");
+const ThreadPoolT = @import("threads.zig").ThreadPool;
 
 const NEEDLE_MAX = 128;
 
@@ -18,12 +20,17 @@ pub fn Searcher(comptime Item: type) type {
 
             fn lessThan(_: void, lhs: Result, rhs: Result) bool {
                 if (rhs.score == null) {
+                    if (lhs.score == null) return true;
                     return false;
                 }
                 if (lhs.score == null) {
                     return true;
                 }
                 return lhs.score.? < rhs.score.?;
+            }
+
+            fn getMatched(r: Result) []const usize {
+                return r.matches[0..r.num_matches];
             }
 
             /// Print the matches highlighted in the search string with some
@@ -34,8 +41,9 @@ pub fn Searcher(comptime Item: type) type {
                 ctx: usize,
                 maxlen: usize,
             ) !void {
-                var start = r.matches[0] -| ctx;
-                const last_match_index = r.matches[r.matches.len - 1];
+                const matches = r.getMatched();
+                var start = matches[0] -| ctx;
+                const last_match_index = matches[matches.len - 1];
                 var end = @min(
                     start + maxlen,
                     @min(last_match_index + ctx, r.string.len),
@@ -55,7 +63,7 @@ pub fn Searcher(comptime Item: type) type {
 
                 var m_i: usize = 0;
                 for (slice, start..) |c, i| {
-                    if (m_i < r.matches.len and r.matches[m_i] == i) {
+                    if (m_i < matches.len and matches[m_i] == i) {
                         try f.write(writer, "{c}", .{c});
                         m_i += 1;
                     } else {
@@ -85,10 +93,24 @@ pub fn Searcher(comptime Item: type) type {
             }
         };
 
+        const ThreadCtx = struct {
+            finder: fuzzig.Ascii,
+            needle: []const u8 = "",
+        };
+
+        const ThreadPool = ThreadPoolT(Result, ThreadCtx, threadWork);
+
+        fn threadWork(result: *Result, ctx: *ThreadCtx) void {
+            const r = ctx.finder.scoreMatches(result.string, ctx.needle);
+            result.num_matches = r.matches.len;
+            @memcpy(result.matches[0..result.num_matches], r.matches);
+            result.score = r.score;
+        }
+
         heap: std.heap.ArenaAllocator,
         items: []const Item,
         result_buffer: []Result,
-        finder: fuzzig.Ascii,
+        pool: ThreadPool,
         previous_needle: []const u8 = "",
 
         const ResultBufferInfo = struct {
@@ -129,42 +151,47 @@ pub fn Searcher(comptime Item: type) type {
             errdefer heap.deinit();
             const info = try initResultsBuffer(heap.allocator(), items, strings);
 
-            const finder = try fuzzig.Ascii.init(
-                heap.allocator(),
-                info.max_content_length,
-                128,
-                opts,
-            );
+            const n_threads = std.Thread.getCpuCount() catch 1;
+
+            var threads = try ThreadPool.init(allocator, n_threads);
+            errdefer threads.deinit();
+
+            for (threads.ctxs) |*ctx| {
+                ctx.finder = try fuzzig.Ascii.init(
+                    heap.allocator(),
+                    info.max_content_length,
+                    128,
+                    opts,
+                );
+                ctx.needle = "";
+            }
 
             return .{
                 .heap = heap,
                 .items = items,
-                .finder = finder,
+                .pool = threads,
                 .result_buffer = info.result_buffer,
             };
         }
 
         pub fn deinit(self: *Self) void {
             self.heap.deinit();
+            self.pool.deinit();
             self.* = undefined;
         }
 
         /// Search for needle in all strings
         pub fn search(self: *Self, needle: []const u8) !ResultList {
-            var timer = std.time.Timer.start() catch null;
+            for (self.pool.ctxs) |*ctx| ctx.needle = needle;
 
-            for (self.result_buffer) |*result| {
-                const r = self.finder.scoreMatches(result.string, needle);
-                result.num_matches = r.matches.len;
-                @memcpy(result.matches[0..result.num_matches], r.matches);
-                result.score = r.score;
-            }
-
-            const runtime = if (timer) |*tmr| tmr.lap() else 0;
+            var timer = try std.time.Timer.start();
+            try self.pool.map(self.result_buffer);
+            self.pool.blockUntilDone();
 
             self.previous_needle = needle;
 
             std.sort.insertion(Result, self.result_buffer, {}, Result.lessThan);
+            const runtime = timer.lap();
             return ResultList.nonNull(self.result_buffer, runtime);
         }
     };
@@ -188,6 +215,7 @@ test "simple search" {
         allocator,
         &items,
         &strings,
+        .{},
     );
     defer searcher.deinit();
 
