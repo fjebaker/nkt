@@ -137,6 +137,16 @@ pub const SearchDisplay = struct {
                         );
                         return .Cursor;
                     },
+                    // CtrlW
+                    23 => {
+                        const index = std.mem.lastIndexOfScalar(
+                            u8,
+                            std.mem.trimRight(u8, self.getText(), " "),
+                            ' ',
+                        ) orelse 0;
+                        self.text_index = index;
+                        break;
+                    },
                     Key.Enter => return .Enter,
                     Key.Backspace => {
                         if (self.text_index > 0) {

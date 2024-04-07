@@ -191,43 +191,54 @@ pub fn execute(
                 preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
 
-            for (first_row.., slice) |row, res| {
-                try display.moveAndClear(row);
-                if (row == selected_row) {
+            for (0..max_rows) |i| {
+                try display.moveAndClear(i);
+                const max_len = term_size.ws_col -
+                    preview_columns -
+                    PREVIEW_SIZE_PADDING;
+
+                if (i == selected_row) {
                     try colors.GREEN.bold().write(display_writer, " >> ", .{});
                 } else {
                     try display_writer.writeAll("    ");
                 }
 
-                if (res.score) |scr| {
-                    try display_writer.print(
-                        "[{d: >4}] ",
-                        .{@as(usize, @intCast(@abs(scr)))},
-                    );
+                if (i >= first_row) {
+                    const res = slice[i - first_row];
+                    if (res.score) |scr| {
+                        try display_writer.print(
+                            "[{d: >4}] ",
+                            .{@as(usize, @intCast(@abs(scr)))},
+                        );
 
-                    const max_len = term_size.ws_col -
-                        preview_columns -
-                        PREVIEW_SIZE_PADDING;
+                        const written = try res.printMatched(
+                            display_writer,
+                            14,
+                            max_len,
+                        );
 
-                    const written = try res.printMatched(
-                        display_writer,
-                        14,
-                        max_len,
-                    );
+                        try display_writer.writeByteNTimes(
+                            ' ',
+                            PREVIEW_SIZE_PADDING - 1 + max_len - written,
+                        );
+                    }
+                } else {
                     try display_writer.writeByteNTimes(
                         ' ',
-                        PREVIEW_SIZE_PADDING - 1 + max_len - written,
+                        PREVIEW_SIZE_PADDING - 1 + max_len + 7,
                     );
-                    try display_writer.writeByte('|');
-                    try display_writer.writeByteNTimes(' ', 1);
+                }
 
-                    if (row == first_row) {
-                        const path = chunk_machine.getKeyFromChunk(selected_item);
-                        try display_writer.print("File: {s}", .{path});
-                        //
-                    } else if (row > first_row + 1) {
-                        try preview.writeNext(display_writer);
-                    }
+                // preview
+                try display_writer.writeByte('|');
+                try display_writer.writeByteNTimes(' ', 1);
+
+                if (i == 0) {
+                    const path = chunk_machine.getKeyFromChunk(selected_item);
+                    try display_writer.print("File: {s}", .{path});
+                    //
+                } else if (i > 1) {
+                    try preview.writeNext(display_writer);
                 }
             }
         }
