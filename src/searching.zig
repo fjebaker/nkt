@@ -32,8 +32,8 @@ pub const FuzzyFinder = fuzzig.Algorithm(
     u8,
     i32,
     .{
-        .score_gap_start = -8,
-        .score_gap_extension = -8,
+        .score_gap_start = -4,
+        .score_gap_extension = -2,
     },
     fuzzig.AsciiOptions,
 );
