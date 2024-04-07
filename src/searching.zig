@@ -20,7 +20,6 @@ pub fn Searcher(comptime Item: type) type {
 
             fn lessThan(_: void, lhs: Result, rhs: Result) bool {
                 if (rhs.score == null) {
-                    if (lhs.score == null) return true;
                     return false;
                 }
                 if (lhs.score == null) {
@@ -43,10 +42,9 @@ pub fn Searcher(comptime Item: type) type {
             ) !void {
                 const matches = r.getMatched();
                 var start = matches[0] -| ctx;
-                const last_match_index = matches[matches.len - 1];
                 var end = @min(
                     start + maxlen,
-                    @min(last_match_index + ctx, r.string.len),
+                    r.string.len,
                 );
 
                 const f = color.RED;
@@ -88,7 +86,7 @@ pub fn Searcher(comptime Item: type) type {
                         index = i;
                         break;
                     }
-                } else return .{ .results = results, .runtime = runtime };
+                } else return .{ .results = &.{}, .runtime = runtime };
                 return .{ .results = results[index..], .runtime = runtime };
             }
         };
@@ -187,11 +185,10 @@ pub fn Searcher(comptime Item: type) type {
             var timer = try std.time.Timer.start();
             try self.pool.map(self.result_buffer);
             self.pool.blockUntilDone();
+            const runtime = timer.lap();
 
             self.previous_needle = needle;
-
-            std.sort.heap(Result, self.result_buffer, {}, Result.lessThan);
-            const runtime = timer.lap();
+            std.sort.insertion(Result, self.result_buffer, {}, Result.lessThan);
             return ResultList.nonNull(self.result_buffer, runtime);
         }
     };
