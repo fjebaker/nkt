@@ -164,6 +164,7 @@ pub fn execute(
         if (results) |rs| {
             const start = rs.results.len -| max_rows;
             const slice = rs.results[start..];
+            if (slice.len == 0) continue;
 
             const first_row = max_rows -| slice.len;
 
