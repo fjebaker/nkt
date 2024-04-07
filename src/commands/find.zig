@@ -1,6 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const colors = @import("../colors.zig");
+const color = @import("../colors.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
@@ -109,6 +109,28 @@ pub fn execute(
         try chunk_machine.add(p, content);
     }
 
+    const choice = try self.doSearchLoop(allocator, &chunk_machine);
+
+    if (choice) |c| {
+        const path = chunk_machine.getKeyFromChunk(c.item.*);
+        const line_no = c.item.line_no;
+        std.log.default.debug(
+            "Selected: {s}:{d}",
+            .{ path, line_no },
+        );
+        try editFileAt(allocator, root, path, line_no, opts);
+    } else {
+        try writer.writeAll("No item selected\n");
+    }
+}
+
+const Result = searching.ChunkMachine.SearcherType.Result;
+
+pub fn doSearchLoop(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    chunk_machine: *searching.ChunkMachine,
+) !?Result {
     var searcher = try chunk_machine.searcher(
         allocator,
         .{ .case_sensitive = self.case_sensitive },
@@ -128,7 +150,7 @@ pub fn execute(
     var needle: []const u8 = "";
     var results: ?searching.ChunkMachine.SearcherType.ResultList = null;
     var runtime: u64 = 0;
-    var choice: ?searching.ChunkMachine.SearcherType.Result = null;
+    var choice: ?Result = null;
     while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
@@ -198,7 +220,7 @@ pub fn execute(
                     PREVIEW_SIZE_PADDING;
 
                 if (i == selected_row) {
-                    try colors.GREEN.bold().write(display_writer, " >> ", .{});
+                    try color.GREEN.bold().write(display_writer, " >> ", .{});
                 } else {
                     try display_writer.writeAll("    ");
                 }
@@ -206,9 +228,11 @@ pub fn execute(
                 if (i >= first_row) {
                     const res = slice[i - first_row];
                     if (res.score) |scr| {
-                        try display_writer.print(
+                        const score: usize = @intCast(@abs(scr));
+                        try color.DIM.write(
+                            display_writer,
                             "[{d: >4}] ",
-                            .{@as(usize, @intCast(@abs(scr)))},
+                            .{score},
                         );
 
                         const written = try res.printMatched(
@@ -261,17 +285,7 @@ pub fn execute(
     try display.display.moveToRow(0);
     try display.display.draw();
 
-    if (choice) |c| {
-        const path = chunk_machine.getKeyFromChunk(c.item.*);
-        const line_no = c.item.line_no;
-        std.log.default.debug(
-            "Selected: {s}:{d}",
-            .{ path, line_no },
-        );
-        try editFileAt(allocator, root, path, line_no, opts);
-    } else {
-        try writer.writeAll("No item selected\n");
-    }
+    return choice;
 }
 
 fn directoryNotesUnder(

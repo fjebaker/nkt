@@ -377,7 +377,7 @@ pub const PreviewDisplay = struct {
                 return try writer.writeAll("   ");
             }
         }
-        try writer.print("{d: >3}", .{i + 1});
+        try color.YELLOW.write(writer, "{d: >3}", .{i + 1});
     }
 
     fn getNext(p: *PreviewDisplay) ?utils.LineWindowIterator.LineSlice {
@@ -393,7 +393,7 @@ pub const PreviewDisplay = struct {
 
     pub fn writeNext(p: *PreviewDisplay, writer: anytype) !void {
         const next = p.getNext() orelse {
-            try writer.writeByte('~');
+            try color.CYAN.write(writer, "~", .{});
             return;
         };
 
