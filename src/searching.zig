@@ -2,6 +2,31 @@ const std = @import("std");
 const termui = @import("termui");
 const fuzzig = @import("fuzzig");
 
+const color = @import("colors.zig");
+const utils = @import("utils.zig");
+const ThreadPoolT = @import("threads.zig").ThreadPool;
+
+const MatchIterator = utils.Iterator(usize);
+
+pub fn writeHighlightMatched(
+    writer: anytype,
+    text: []const u8,
+    match_itt: *MatchIterator,
+    offset: usize,
+) !void {
+    const f = color.RED.bold();
+    for (text, offset..) |c, i| {
+        if (match_itt.peek()) |mi| {
+            if (mi == i) {
+                try f.write(writer, "{c}", .{c});
+                _ = match_itt.next();
+                continue;
+            }
+        }
+        try writer.writeByte(c);
+    }
+}
+
 /// Default ASCII Fuzzy Finder
 pub const FuzzyFinder = fuzzig.Algorithm(
     u8,
@@ -12,10 +37,6 @@ pub const FuzzyFinder = fuzzig.Algorithm(
     },
     fuzzig.AsciiOptions,
 );
-
-const color = @import("colors.zig");
-const utils = @import("utils.zig");
-const ThreadPoolT = @import("threads.zig").ThreadPool;
 
 const NEEDLE_MAX = 128;
 
@@ -61,8 +82,6 @@ pub fn Searcher(comptime Item: type) type {
 
                 const total_length = end - start;
 
-                const f = color.RED;
-
                 if (start > 0) {
                     try color.DIM.write(writer, "...", .{});
                     start += 3;
@@ -73,15 +92,8 @@ pub fn Searcher(comptime Item: type) type {
 
                 const slice = r.string[start..end];
 
-                var m_i: usize = 0;
-                for (slice, start..) |c, i| {
-                    if (m_i < matches.len and matches[m_i] == i) {
-                        try f.write(writer, "{c}", .{c});
-                        m_i += 1;
-                    } else {
-                        try writer.writeByte(c);
-                    }
-                }
+                var match_itt = MatchIterator.init(matches);
+                try writeHighlightMatched(writer, slice, &match_itt, start);
 
                 if (end < r.string.len) {
                     try color.DIM.write(writer, "...", .{});
@@ -275,15 +287,14 @@ pub const ChunkMachine = struct {
         var each_line = std.mem.tokenizeAny(u8, value, "\n");
         var line_number: usize = 0;
         while (each_line.next()) |line| {
-            const trimmed = std.mem.trim(u8, line, " \t");
             defer line_number += 1;
             // skip short lines
-            if (trimmed.len < 4) continue;
+            if (line.len < 4) continue;
 
             const end = each_line.index;
             const start = end - line.len;
 
-            try self.chunks.append(trimmed);
+            try self.chunks.append(line);
             try self.item_list.append(.{
                 .index = index,
                 .start = start,
@@ -348,3 +359,52 @@ pub const ChunkMachine = struct {
         return self.item_list.items.len;
     }
 };
+
+pub const PreviewDisplay = struct {
+    itt: utils.LineWindowIterator,
+    match_itt: MatchIterator,
+    offset: usize = 0,
+    last_line_no: ?usize = 0,
+
+    fn writeLineNum(p: *const PreviewDisplay, writer: anytype, i: usize) !void {
+        if (p.last_line_no) |last| {
+            if (i == last) {
+                return try writer.writeAll("   ");
+            }
+        }
+        try writer.print("{d: >3}", .{i});
+    }
+
+    pub fn writeNext(p: *PreviewDisplay, writer: anytype) !void {
+        const next = p.itt.next() orelse {
+            try writer.writeByte('~');
+            return;
+        };
+        try p.writeLineNum(writer, next.line_no);
+        try writer.writeByteNTimes(' ', 1);
+
+        try writeHighlightMatched(
+            writer,
+            next.slice,
+            &p.match_itt,
+            p.offset,
+        );
+
+        p.offset += next.slice.len;
+        p.last_line_no = next.line_no;
+    }
+};
+
+pub fn previewDisplay(
+    text: []const u8,
+    starting_line_no: usize,
+    matches: []const usize,
+    size: usize,
+) PreviewDisplay {
+    var itt = utils.lineWindow(text, size, size);
+    itt.current_line = starting_line_no;
+    return .{
+        .itt = itt,
+        .match_itt = MatchIterator.init(matches),
+    };
+}

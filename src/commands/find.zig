@@ -156,13 +156,12 @@ pub fn execute(
             else
                 "";
 
-            var itt = utils.lineWindow(
+            var preview = searching.previewDisplay(
                 best_match,
-                preview_columns - PREVIEW_SIZE_PADDING - 14,
+                selected_item.line_no,
+                slice[index].matches,
                 preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
-            itt.current_line = selected_item.line_no;
-            var last_line_no: ?usize = null;
 
             for (first_row.., slice) |row, res| {
                 try display.moveAndClear(row);
@@ -194,18 +193,8 @@ pub fn execute(
                     );
                     try display_writer.writeByte('|');
                     try display_writer.writeByteNTimes(' ', 1);
-                    if (itt.next()) |line| {
-                        if (last_line_no != null and last_line_no.? == line.line_no) {
-                            try display_writer.writeAll("   ");
-                        } else {
-                            try display_writer.print("{d: >3}", .{line.line_no});
-                        }
-                        try display_writer.writeByteNTimes(' ', 1);
-                        try display_writer.writeAll(line.slice);
-                        last_line_no = line.line_no;
-                    } else {
-                        try display_writer.writeAll("~");
-                    }
+
+                    try preview.writeNext(display_writer);
                 }
             }
         }
