@@ -1,7 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
 const colors = @import("../colors.zig");
-const tags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
@@ -10,14 +9,11 @@ const commands = @import("../commands.zig");
 const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
 
-// const Finder = @import("../search.zig").Finder;
 const searching = @import("../searching.zig");
 const Editor = @import("../Editor.zig");
-const BlockPrinter = @import("../BlockPrinter.zig");
 
 const Self = @This();
 
-const PREVIEW_SIZE_PERCENT = 70; // percentage
 const PREVIEW_SIZE_PADDING = 3; // num columns
 
 pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
@@ -25,17 +21,44 @@ pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
 pub const short_help = "Find in notes.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
-    .arg = "what",
-    .help = "What to search in",
-}});
+pub const arguments = cli.Arguments(&.{
+    .{
+        .arg = "what",
+        .help = "What to search in",
+    },
+    .{
+        .arg = "--case",
+        .help = "Seach should be case sensitive (Default: false)",
+    },
+    .{
+        .arg = "--rows n",
+        .help = "Number of rows to show results in (Default: 20)",
+        .argtype = usize,
+    },
+    .{
+        .arg = "--preview width",
+        .help = "Preview width as a percentage of the total terminal (Default: 60)",
+        .argtype = usize,
+    },
+});
 
 what: ?[]const u8,
+case_sensitive: bool,
+rows: usize,
+preview_size: usize,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
+    const rows = args.rows orelse 20;
+    if (rows < 3) {
+        try cli.throwError(cli.CLIErrors.BadArgument, "Rows must be at least 4", .{});
+        unreachable;
+    }
     return .{
         .what = args.what,
+        .case_sensitive = args.case,
+        .rows = rows,
+        .preview_size = args.preview orelse 60,
     };
 }
 
@@ -44,7 +67,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     try root.load();
 
@@ -86,10 +109,13 @@ pub fn execute(
         try chunk_machine.add(p, content);
     }
 
-    var searcher = try chunk_machine.searcher(allocator, .{});
+    var searcher = try chunk_machine.searcher(
+        allocator,
+        .{ .case_sensitive = self.case_sensitive },
+    );
     defer searcher.deinit();
 
-    var display = try cli.SearchDisplay.init(30);
+    var display = try cli.SearchDisplay.init(self.rows);
     defer display.deinit();
 
     try display.clear(false);
@@ -106,7 +132,7 @@ pub fn execute(
     while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
-            (term_size.ws_col * PREVIEW_SIZE_PERCENT),
+            (term_size.ws_col * self.preview_size),
             100,
         );
 
@@ -216,18 +242,15 @@ pub fn execute(
 
     if (choice) |c| {
         const path = chunk_machine.getKeyFromChunk(c.item.*);
-        std.debug.print("Selected: '{s}'\n", .{path});
-        std.debug.print("Selected: '{s}'\n", .{c.string});
+        const line_no = c.item.line_no;
+        std.log.default.debug(
+            "Selected: {s}:{d}",
+            .{ path, line_no },
+        );
+        try editFileAt(allocator, root, path, line_no, opts);
+    } else {
+        try writer.writeAll("No item selected\n");
     }
-
-    // var finder = Finder.init(allocator, root.fs.?.root_path, paths);
-    // defer finder.deinit();
-
-    // const selected = try finder.find() orelse return;
-
-    // std.log.default.debug("Selected: {s}:{d}", .{ selected.path, selected.line_number });
-
-    // try editFileAt(allocator, root, selected.path, selected.line_number, opts);
 }
 
 fn directoryNotesUnder(
