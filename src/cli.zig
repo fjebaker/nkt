@@ -51,13 +51,14 @@ pub const Commands = Clippy.Commands;
 
 pub const comptimeWrap = clippy.comptimeWrap;
 
-pub const TextAndDisplay = struct {
+pub const SearchDisplay = struct {
     display: termui.TermUI.RowDisplay,
     text: [128]u8 = undefined,
     text_index: usize = 0,
-    selected: bool = false,
+    selected_index: usize = 0,
+    max_selection: usize = 0,
 
-    pub fn init(rows: usize) !TextAndDisplay {
+    pub fn init(rows: usize) !SearchDisplay {
         var tui = try termui.TermUI.init(
             std.io.getStdIn(),
             std.io.getStdOut(),
@@ -70,48 +71,72 @@ pub const TextAndDisplay = struct {
         };
     }
 
-    pub fn deinit(self: *TextAndDisplay) void {
+    pub fn deinit(self: *SearchDisplay) void {
         self.display.ctrl.tui.deinit();
         self.* = undefined;
     }
 
-    pub fn clear(self: *TextAndDisplay, flush: bool) !void {
+    /// Clear the display
+    pub fn clear(self: *SearchDisplay, flush: bool) !void {
         try self.display.clear(flush);
     }
 
-    pub fn draw(self: *TextAndDisplay) !void {
+    /// Draw the display
+    pub fn draw(self: *SearchDisplay) !void {
         try self.display.moveToEnd();
         try self.display.ctrl.cursorToColumn(0);
         try self.display.ctrl.writer().print(
             " > {s}",
-            .{self.getTextSlice()},
+            .{self.getText()},
         );
         try self.display.draw();
     }
 
-    pub fn moveTo(self: *TextAndDisplay, row: usize) !void {
+    /// Move the cursor to a row without clearing
+    pub fn moveTo(self: *SearchDisplay, row: usize) !void {
         try self.display.moveToRow(row);
     }
 
-    fn getTextSlice(self: *const TextAndDisplay) []const u8 {
-        return self.text[0..self.text_index];
-    }
-
-    pub fn moveAndClear(self: *TextAndDisplay, row: usize) !void {
+    /// Move the cursor to a specific row and clear it
+    pub fn moveAndClear(self: *SearchDisplay, row: usize) !void {
         try self.display.moveToRow(row);
         try self.display.ctrl.clearCurrentLine();
     }
 
-    pub fn getText(self: *TextAndDisplay) !?[]const u8 {
+    /// Get the text that has currently been entered
+    pub fn getText(self: *const SearchDisplay) []const u8 {
+        return self.text[0..self.text_index];
+    }
+
+    pub fn setMaxSelection(self: *SearchDisplay, max: usize) void {
+        self.max_selection = max;
+        self.selected_index = @min(max, self.selected_index);
+    }
+
+    pub const Event = union(enum) {
+        Cursor,
+        Key,
+        Enter,
+    };
+
+    pub fn update(self: *SearchDisplay) !?Event {
         while (true) {
             const inp = try self.display.ctrl.tui.nextInput();
             switch (inp) {
                 .char => |c| switch (c) {
                     Key.CtrlC, Key.CtrlD => return null,
-                    Key.Enter => {
-                        self.selected = true;
-                        return null;
+                    Key.CtrlJ => {
+                        self.selected_index -|= 1;
+                        return .Cursor;
                     },
+                    Key.CtrlK => {
+                        self.selected_index = @min(
+                            self.selected_index + 1,
+                            self.max_selection,
+                        );
+                        return .Cursor;
+                    },
+                    Key.Enter => return .Enter,
                     Key.Backspace => {
                         if (self.text_index > 0) {
                             self.text_index -|= 1;
@@ -130,6 +155,6 @@ pub const TextAndDisplay = struct {
                 else => {},
             }
         }
-        return self.getTextSlice();
+        return .Key;
     }
 };

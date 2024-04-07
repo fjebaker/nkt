@@ -1,5 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
+const colors = @import("../colors.zig");
 const tags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
@@ -73,9 +74,6 @@ pub fn execute(
 
     const tmp_alloc = heap.allocator();
 
-    var items = std.ArrayList([]const u8).init(allocator);
-    defer items.deinit();
-
     var contents = std.ArrayList([]const u8).init(allocator);
     defer contents.deinit();
 
@@ -91,27 +89,52 @@ pub fn execute(
     var searcher = try chunk_machine.searcher(allocator, .{});
     defer searcher.deinit();
 
-    var display = try cli.TextAndDisplay.init(20);
+    var display = try cli.SearchDisplay.init(20);
     defer display.deinit();
 
     try display.clear(false);
     try display.draw();
 
+    const max_rows = display.display.max_rows - 2;
+
     const display_writer = display.display.ctrl.writer();
-    while (try display.getText()) |needle| {
+
+    var needle: []const u8 = "";
+    var results: ?searching.ChunkMachine.SearcherType.ResultList = null;
+    var runtime: u64 = 0;
+    while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
-        const preview_columns = @divFloor((term_size.ws_col * PREVIEW_SIZE_PERCENT), 100);
+        const preview_columns = @divFloor(
+            (term_size.ws_col * PREVIEW_SIZE_PERCENT),
+            100,
+        );
 
         try display.clear(false);
-        if (needle.len > 0) {
-            var timer = try std.time.Timer.start();
-            const results = try searcher.search(needle);
-            const runtime = timer.lap();
 
-            const max_rows = display.display.max_rows - 2;
+        switch (event) {
+            .Key => {
+                needle = display.getText();
+                if (needle.len > 0) {
+                    var timer = try std.time.Timer.start();
+                    results = try searcher.search(needle);
+                    runtime = timer.lap();
+                } else {
+                    results = null;
+                }
+            },
+            else => {},
+        }
 
-            const start = results.results.len -| max_rows;
-            const slice = results.results[start..];
+        if (results) |rs| {
+            const start = rs.results.len -| max_rows;
+            const slice = rs.results[start..];
+
+            const first_row = max_rows -| slice.len;
+
+            display.setMaxSelection(slice.len - 1);
+
+            // offset which row we are pointing at
+            const selected_row = (slice.len + first_row) - display.selected_index - 1;
 
             const best_match =
                 if (slice.len > 0)
@@ -120,17 +143,20 @@ pub fn execute(
                 )
             else
                 "";
-
             var itt = utils.lineWindow(
                 best_match,
-                preview_columns - PREVIEW_SIZE_PADDING - 10,
-                preview_columns - PREVIEW_SIZE_PADDING - 10,
+                preview_columns - PREVIEW_SIZE_PADDING - 13,
+                preview_columns - PREVIEW_SIZE_PADDING - 13,
             );
-
-            const first_row = max_rows -| slice.len;
 
             for (first_row.., slice) |row, res| {
                 try display.moveAndClear(row);
+                if (row == selected_row) {
+                    try colors.GREEN.bold().write(display_writer, " >> ", .{});
+                } else {
+                    try display_writer.writeAll("    ");
+                }
+
                 if (res.score) |scr| {
                     try display_writer.print("[{d: >4}] ", .{scr});
 
@@ -154,19 +180,18 @@ pub fn execute(
                     try display_writer.writeAll(line);
                 }
             }
-
-            try display.display.printToRowC(
-                max_rows,
-                "---- {s} ({d} / {d}) = {d} ---",
-                .{
-                    std.fmt.fmtDuration(results.runtime),
-                    results.results.len,
-                    items.items.len,
-                    std.fmt.fmtDuration(runtime),
-                },
-            );
         }
 
+        try display.display.printToRowC(
+            max_rows,
+            "---- {s} ({d} / {d}) = {d} ---",
+            .{
+                std.fmt.fmtDuration(if (results) |rs| rs.runtime else 0),
+                if (results) |rs| rs.results.len else chunk_machine.numItems(),
+                chunk_machine.numItems(),
+                std.fmt.fmtDuration(runtime),
+            },
+        );
         try display.draw();
     }
 

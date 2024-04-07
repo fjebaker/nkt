@@ -7,7 +7,8 @@ pub const FuzzyFinder = fuzzig.Algorithm(
     u8,
     i32,
     .{
-        .score_gap_extension = -4,
+        .score_gap_start = -8,
+        .score_gap_extension = -8,
     },
     fuzzig.AsciiOptions,
 );
@@ -245,14 +246,20 @@ test "simple search" {
 }
 
 pub const ChunkMachine = struct {
-    pub const SearcherType = Searcher(usize);
+    pub const SearchKey = struct {
+        index: usize,
+        start: usize,
+        end: usize,
+    };
+
+    pub const SearcherType = Searcher(SearchKey);
+    const ItemList = std.ArrayList(SearchKey);
 
     const StringList = std.ArrayList([]const u8);
-    const IndexList = std.ArrayList(usize);
 
     keys: StringList,
     values: StringList,
-    chunk_keys: IndexList,
+    item_list: ItemList,
     chunks: StringList,
 
     fn allocator(self: *ChunkMachine) std.mem.Allocator {
@@ -269,14 +276,22 @@ pub const ChunkMachine = struct {
             const trimmed = std.mem.trim(u8, line, " \t");
             // skip short lines
             if (trimmed.len < 4) continue;
+
+            const end = each_line.index;
+            const start = end - line.len;
+
             try self.chunks.append(trimmed);
-            try self.chunk_keys.append(index);
+            try self.item_list.append(.{
+                .index = index,
+                .start = start,
+                .end = end,
+            });
         }
     }
 
-    pub fn getValueFromChunk(self: *const ChunkMachine, key: usize) []const u8 {
-        std.debug.assert(key < self.values.items.len);
-        return self.values.items[key];
+    pub fn getValueFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
+        std.debug.assert(key.index < self.values.items.len);
+        return self.values.items[key.index][key.start..];
     }
 
     /// Get a searcher for the chunks. Searcher will use the passed allocator
@@ -288,7 +303,7 @@ pub const ChunkMachine = struct {
     ) !SearcherType {
         return try SearcherType.initItems(
             alloc,
-            self.chunk_keys.items,
+            self.item_list.items,
             self.chunks.items,
             opts,
         );
@@ -300,7 +315,6 @@ pub const ChunkMachine = struct {
         const index = self.keys.items.len;
         try self.keys.append(key);
         try self.values.append(value);
-
         try self.addChunksToIndex(value, index);
     }
 
@@ -308,7 +322,7 @@ pub const ChunkMachine = struct {
         return .{
             .keys = StringList.init(alloc),
             .values = StringList.init(alloc),
-            .chunk_keys = IndexList.init(alloc),
+            .item_list = ItemList.init(alloc),
             .chunks = StringList.init(alloc),
         };
     }
@@ -316,8 +330,12 @@ pub const ChunkMachine = struct {
     pub fn deinit(self: *ChunkMachine) void {
         self.keys.deinit();
         self.values.deinit();
-        self.chunk_keys.deinit();
+        self.item_list.deinit();
         self.chunks.deinit();
         self.* = undefined;
+    }
+
+    pub fn numItems(self: *const ChunkMachine) usize {
+        return self.item_list.items.len;
     }
 };
