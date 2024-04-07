@@ -5,6 +5,41 @@ const Tasklist = @import("topology/Tasklist.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
+pub const LineWindowIterator = struct {
+    itt: std.mem.SplitIterator(u8, .any),
+    chunk: ?std.mem.WindowIterator(u8) = null,
+
+    size: usize,
+    stride: usize,
+
+    fn getNextLine(w: *LineWindowIterator) ?[]const u8 {
+        if (w.chunk) |*chunk| {
+            const line = chunk.next();
+            if (line) |l| return l;
+        }
+        return null;
+    }
+
+    pub fn next(w: *LineWindowIterator) ?[]const u8 {
+        if (w.getNextLine()) |line| {
+            return line;
+        }
+
+        while (w.itt.next()) |section| {
+            w.chunk = std.mem.window(u8, section, w.size, w.stride);
+            if (w.getNextLine()) |line| {
+                return line;
+            }
+        }
+        return null;
+    }
+};
+
+pub fn lineWindow(text: []const u8, size: usize, stride: usize) LineWindowIterator {
+    const itt = std.mem.splitAny(u8, text, "\n");
+    return .{ .itt = itt, .size = size, .stride = stride };
+}
+
 pub const Error = error{
     HashTooLong,
     InvalidHash,

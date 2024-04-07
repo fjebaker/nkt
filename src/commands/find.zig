@@ -10,11 +10,14 @@ const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
 
 // const Finder = @import("../search.zig").Finder;
-const Searcher = @import("../searching.zig").Searcher;
+const searching = @import("../searching.zig");
 const Editor = @import("../Editor.zig");
 const BlockPrinter = @import("../BlockPrinter.zig");
 
 const Self = @This();
+
+const PREVIEW_SIZE_PERCENT = 70; // percentage
+const PREVIEW_SIZE_PADDING = 3; // num columns
 
 pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
 
@@ -76,25 +79,16 @@ pub fn execute(
     var contents = std.ArrayList([]const u8).init(allocator);
     defer contents.deinit();
 
-    // read all note contents into buffers, split into individual lines
+    var chunk_machine = searching.ChunkMachine.init(allocator);
+    defer chunk_machine.deinit();
+
+    // read all note contents into buffers
     for (paths) |p| {
         const content = try root.fs.?.readFileAlloc(tmp_alloc, p);
-        var line_itt = std.mem.tokenizeAny(u8, content, "\n");
-        while (line_itt.next()) |line| {
-            const trimmed = std.mem.trim(u8, line, " \t");
-            // skip excessively short lines
-            if (trimmed.len <= 3) continue;
-            try items.append(p);
-            try contents.append(trimmed);
-        }
+        try chunk_machine.add(p, content);
     }
 
-    var searcher = try Searcher([]const u8).initItems(
-        allocator,
-        items.items,
-        contents.items,
-        .{},
-    );
+    var searcher = try chunk_machine.searcher(allocator, .{});
     defer searcher.deinit();
 
     var display = try cli.TextAndDisplay.init(20);
@@ -105,6 +99,9 @@ pub fn execute(
 
     const display_writer = display.display.ctrl.writer();
     while (try display.getText()) |needle| {
+        const term_size = try display.display.ctrl.tui.getSize();
+        const preview_columns = @divFloor((term_size.ws_col * PREVIEW_SIZE_PERCENT), 100);
+
         try display.clear(false);
         if (needle.len > 0) {
             var timer = try std.time.Timer.start();
@@ -116,13 +113,45 @@ pub fn execute(
             const start = results.results.len -| max_rows;
             const slice = results.results[start..];
 
+            const best_match =
+                if (slice.len > 0)
+                chunk_machine.getValueFromChunk(
+                    slice[slice.len - 1].item.*,
+                )
+            else
+                "";
+
+            var itt = utils.lineWindow(
+                best_match,
+                preview_columns - PREVIEW_SIZE_PADDING - 10,
+                preview_columns - PREVIEW_SIZE_PADDING - 10,
+            );
+
             const first_row = max_rows -| slice.len;
 
             for (first_row.., slice) |row, res| {
                 try display.moveAndClear(row);
                 if (res.score) |scr| {
                     try display_writer.print("[{d: >4}] ", .{scr});
-                    try res.printMatched(display_writer, 14, 70);
+
+                    const max_len = term_size.ws_col -
+                        preview_columns -
+                        PREVIEW_SIZE_PADDING;
+
+                    const written = try res.printMatched(
+                        display_writer,
+                        14,
+                        max_len,
+                    );
+
+                    try display_writer.writeByteNTimes(
+                        ' ',
+                        PREVIEW_SIZE_PADDING - 1 + max_len - written,
+                    );
+                    try display_writer.writeByte('|');
+                    try display_writer.writeByteNTimes(' ', 1);
+                    const line = itt.next() orelse "";
+                    try display_writer.writeAll(line);
                 }
             }
 

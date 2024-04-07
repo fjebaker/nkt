@@ -43,19 +43,22 @@ pub fn Searcher(comptime Item: type) type {
             }
 
             /// Print the matches highlighted in the search string with some
-            /// context lines and a maximal width
+            /// context lines and a maximal width. Returns number of bytes
+            /// written.
             pub fn printMatched(
                 r: Result,
                 writer: anytype,
                 ctx: usize,
                 maxlen: usize,
-            ) !void {
+            ) !usize {
                 const matches = r.getMatched();
                 var start = matches[0] -| ctx;
                 var end = @min(
                     start + maxlen,
                     r.string.len,
                 );
+
+                const total_length = end - start;
 
                 const f = color.RED;
 
@@ -82,6 +85,8 @@ pub fn Searcher(comptime Item: type) type {
                 if (end < r.string.len) {
                     try color.DIM.write(writer, "...", .{});
                 }
+
+                return total_length;
             }
         };
 
@@ -238,3 +243,81 @@ test "simple search" {
     try std.testing.expectEqual(res_list.results[1].item.*, 0);
     try std.testing.expectEqual(res_list.results[2].item.*, 1);
 }
+
+pub const ChunkMachine = struct {
+    pub const SearcherType = Searcher(usize);
+
+    const StringList = std.ArrayList([]const u8);
+    const IndexList = std.ArrayList(usize);
+
+    keys: StringList,
+    values: StringList,
+    chunk_keys: IndexList,
+    chunks: StringList,
+
+    fn allocator(self: *ChunkMachine) std.mem.Allocator {
+        return self.heap.allocator();
+    }
+
+    fn addChunksToIndex(
+        self: *ChunkMachine,
+        value: []const u8,
+        index: usize,
+    ) !void {
+        var each_line = std.mem.tokenizeAny(u8, value, "\n");
+        while (each_line.next()) |line| {
+            const trimmed = std.mem.trim(u8, line, " \t");
+            // skip short lines
+            if (trimmed.len < 4) continue;
+            try self.chunks.append(trimmed);
+            try self.chunk_keys.append(index);
+        }
+    }
+
+    pub fn getValueFromChunk(self: *const ChunkMachine, key: usize) []const u8 {
+        std.debug.assert(key < self.values.items.len);
+        return self.values.items[key];
+    }
+
+    /// Get a searcher for the chunks. Searcher will use the passed allocator
+    /// instead of the ChunkMachine's allocator
+    pub fn searcher(
+        self: *ChunkMachine,
+        alloc: std.mem.Allocator,
+        opts: fuzzig.AsciiOptions,
+    ) !SearcherType {
+        return try SearcherType.initItems(
+            alloc,
+            self.chunk_keys.items,
+            self.chunks.items,
+            opts,
+        );
+    }
+
+    /// Add a key and value into the chunk machine. Will split the value into
+    /// smaller chunks ro searching.
+    pub fn add(self: *ChunkMachine, key: []const u8, value: []const u8) !void {
+        const index = self.keys.items.len;
+        try self.keys.append(key);
+        try self.values.append(value);
+
+        try self.addChunksToIndex(value, index);
+    }
+
+    pub fn init(alloc: std.mem.Allocator) ChunkMachine {
+        return .{
+            .keys = StringList.init(alloc),
+            .values = StringList.init(alloc),
+            .chunk_keys = IndexList.init(alloc),
+            .chunks = StringList.init(alloc),
+        };
+    }
+
+    pub fn deinit(self: *ChunkMachine) void {
+        self.keys.deinit();
+        self.values.deinit();
+        self.chunk_keys.deinit();
+        self.chunks.deinit();
+        self.* = undefined;
+    }
+};
