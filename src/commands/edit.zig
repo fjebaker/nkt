@@ -35,11 +35,16 @@ pub const arguments = cli.Arguments(selections.selectHelp(
         .arg = "--ext extension",
         .help = "The file extension for the new note (default: 'md').",
     },
+    .{
+        .arg = "--path-only",
+        .help = "Do not open the file in the editor, but print the path to stdout. Used for editor integration.",
+    },
 });
 
 const EditOptions = struct {
     allow_new: bool = false,
     extension: []const u8,
+    path_only: bool,
 };
 
 selection: selections.Selection,
@@ -68,6 +73,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .opts = .{
             .allow_new = args.new,
             .extension = args.ext orelse "md",
+            .path_only = args.@"path-only",
         },
     };
 }
@@ -103,9 +109,15 @@ fn editElseMaybeCreate(
         // edit the existing item
         switch (item.*) {
             .Note => |*n| {
-                try editNote(allocator, root, n.note, &n.directory, opts);
+                try editNote(writer, allocator, root, n.note, &n.directory, e_opts, opts);
             },
             .Task => |*t| {
+                // TODO: clean this flag up
+                if (e_opts.path_only) {
+                    try writer.print("{s}\n", .{maybe_item.?.getPath()});
+                    return;
+                }
+
                 var editor = try Editor.init(allocator);
                 defer editor.deinit();
 
@@ -167,6 +179,12 @@ fn editElseMaybeCreate(
                 );
             },
             .Entry => |*e| {
+                // TODO: clean this flag up
+                if (e_opts.path_only) {
+                    try writer.print("{s}\n", .{maybe_item.?.getPath()});
+                    return;
+                }
+
                 var editor = try Editor.init(allocator);
                 defer editor.deinit();
 
@@ -251,7 +269,11 @@ fn editElseMaybeCreate(
                 opts,
             );
             defer allocator.free(path);
-            try becomeEditorRelativePath(allocator, &root.fs.?, path);
+            if (e_opts.path_only) {
+                try writer.print("{s}\n", .{path});
+            } else {
+                try becomeEditorRelativePath(allocator, &root.fs.?, path);
+            }
         } else {
             // make sure was trying to select a note
             if (selection.collection_type == null) {
@@ -272,10 +294,12 @@ fn editElseMaybeCreate(
 }
 
 fn editNote(
+    writer: anytype,
     allocator: std.mem.Allocator,
     root: *Root,
     n: Directory.Note,
     dir: *Directory,
+    e_opts: EditOptions,
     _: commands.Options,
 ) !void {
     const note = try dir.touchNote(
@@ -288,11 +312,15 @@ fn editNote(
     );
     try root.writeChanges();
 
-    try becomeEditorRelativePath(
-        allocator,
-        &root.fs.?,
-        note.path,
-    );
+    if (e_opts.path_only) {
+        try writer.print("{s}\n", .{note.path});
+    } else {
+        try becomeEditorRelativePath(
+            allocator,
+            &root.fs.?,
+            note.path,
+        );
+    }
 }
 
 fn createNew(
@@ -303,7 +331,10 @@ fn createNew(
     opts: commands.Options,
 ) ![]const u8 {
     if (selection.collection_type) |ctype| {
-        if (ctype != .CollectionDirectory) {
+        const is_index = (ctype == .CollectionJournal and
+            selection.selector.? == .ByIndex and
+            !selection.collection_provided);
+        if (ctype != .CollectionDirectory and !is_index) {
             try cli.throwError(
                 Error.InvalidEdit,
                 "Can only create new items with `edit` in directories ('{s}' is invalid).",
@@ -313,8 +344,13 @@ fn createNew(
         }
     }
 
-    switch (selection.selector.?) {
-        .ByDate => |date| {
+    const sel = selection.selector.?;
+    switch (sel) {
+        .ByDate, .ByIndex => {
+            const date = if (sel == .ByDate)
+                sel.ByDate
+            else
+                time.shiftBack(time.Time.now(), sel.ByIndex);
             const cname = selection.collection_name orelse
                 root.info.default_journal;
             const local_date = date;
