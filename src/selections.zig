@@ -174,6 +174,9 @@ pub const Selection = struct {
         entry_time: ?[]const u8 = null,
     } = .{},
 
+    /// True if the collection was specified on the command line
+    collection_provided: bool = false,
+
     fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
         const name = s.collection_name orelse
             return ResolveResult.throw(Error.AmbiguousSelection);
@@ -526,6 +529,7 @@ fn addFlags(
                             selection.selector = .{ .ByDate = time.shiftBack(time.Time.now(), i) };
                             selection.collection_name = directory;
                             selection.collection_type = .CollectionDirectory;
+                            selection.collection_provided = directory != null;
                             return null;
                         },
                         else => {},
@@ -540,6 +544,7 @@ fn addFlags(
                     .was_given = .CollectionTasklist,
                 };
                 selection.collection_name = journal;
+                selection.collection_provided = journal != null;
             },
             .CollectionTasklist => {
                 if (journal != null) return .{
@@ -551,6 +556,7 @@ fn addFlags(
                     .was_given = .CollectionDirectory,
                 };
                 selection.collection_name = journal;
+                selection.collection_provided = tasklist != null;
             },
             .CollectionDirectory => {
                 if (journal != null) return .{
@@ -562,6 +568,7 @@ fn addFlags(
                     .was_given = .CollectionTasklist,
                 };
                 selection.collection_name = journal;
+                selection.collection_provided = directory != null;
             },
         }
     } else {
@@ -575,14 +582,17 @@ fn addFlags(
         // asign the one that is set
         if (journal) |txt| {
             selection.collection_name = txt;
+            selection.collection_provided = true;
             selection.collection_type = .CollectionJournal;
         }
         if (directory) |txt| {
             selection.collection_name = txt;
+            selection.collection_provided = true;
             selection.collection_type = .CollectionDirectory;
         }
         if (tasklist) |txt| {
             selection.collection_name = txt;
+            selection.collection_provided = true;
             selection.collection_type = .CollectionTasklist;
         }
     }
@@ -648,12 +658,14 @@ test "selection parsing" {
             .ByIndex = 0,
         },
         .collection_type = .CollectionJournal,
+        .collection_provided = false,
     });
     try testSelectionParsing("t0", null, null, null, .{
         .selector = .{
             .ByQualifiedIndex = .{ .index = 0, .qualifier = 't' },
         },
         .collection_type = .CollectionTasklist,
+        .collection_provided = false,
     });
     try testSelectionParsing("hello", null, "place", null, .{
         .selector = .{
@@ -661,6 +673,7 @@ test "selection parsing" {
         },
         .collection_type = .CollectionDirectory,
         .collection_name = "place",
+        .collection_provided = true,
     });
     try std.testing.expectError(
         Error.IncompatibleSelection,
