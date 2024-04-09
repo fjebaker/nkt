@@ -84,14 +84,15 @@ pub fn execute(
         },
     }
 
-    try writer.print(
-        "New '{s}' created with name '{s}'\n",
-        .{ @tagName(self.ctype), self.name },
-    );
-
     switch (self.ctype) {
         .chain => try root.writeChains(),
         .tag => try root.writeTags(),
         else => try root.writeChanges(),
     }
+    try root.writeRoot();
+
+    try writer.print(
+        "New '{s}' created with name '{s}'\n",
+        .{ @tagName(self.ctype), self.name },
+    );
 }

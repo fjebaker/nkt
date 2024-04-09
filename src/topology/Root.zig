@@ -585,7 +585,9 @@ pub fn addNewCollection(
         .path = try self.newPathFrom(name, t),
     };
 
-    return self.addNewCollectionFromDescription(descr, t);
+    const c = self.addNewCollectionFromDescription(descr, t);
+    self.markModified(descr, t);
+    return c;
 }
 
 fn lookupCollection(
