@@ -415,6 +415,39 @@ pub fn toTimestamp(string: []const u8) !Timestamp {
     return .{ .hour = hour, .minute = minute, .second = seconds };
 }
 
+const Duration = enum {
+    hours,
+    days,
+    weeks,
+    months,
+    pub fn toDelta(d: Duration, num: u16) Date.Delta {
+        return switch (d) {
+            .hours => .{
+                .seconds = @as(i64, @intCast(num)) * std.time.s_per_hour,
+            },
+            .days => .{ .days = @intCast(num) },
+            .weeks => .{ .days = @as(i32, @intCast(num)) * 7 },
+            .months => .{ .days = @as(i32, @intCast(num)) * 30 },
+        };
+    }
+};
+
+fn stringToDuration(s: []const u8) ?Duration {
+    if (utils.stringEqualOrPlural(s, "hour", null)) {
+        return .hours;
+    }
+    if (utils.stringEqualOrPlural(s, "day", null)) {
+        return .days;
+    }
+    if (utils.stringEqualOrPlural(s, "week", null)) {
+        return .weeks;
+    }
+    if (utils.stringEqualOrPlural(s, "month", null)) {
+        return .months;
+    }
+    return null;
+}
+
 /// Struct representing a colloquial manner for describing time offsets. Used
 /// to parse strings such as `today` or `tomorrow evening`.
 pub const Colloquial = struct {
@@ -444,6 +477,10 @@ pub const Colloquial = struct {
     fn next(c: *Colloquial) ![]const u8 {
         return c.tkn.next() orelse
             error.BadArgument;
+    }
+
+    fn peek(c: *Colloquial) ?[]const u8 {
+        return c.tkn.peek();
     }
 
     fn optionalTime(c: *Colloquial) !Timestamp {
@@ -476,18 +513,32 @@ pub const Colloquial = struct {
                     try c.optionalTime(),
                 );
             }
-        } else {
+        } else if (_eq(arg, "today")) {
             // predicated
-            if (_eq(arg, "today")) {
-                return c.setTime(c.now, try c.optionalTime());
-            } else if (_eq(arg, "tomorrow")) {
-                return c.setTime(
-                    c.now.shiftDays(1),
-                    try c.optionalTime(),
-                );
-            } else if (isDate(arg)) {
-                const date = try stringToDate(arg);
-                return c.setTime(date, try c.optionalTime());
+            return c.setTime(c.now, try c.optionalTime());
+        } else if (_eq(arg, "tomorrow")) {
+            return c.setTime(
+                c.now.shiftDays(1),
+                try c.optionalTime(),
+            );
+        } else if (isDate(arg)) {
+            const date = try stringToDate(arg);
+            return c.setTime(date, try c.optionalTime());
+        }
+
+        // test for offset, e.g. 10 days, 2 weeks
+        if (utils.allNumeric(arg)) {
+            if (c.peek()) |n| {
+                if (stringToDuration(n)) |dur| {
+                    _ = try c.next();
+                    const num = try std.fmt.parseInt(
+                        u16,
+                        arg,
+                        10,
+                    );
+                    const delta = dur.toDelta(num);
+                    return c.setTime(c.now.shift(delta), DEFAULT_TIME);
+                }
             }
         }
 
@@ -640,6 +691,16 @@ test "time parsing" {
         nowish,
         "2023-11-09 15:30:00",
         nowish.shiftDays(1).shiftHours(2).shiftMinutes(30),
+    );
+    try testTimeParsing(
+        nowish,
+        "10 days",
+        nowish.shiftDays(10),
+    );
+    try testTimeParsing(
+        nowish,
+        "1 week",
+        nowish.shiftDays(7),
     );
 }
 

@@ -381,6 +381,26 @@ pub fn absDiff(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
     return b - a;
 }
 
+/// Test if a string is equal to another string or its plural.
+/// If plural is not given, will simlpy check if an `s` is appended.
+pub fn stringEqualOrPlural(
+    s: []const u8,
+    expected: []const u8,
+    plural: ?[]const u8,
+) bool {
+    const is_singular = std.mem.eql(u8, s[0..expected.len], expected);
+    if (s.len == expected.len and is_singular) return true;
+    if (plural) |p| {
+        return std.mem.eql(u8, s, p);
+    } else {
+        return is_singular and s.len == expected.len + 1 and s[s.len - 1] == 's';
+    }
+}
+
+test "plural compare" {
+    try std.testing.expect(stringEqualOrPlural("days", "day", null));
+}
+
 // needs revisting below here
 // vvvvvvvvvvvvvvvvvvvvvvvvvv
 
