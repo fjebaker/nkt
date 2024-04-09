@@ -149,7 +149,7 @@ pub fn drain(
 
     var previous: ?FormattedTask = null;
     for (self.entries.items) |item| {
-        if (needsSeperator(previous, item)) {
+        if (needsSeperator(self.now, previous, item)) {
             try fp.addText("\n", .{});
         }
         try printTask(&fp, item, col_widths, details, self.opts.full_hash);
@@ -161,7 +161,9 @@ pub fn drain(
     try fp.drain(writer);
 }
 
-fn needsSeperator(prev: ?FormattedTask, current: FormattedTask) bool {
+const DUE_GAP = 10 * std.time.ms_per_day;
+
+fn needsSeperator(now: time.Time, prev: ?FormattedTask, current: FormattedTask) bool {
     const p = prev orelse return false;
 
     const p_due = p.task.due orelse {
@@ -171,8 +173,13 @@ fn needsSeperator(prev: ?FormattedTask, current: FormattedTask) bool {
 
     const c_due = current.task.due.?;
 
-    // if they are both overdue, no gap
-    if (p.status == .PastDue and current.status == .PastDue) return false;
+    // if they are both overdue, only put a gap between recent and long past
+    if (p.status == .PastDue and current.status == .PastDue) {
+        const curr_week = time.absTimeDiff(now, c_due) < DUE_GAP;
+        const prev_week = time.absTimeDiff(now, p_due) < DUE_GAP;
+        if (prev_week and !curr_week) return true;
+        return false;
+    }
 
     const t_diff = time.absTimeDiff(p_due, c_due);
     return t_diff > std.time.ms_per_day;
