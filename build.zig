@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const coverage = b.option(bool, "coverage", "Generate test coverage") orelse false;
-    const tracy = b.option(bool, "tracy", "Generate test coverage") orelse false;
+    const tracy = b.option(bool, "tracy", "Compile against tracy client") orelse false;
 
     const time = b.dependency("time", .{
         .target = target,
