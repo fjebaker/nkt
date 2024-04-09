@@ -148,12 +148,19 @@ pub fn execute(
 
     switch (item) {
         .Day => |*day| {
+            const tasks = try root.getAllTasks(allocator);
+            defer allocator.free(tasks);
+
+            var task_events = try abstractions.TaskEventList.init(allocator, tasks);
+            defer task_events.deinit();
+
+            const events = task_events.eventsOnDay(day.day.getDate());
             _ = try self.readDay(
                 allocator,
                 root,
                 &day.journal,
                 day.day,
-                &.{},
+                events,
                 selected_tags,
                 tdl.tags,
                 &bprinter,
