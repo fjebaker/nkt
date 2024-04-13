@@ -102,7 +102,7 @@ pub const Time = struct {
     }
 
     /// Turn a `Time` into a `Date`, shifting the timezone if appropriate
-    pub fn toDate(t: Time) Date {
+    pub fn toDate(t: *const Time) Date {
         const date = Date.fromTimestamp(@intCast(t.time));
         return date.shiftTimezone(&t.getTimeZone().tz);
     }
