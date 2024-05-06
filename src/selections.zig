@@ -163,6 +163,27 @@ fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
     );
 }
 
+/// Internal utility method used to turn various "failed to resolve" errors
+/// from canary selectors into null values to make sending the next canary less
+/// verbose
+fn unwrapCanary(rr: ResolveResult) ?ResolveResult {
+    if (rr.err) |err| {
+        switch (err) {
+            Error.UnknownSelection,
+            Error.InvalidSelection,
+            Root.Error.NoSuchItem,
+            => {
+                std.log.default.debug("Resolve returned {!}", .{err});
+            },
+            else => {
+                return ResolveResult.throw(err);
+            },
+        }
+    }
+    if (rr.item != null) return rr;
+    return null;
+}
+
 /// Struct representing the selection made
 pub const Selection = struct {
     /// The type of the collection selected
@@ -209,13 +230,73 @@ pub const Selection = struct {
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
+    fn lookInCollection(
+        s: Selection,
+        root: *Root,
+        comptime ct: Root.CollectionType,
+        name: []const u8,
+    ) !ResolveResult {
+        std.log.default.debug(
+            "Looking up collection {s}->'{s}'",
+            .{ @tagName(ct), name },
+        );
+
+        var col = (try root.getCollection(name, ct)) orelse
+            return ResolveResult.throw(Error.UnknownSelection);
+        const selector = s.selector.?;
+
+        switch (ct) {
+            .CollectionJournal => {
+                return try retrieveFromJournal(
+                    selector,
+                    &col,
+                    s.modifiers.entry_time,
+                );
+            },
+            .CollectionDirectory => {
+                return try retrieveFromDirectory(selector, &col);
+            },
+            .CollectionTasklist => {
+                return try retrieveFromTasklist(selector, &col);
+            },
+        }
+    }
+
     fn resolve(s: Selection, root: *Root) !ResolveResult {
+        // if no item selection is given, we resolve a whole collection instead
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
         std.log.default.debug("Selector: {s}", .{@tagName(selector)});
 
         if (s.collection_type) |ct| {
+            switch (ct) {
+                inline else => |t| {
+                    if (s.collection_name) |name| {
+                        return s.lookInCollection(root, t, name);
+                    } else {
+                        std.log.default.debug(
+                            "No collection name given, using default search order",
+                            .{},
+                        );
+
+                        // first look in the default, then look in all the rest
+                        const default_name = root.defaultCollectionName(t);
+                        const default_r = try s.lookInCollection(root, t, default_name);
+                        if (unwrapCanary(default_r)) |rr| {
+                            return rr;
+                        }
+                        // now try all the others
+                        for (root.getAllDescriptor(t)) |d| {
+                            const r = try s.lookInCollection(root, t, d.name);
+                            if (unwrapCanary(r)) |rr| {
+                                return rr;
+                            }
+                        }
+                    }
+                },
+            }
+
             switch (ct) {
                 .CollectionJournal => {
                     const name = s.collection_name orelse
@@ -258,21 +339,8 @@ pub const Selection = struct {
             var canary = s;
             canary.collection_type = ct;
             const r = try canary.resolve(root);
-            if (r.err) |err| {
-                switch (err) {
-                    Error.UnknownSelection,
-                    Error.InvalidSelection,
-                    Root.Error.NoSuchItem,
-                    => {
-                        std.log.default.debug("Resolve returned {!}", .{err});
-                    },
-                    else => {
-                        return ResolveResult.throw(err);
-                    },
-                }
-            }
-            if (r.item) |_| {
-                return r;
+            if (unwrapCanary(r)) |rr| {
+                return rr;
             }
         }
 

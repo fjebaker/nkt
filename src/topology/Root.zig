@@ -350,6 +350,11 @@ pub fn addDescriptor(self: *Root, descr: Descriptor, comptime t: CollectionType)
     @field(self.info, t.toFieldName()) = try list.toOwnedSlice();
 }
 
+/// Get the `Descriptor` of all items of the specified `CollectionType`.
+pub fn getAllDescriptor(self: *Root, comptime t: CollectionType) []const Descriptor {
+    return @field(self.info, t.toFieldName());
+}
+
 /// Get the `Descriptor` matching name `name` of type `CollectionType`. Returns
 /// `null` if no match found.
 pub fn getDescriptor(
@@ -905,6 +910,15 @@ pub fn writeTags(self: *Root) !void {
     const tag_content = try list.serialize(self.allocator);
     defer self.allocator.free(tag_content);
     try fs.overwrite(self.info.tagpath, tag_content);
+}
+
+/// Get the default collection name of the selected type
+pub fn defaultCollectionName(self: *Root, comptime ct: CollectionType) []const u8 {
+    return switch (ct) {
+        .CollectionDirectory => self.info.default_directory,
+        .CollectionJournal => self.info.default_journal,
+        .CollectionTasklist => self.info.default_tasklist,
+    };
 }
 
 /// Returns a list of all tasks in all tasklists
