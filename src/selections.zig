@@ -626,7 +626,7 @@ fn addFlags(
                     .has = ct,
                     .was_given = .CollectionDirectory,
                 };
-                selection.collection_name = journal;
+                selection.collection_name = tasklist;
                 selection.collection_provided = tasklist != null;
             },
             .CollectionDirectory => {
@@ -638,7 +638,7 @@ fn addFlags(
                     .has = ct,
                     .was_given = .CollectionTasklist,
                 };
-                selection.collection_name = journal;
+                selection.collection_name = directory;
                 selection.collection_provided = directory != null;
             },
         }
