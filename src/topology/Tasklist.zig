@@ -11,6 +11,13 @@ const Tasklist = @This();
 pub const TASKLIST_DIRECTORY = "tasklists";
 pub const TASKLIST_EXTENSION = "json";
 
+pub const MINI_HASH_LEN = 5;
+pub const MINI_HASH_MAX_VALUE = std.math.powi(
+    u64,
+    16,
+    MINI_HASH_LEN,
+) catch unreachable;
+
 pub const Error = error{
     DuplicateTask,
     UnknownImportance,
@@ -145,8 +152,10 @@ pub fn getTaskByHashPtr(self: *Tasklist, h: u64) ?*Task {
 
 /// Get task by mini hash. Returns `null` if no task found or
 /// `error.AmbiguousSelection` if multiple tasks matched.
+/// Mini hashes are defined as the last MINI_HASH_LEN numbers in the hex
+/// expression.
 pub fn getTaskByMiniHash(self: *Tasklist, h: u64) !?Task {
-    const shift: u6 = @intCast(@divFloor(@clz(h), 4) * 4);
+    const shift = (16 - MINI_HASH_LEN) * 4;
 
     var selected: ?Task = null;
     for (self.info.tasks) |task| {
@@ -193,6 +202,12 @@ test "get by mini hash" {
             .created = .{ .time = 0 },
             .modified = .{ .time = 0 },
         },
+        .{
+            .outcome = "leading zero",
+            .hash = 0x0016f4391c40056a,
+            .created = .{ .time = 0 },
+            .modified = .{ .time = 0 },
+        },
     };
     var info: Info = .{
         .tags = &.{},
@@ -220,6 +235,10 @@ test "get by mini hash" {
     try std.testing.expectEqualDeep(
         tasks[2],
         (try tl.getTaskByMiniHash(0x7416f)).?,
+    );
+    try std.testing.expectEqualDeep(
+        tasks[3],
+        (try tl.getTaskByMiniHash(0x0016f)).?,
     );
 }
 

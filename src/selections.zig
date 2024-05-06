@@ -65,6 +65,7 @@ const ResolveResult = struct {
     }
 
     fn throw(err: anyerror) ResolveResult {
+        std.log.default.debug("ResolveResult error: {!}", .{err});
         return .{ .item = null, .err = err };
     }
 
@@ -146,11 +147,13 @@ fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
             break :b try tasklist.getTaskByIndex(index);
         },
         .ByDate => return ResolveResult.throw(Error.InvalidSelection),
-        .ByHash => |h| switch (@clz(h)) {
-            0 => tasklist.getTaskByHash(h),
-            1...63 => tasklist.getTaskByMiniHash(h) catch |e|
-                return ResolveResult.throw(e),
-            else => return ResolveResult.throw(utils.Error.HashTooLong),
+        .ByHash => |h| b: {
+            if (h <= Tasklist.MINI_HASH_MAX_VALUE) {
+                break :b tasklist.getTaskByMiniHash(h) catch |e|
+                    return ResolveResult.throw(e);
+            } else {
+                break :b tasklist.getTaskByHash(h);
+            }
         },
     };
     const t = task orelse
