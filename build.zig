@@ -53,6 +53,11 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    if (optimize == .Debug) {
+        exe.use_lld = false;
+        exe.use_llvm = false;
+    }
+
     exe.root_module.addImport("time", time);
     exe.root_module.addImport("farbe", farbe);
     exe.root_module.addImport("chrono", chrono);

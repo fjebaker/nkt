@@ -557,17 +557,6 @@ pub const Colloquial = struct {
         }
     }
 
-    fn parseDate(c: *Colloquial) !Date {
-        const arg = c.next();
-        if (isDate(arg)) {
-            return try stringToDate(arg);
-        } else if (std.mem.eql(u8, arg, "today")) {
-            return Date.now();
-        } else if (std.mem.eql(u8, arg, "tomorrow")) {
-            return c.now().shiftDays(1);
-        } else return error.BadArgument;
-    }
-
     fn asWeekday(arg: []const u8) ?Weekday {
         inline for (1..8) |i| {
             const weekday: Weekday = @enumFromInt(i);
@@ -603,7 +592,7 @@ pub const Colloquial = struct {
             @compileError("Could not parse time: " ++ s);
     }
 
-    const TIME_OF_DAY = std.ComptimeStringMap(Timestamp, .{
+    const TIME_OF_DAY = std.StaticStringMap(Timestamp).initComptime(.{
         .{ "morning", _compTime("08:00:00") },
         .{ "lunch", _compTime("13:00:00") },
         .{ "eod", _compTime("17:00:00") },
