@@ -4,6 +4,8 @@ const tags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
+const searching = @import("../searching.zig");
+const color = @import("../colors.zig");
 
 const commands = @import("../commands.zig");
 const FileSystem = @import("../FileSystem.zig");
@@ -23,8 +25,8 @@ pub const long_help = short_help;
 
 pub const arguments = cli.Arguments(selections.selectHelp(
     "item",
-    "The item to edit (see `help select`).",
-    .{ .required = true },
+    "The item to edit (see `help select`). If left blank will open an interactive search through the names of the notes.",
+    .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
     .{
@@ -47,17 +49,20 @@ const EditOptions = struct {
     path_only: bool,
 };
 
-selection: selections.Selection,
+selection: ?selections.Selection,
 opts: EditOptions,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
-    const selection = try selections.fromArgs(
-        arguments.Parsed,
-        args.item,
-        args,
-    );
+    const selection = if (args.item) |item|
+        try selections.fromArgs(
+            arguments.Parsed,
+            item,
+            args,
+        )
+    else
+        null;
 
     if (args.new == false and args.ext != null) {
         try cli.throwError(
@@ -86,14 +91,143 @@ pub fn execute(
     opts: commands.Options,
 ) !void {
     try root.load();
-    try editElseMaybeCreate(
-        writer,
-        self.selection,
-        allocator,
-        root,
-        opts,
-        self.opts,
+    if (self.selection) |selection| {
+        try editElseMaybeCreate(
+            writer,
+            selection,
+            allocator,
+            root,
+            opts,
+            self.opts,
+        );
+    } else {
+        try self.searchFileNames(
+            allocator,
+            root,
+            writer,
+            opts,
+        );
+    }
+}
+
+const SearchKey = struct {
+    index: usize,
+};
+const NameSearcher = searching.Searcher(SearchKey);
+
+fn searchFileNames(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    var dir = (try root.getDirectory(root.info.default_directory)).?;
+
+    const search_items = try allocator.alloc(
+        []const u8,
+        dir.info.notes.len,
     );
+    defer allocator.free(search_items);
+
+    const search_keys = try allocator.alloc(
+        SearchKey,
+        dir.info.notes.len,
+    );
+    defer allocator.free(search_keys);
+
+    for (dir.info.notes, search_items, search_keys, 0..) |note, *item, *key, i| {
+        item.* = note.name;
+        key.*.index = i;
+    }
+
+    var searcher = try NameSearcher.initItems(
+        allocator,
+        search_keys,
+        search_items,
+        .{
+            .wildcard_spaces = true,
+        },
+    );
+    defer searcher.deinit();
+
+    var display = try cli.SearchDisplay.init(10);
+    defer display.deinit();
+    const max_rows = display.display.max_rows - 1;
+
+    try display.clear(false);
+    try display.draw();
+
+    const display_writer = display.display.ctrl.writer();
+    var needle: []const u8 = "";
+    var results: ?NameSearcher.ResultList = null;
+    var choice: ?usize = null;
+    while (try display.update()) |event| {
+        const term_size = try display.display.ctrl.tui.getSize();
+        try display.clear(false);
+        switch (event) {
+            .Key => {
+                needle = display.getText();
+                if (needle.len > 0) {
+                    results = try searcher.search(needle);
+                } else {
+                    results = null;
+                }
+            },
+            .Enter => {
+                if (results) |rs| {
+                    const start = rs.results.len -| max_rows;
+                    const slice = rs.results[start..];
+                    const index = slice.len - display.selected_index - 1;
+                    choice = slice[index].item.index;
+                    break;
+                }
+            },
+            else => {},
+        }
+
+        if (results != null and results.?.results.len > 0) {
+            const rs = results.?;
+            const rd = display.resultConfiguration(
+                rs.results.len,
+                max_rows,
+            );
+
+            for (0..max_rows) |i| {
+                try display.moveAndClear(i);
+                if (i == rd.row) {
+                    try color.GREEN.bold().write(display_writer, " >> ", .{});
+                } else {
+                    try display_writer.writeAll("    ");
+                }
+
+                if (i >= rd.first_row) {
+                    const res = rs.results[i + rd.start - rd.first_row];
+                    const score: usize = if (res.score) |s| @intCast(@abs(s)) else 0;
+                    try color.DIM.write(
+                        display_writer,
+                        "[{d: >4}] ",
+                        .{score},
+                    );
+                    _ = try res.printMatched(
+                        display_writer,
+                        14,
+                        term_size.ws_col,
+                    );
+                }
+            }
+        }
+
+        try display.draw();
+    }
+
+    // cleanup
+    try display.cleanup();
+
+    if (choice) |c| {
+        const note = dir.info.notes[c];
+        try editNote(writer, allocator, root, note, &dir, self.opts, opts);
+    }
 }
 
 fn editElseMaybeCreate(
