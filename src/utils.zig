@@ -5,6 +5,49 @@ const Tasklist = @import("topology/Tasklist.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
 
+/// Prompt the user yes or no and return their choice. Default no.
+pub fn promptNo(
+    allocator: std.mem.Allocator,
+    writer: anytype,
+    comptime fmt: []const u8,
+    args: anytype,
+) !bool {
+    try writer.print(fmt ++ "\nyes/[no]: ", args);
+    const choice = try issuePrompt(allocator, writer);
+    return choice orelse false;
+}
+/// Prompt the user yes or no and return their choice. Defaults yes.
+pub fn promptYes(
+    allocator: std.mem.Allocator,
+    writer: anytype,
+    comptime fmt: []const u8,
+    args: anytype,
+) !bool {
+    try writer.print(fmt ++ "\n[yes]/no: ", args);
+    const choice = try issuePrompt(allocator, writer);
+    return choice orelse true;
+}
+
+fn issuePrompt(
+    allocator: std.mem.Allocator,
+    writer: anytype,
+) !?bool {
+    var stdin = std.io.getStdIn().reader();
+    const input = try stdin.readUntilDelimiterOrEofAlloc(
+        allocator,
+        '\n',
+        1024,
+    );
+    defer if (input) |inp| allocator.free(inp);
+
+    if (input) |inp| {
+        _ = try writer.writeAll("\n");
+        if (std.mem.eql(u8, inp, "yes")) return true;
+        if (std.mem.eql(u8, inp, "no")) return false;
+    }
+    return null;
+}
+
 /// Get the index pointing to the end of the current slice returned by a
 /// standard library split iterator
 pub fn getSplitIndex(itt: std.mem.SplitIterator(u8, .scalar)) usize {

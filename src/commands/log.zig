@@ -5,6 +5,8 @@ const utils = @import("../utils.zig");
 
 const commands = @import("../commands.zig");
 const Root = @import("../topology/Root.zig");
+const Editor = @import("../Editor.zig");
+const BlockPrinter = @import("../printers.zig").BlockPrinter;
 
 const Self = @This();
 
@@ -15,13 +17,16 @@ pub const long_help =
     \\notes in that they are single, short lines or items, a literal
     \\log file of your day. For longer form daily notes, use the 'edit' command.
     \\Entries support the standard infix tagging (i.e. @tag).
+    \\
+    \\If writing in the editor, everything will be truncated onto one line
+    \\except for @tags. Tags on a line without any other text will be treated as
+    \\appended on the CLI.
 ;
 
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "text",
-        .help = "The text to log for the entry.",
-        .required = true,
+        .help = "The text to log for the entry. If blank will open editor for editing notes.",
     },
     .{
         .arg = "-j/--journal name",
@@ -72,7 +77,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     // load the topology
     try root.load();
@@ -89,22 +94,141 @@ pub fn execute(
         unreachable;
     };
 
+    if (self.args.text) |t| {
+        try addEntryToJournal(allocator, t, self.tags, root, &j, writer);
+    } else {
+        const im_writer = std.io.getStdOut().writer();
+        var result = try fromEditor(allocator);
+        defer result.deinit();
+
+        if (result.text.len == 0) {
+            try im_writer.writeAll("No text given. Nothing written to journal.\n");
+            return;
+        }
+
+        const tdl = try root.getTagDescriptorList();
+        var bprinter = BlockPrinter.init(allocator, .{
+            .tag_descriptors = tdl.tags,
+            .pretty = !opts.piped,
+        });
+        defer bprinter.deinit();
+
+        try bprinter.addBlock("Entry parsed:\n\n", .{});
+        try bprinter.addFormatted(.Item, "{s}\n-- ", .{result.text}, .{});
+        for (result.tags) |tag| {
+            try bprinter.addFormatted(.Item, "{s} ", .{tag}, .{});
+        }
+        try bprinter.drain(im_writer);
+
+        try im_writer.writeByte('\n');
+
+        if (try utils.promptYes(
+            allocator,
+            im_writer,
+            "Add entry to journal '{s}'?",
+            .{j.descriptor.name},
+        )) {
+            try addEntryToJournal(
+                allocator,
+                result.text,
+                result.tags,
+                root,
+                &j,
+                writer,
+            );
+        }
+    }
+}
+
+const LogInput = struct {
+    arena: std.heap.ArenaAllocator,
+    tags: []const []const u8,
+    text: []const u8,
+
+    pub fn deinit(self: *LogInput) void {
+        self.arena.deinit();
+        self.* = undefined;
+    }
+};
+
+fn onlyTags(content: []const u8) bool {
+    var word_itt = std.mem.tokenize(u8, content, " ");
+    while (word_itt.next()) |tkn| {
+        if (tkn[0] != '@') return false;
+    }
+    return true;
+}
+
+fn fromEditor(allocator: std.mem.Allocator) !LogInput {
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+    const alloc = arena.allocator();
+
+    const input = try editor.editTemporaryContent(
+        alloc,
+        "",
+    );
+
+    var tag_list = std.ArrayList([]const u8).init(alloc);
+    defer tag_list.deinit();
+
+    var text_list = std.ArrayList(u8).init(alloc);
+    defer text_list.deinit();
+
+    var itt = std.mem.tokenize(u8, input, "\n");
+    var on_tags: bool = false;
+    while (itt.next()) |line| {
+        const content = std.mem.trim(u8, line, " ");
+        if (content[0] == '@' and onlyTags(content)) {
+            on_tags = true;
+            var word_itt = std.mem.tokenize(u8, content, " ");
+            while (word_itt.next()) |tkn| {
+                try tag_list.append(tkn);
+            }
+            break;
+        }
+
+        if (on_tags) {
+            return error.InvalidTag;
+        }
+        try text_list.appendSlice(content);
+        try text_list.append(' ');
+    }
+
+    return .{
+        .arena = arena,
+        .tags = try tag_list.toOwnedSlice(),
+        .text = try text_list.toOwnedSlice(),
+    };
+}
+
+fn addEntryToJournal(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    e_tags: []const []const u8,
+    root: *Root,
+    j: *Root.Journal,
+    writer: anytype,
+) !void {
     root.markModified(j.descriptor, .CollectionJournal);
 
     const entry_tags = try utils.parseAndAssertValidTags(
         allocator,
         root,
-        self.args.text,
-        self.tags,
+        text,
+        e_tags,
     );
     defer allocator.free(entry_tags);
-    const day = try j.addNewEntryFromText(self.args.text, entry_tags);
+    const day = try j.addNewEntryFromText(text, entry_tags);
 
     try root.writeChanges();
     try j.writeDays();
 
     try writer.print(
-        "Written entry to '{s}' in journal '{s}'\n",
-        .{ day.name, j.descriptor.name },
+        "Written entry {s} in journal '{s}'\n",
+        .{ try day.created.formatDateTime(), j.descriptor.name },
     );
 }

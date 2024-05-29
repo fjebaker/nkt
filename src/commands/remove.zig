@@ -51,7 +51,7 @@ pub fn execute(
 
     switch (item) {
         .Entry => |*e| {
-            if (try prompt(
+            if (try utils.promptNo(
                 allocator,
                 writer,
                 "Remove entry '{s}' in journal '{s}'?",
@@ -63,7 +63,7 @@ pub fn execute(
             }
         },
         .Day => |*d| {
-            if (try prompt(
+            if (try utils.promptNo(
                 allocator,
                 writer,
                 "Remove ENTIRE day '{s}' in journal '{s}'?",
@@ -79,7 +79,7 @@ pub fn execute(
             }
         },
         .Task => |*t| {
-            if (try prompt(
+            if (try utils.promptNo(
                 allocator,
                 writer,
                 "Remove task '{s}' (/{x}) in tasklist '{s}'?",
@@ -95,7 +95,7 @@ pub fn execute(
             }
         },
         .Note => |*n| {
-            if (try prompt(
+            if (try utils.promptNo(
                 allocator,
                 writer,
                 "Remove note '{s}' in directory '{s}'?",
@@ -113,26 +113,4 @@ pub fn execute(
         // TODO: implement these
         .Collection => {},
     }
-}
-
-fn prompt(
-    allocator: std.mem.Allocator,
-    writer: anytype,
-    comptime fmt: []const u8,
-    args: anytype,
-) !bool {
-    try writer.print(fmt ++ "\nyes/[no]: ", args);
-
-    var stdin = std.io.getStdIn().reader();
-    const input = try stdin.readUntilDelimiterOrEofAlloc(
-        allocator,
-        '\n',
-        1024,
-    );
-    defer if (input) |inp| allocator.free(inp);
-
-    if (input) |inp| {
-        _ = try writer.writeAll("\n");
-        return std.mem.eql(u8, inp, "yes");
-    } else return false;
 }
