@@ -39,8 +39,8 @@ pub fn loggerFn(
 ) void {
     const prefix = "[" ++ comptime level.asText() ++ "]: ";
     // Print the message to stderr, silently ignoring any errors
-    std.debug.getStderrMutex().lock();
-    defer std.debug.getStderrMutex().unlock();
+    std.debug.lockStdErr();
+    defer std.debug.unlockStdErr();
     const stderr = std.io.getStdErr();
     const writer = stderr.writer();
 

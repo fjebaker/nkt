@@ -328,15 +328,15 @@ fn runCommand(
         .{ cwd, cmd },
     );
 
-    var proc = std.ChildProcess.init(
+    var proc = std.process.Child.init(
         cmd,
         allocator,
     );
 
     proc.cwd = cwd;
-    proc.stdin_behavior = std.ChildProcess.StdIo.Inherit;
-    proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
-    proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+    proc.stdin_behavior = std.process.Child.StdIo.Inherit;
+    proc.stdout_behavior = std.process.Child.StdIo.Inherit;
+    proc.stderr_behavior = std.process.Child.StdIo.Inherit;
 
     try proc.spawn();
 

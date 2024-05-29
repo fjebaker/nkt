@@ -4,28 +4,28 @@
     .version = "0.2.0",
     .dependencies = .{
         .time = .{
-            .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
-            .hash = "122038b4b5df08d2af6daf81e5f18d4c244d807c9323224db826cc107ce3894f6fa9",
+            .url = "https://github.com/fjebaker/zig-datetime/archive/master.tar.gz",
+            .hash = "1220f7f4a9210f6ce3949446276566b0a22775e85dc6b81daf7aae55e0ec5588f4dc",
         },
         .chrono = .{
             .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
-            .hash = "1220e9cc30b0fb9a096fc4d65000071e1b46fd3de7310206560336268ff0a55e7e26",
+            .hash = "1220d4ccf7327fd4ed741980ee1312d5f251db0af0f9d6ddde354d6b0d12f80d0e73",
         },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
-            .hash = "1220623c42ffb9f78fdd017f10e3ba2291210965893b22efc062f4f24d7ad306651b",
+            .hash = "1220d21d53393ee55f3f66f11181622db7551bfb94f3f526457ad0cef850415ab248",
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
-            .hash = "1220fddbe569e7ff44d4fa48738bc7030ccdca34e52785b0293259327d36c326e108",
+            .hash = "12208d9abdd3ae73d733eb9bceb1f2d44d7eb6825004ffd8ef1d547dce82191fe228",
         },
         .termui = .{
             .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
-            .hash = "12201bcd34bfab98a1b02c97bee8b9727a336bdc4a62c8417a084d63eaf81b8fbf5d",
+            .hash = "12201642c68e4e93dccaacd652bb4a5cde2a27ed5ed9878a67ed05981dcd9df7976a",
         },
         .fuzzig = .{
             .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
-            .hash = "1220214dfb9a0806d9c8a059beb9e3b07811fd138cd5baeb9d1da432588920a084bf",
+            .hash = "122019f077d09686b1ec47928ca2b4bf264422f3a27afc5b49dafb0129a4ceca0d01",
         },
     },
 }

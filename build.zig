@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub fn addTracy(step: *std.Build.Step.Compile) !void {
+pub fn addTracy(b: *std.Build, step: *std.Build.Step.Compile) !void {
     step.want_lto = false;
     step.addCSourceFile(
         .{
-            .file = .{ .path = "../tracy/public/TracyClient.cpp" },
+            .file = b.path("../tracy/public/TracyClient.cpp"),
             .flags = &.{
                 "-DTRACY_ENABLE=1",
                 "-fno-sanitize=undefined",
@@ -48,7 +48,7 @@ pub fn build(b: *std.Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "nkt",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -66,7 +66,7 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("fuzzig", fuzzig);
 
     if (tracy) {
-        try addTracy(exe);
+        try addTracy(b, exe);
     }
 
     b.installArtifact(exe);
@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) !void {
 
     const unit_tests = b.addTest(.{
         .name = "test-nkt",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });

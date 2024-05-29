@@ -36,24 +36,24 @@ const Git = struct {
         };
     }
 
-    fn setupProcess(git: *Git, proc: *std.ChildProcess) void {
+    fn setupProcess(git: *Git, proc: *std.process.Child) void {
         proc.env_map = &git.env_map;
         proc.cwd = git.root_dir;
 
-        proc.stdin_behavior = std.ChildProcess.StdIo.Inherit;
-        proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
-        proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+        proc.stdin_behavior = std.process.Child.StdIo.Inherit;
+        proc.stdout_behavior = std.process.Child.StdIo.Inherit;
+        proc.stderr_behavior = std.process.Child.StdIo.Inherit;
     }
 
     pub fn addAllCommit(git: *Git, message: []const u8) !void {
-        var add_proc = std.ChildProcess.init(
+        var add_proc = std.process.Child.init(
             &.{ "git", "add", "." },
             git.mem.child_allocator,
         );
         git.setupProcess(&add_proc);
         _ = try add_proc.spawnAndWait();
 
-        var commit_proc = std.ChildProcess.init(
+        var commit_proc = std.process.Child.init(
             &.{ "git", "commit", "-m", message },
             git.mem.child_allocator,
         );
@@ -62,7 +62,7 @@ const Git = struct {
     }
 
     pub fn push(git: *Git) !void {
-        var push_proc = std.ChildProcess.init(
+        var push_proc = std.process.Child.init(
             &.{ "git", "push", "origin", "main" },
             git.mem.child_allocator,
         );

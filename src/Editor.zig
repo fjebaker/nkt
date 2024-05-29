@@ -44,14 +44,14 @@ fn editWithArgs(
     const all_args = try assemble_args(self.allocator, self.editor, filename, args);
     defer self.allocator.free(all_args);
 
-    var proc = std.ChildProcess.init(
+    var proc = std.process.Child.init(
         all_args,
         self.allocator,
     );
 
-    proc.stdin_behavior = std.ChildProcess.StdIo.Inherit;
-    proc.stdout_behavior = std.ChildProcess.StdIo.Inherit;
-    proc.stderr_behavior = std.ChildProcess.StdIo.Inherit;
+    proc.stdin_behavior = std.process.Child.StdIo.Inherit;
+    proc.stdout_behavior = std.process.Child.StdIo.Inherit;
+    proc.stderr_behavior = std.process.Child.StdIo.Inherit;
 
     try proc.spawn();
     const term = try proc.wait();
