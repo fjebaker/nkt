@@ -82,6 +82,13 @@ pub const SearchDisplay = struct {
         try self.display.clear(flush);
     }
 
+    /// Utility method to cleanup the screen
+    pub fn cleanup(self: *SearchDisplay) !void {
+        try self.clear(false);
+        try self.display.moveToRow(0);
+        try self.display.draw();
+    }
+
     /// Draw the display
     pub fn draw(self: *SearchDisplay) !void {
         try self.display.moveToEnd();
@@ -109,6 +116,45 @@ pub const SearchDisplay = struct {
         return self.text[0..self.text_index];
     }
 
+    pub const ResultDisplayConfig = struct {
+        /// The index into the array which represents the current selected
+        index: usize,
+        /// The offset to find items when drawing results into rows
+        start: usize,
+        /// The row which has the currently selected
+        row: usize,
+        /// The index of the first row from the top (used to workout where to
+        /// start drawing from)
+        first_row: usize,
+    };
+
+    /// Get information about how to print the results
+    pub fn resultConfiguration(
+        self: *SearchDisplay,
+        results_len: usize,
+        max_result_rows: usize,
+    ) ResultDisplayConfig {
+        const start = results_len -| max_result_rows;
+        const slice_len = results_len -| start;
+        std.debug.assert(slice_len > 0);
+
+        const first_row = max_result_rows -| slice_len;
+
+        self.setMaxSelection(slice_len - 1);
+
+        // offset which row we are pointing at
+        const index = slice_len - self.selected_index - 1;
+        const selected_row = index + first_row;
+
+        return .{
+            .index = index + start,
+            .start = start,
+            .first_row = first_row,
+            .row = selected_row,
+        };
+    }
+
+    /// Set the cursor to the maximum selectable
     pub fn setMaxSelection(self: *SearchDisplay, max: usize) void {
         self.max_selection = max;
         self.selected_index = @min(max, self.selected_index);

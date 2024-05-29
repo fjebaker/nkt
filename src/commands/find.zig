@@ -5,6 +5,8 @@ const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
 
+const tracy = @import("../tracy.zig");
+
 const commands = @import("../commands.zig");
 const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
@@ -151,7 +153,11 @@ pub fn doSearchLoop(
     var results: ?searching.ChunkMachine.SearcherType.ResultList = null;
     var runtime: u64 = 0;
     var choice: ?Result = null;
+    tracy.frameMarkNamed("setup_completed");
     while (try display.update()) |event| {
+        var t_ctx = tracy.trace(@src());
+        defer t_ctx.end();
+
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
             (term_size.ws_col * self.preview_size),
@@ -183,33 +189,26 @@ pub fn doSearchLoop(
             else => {},
         }
 
-        if (results) |rs| {
-            const start = rs.results.len -| max_rows;
-            const slice = rs.results[start..];
-            if (slice.len == 0) continue;
+        if (results != null and results.?.results.len > 0) {
+            const rs = results.?;
+            const rd = display.resultConfiguration(
+                rs.results.len,
+                max_rows,
+            );
 
-            const first_row = max_rows -| slice.len;
-
-            display.setMaxSelection(slice.len - 1);
-
-            // offset which row we are pointing at
-            const index = slice.len - display.selected_index - 1;
-            const selected_row = index + first_row;
-            const selected_item = slice[index].item.*;
+            const s_result = rs.results[rd.index];
+            const selected_item = s_result.item.*;
 
             const best_match =
-                if (slice.len > 0)
                 chunk_machine.getValueFromChunk(
-                    selected_item,
-                )
-            else
-                "";
+                selected_item,
+            );
 
             var preview = searching.previewDisplay(
                 best_match,
                 selected_item.line_no,
-                slice[index].matches,
-                slice[index].item.start,
+                s_result.matches,
+                s_result.item.start,
                 preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
 
@@ -219,14 +218,14 @@ pub fn doSearchLoop(
                     preview_columns -
                     PREVIEW_SIZE_PADDING;
 
-                if (i == selected_row) {
+                if (i == rd.row) {
                     try color.GREEN.bold().write(display_writer, " >> ", .{});
                 } else {
                     try display_writer.writeAll("    ");
                 }
 
-                if (i >= first_row) {
-                    const res = slice[i - first_row];
+                if (i >= rd.first_row) {
+                    const res = rs.results[i + rd.start - rd.first_row];
                     if (res.score) |scr| {
                         const score: usize = @intCast(@abs(scr));
                         try color.DIM.write(
@@ -281,9 +280,7 @@ pub fn doSearchLoop(
     }
 
     // cleanup
-    try display.clear(false);
-    try display.display.moveToRow(0);
-    try display.display.draw();
+    try display.cleanup();
 
     return choice;
 }
