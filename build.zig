@@ -21,6 +21,9 @@ pub fn build(b: *std.Build) !void {
     const coverage = b.option(bool, "coverage", "Generate test coverage") orelse false;
     const tracy = b.option(bool, "tracy", "Compile against tracy client") orelse false;
 
+    var opts = b.addOptions();
+    opts.addOption(bool, "tracy_enabled", tracy);
+
     const time = b.dependency("time", .{
         .target = target,
         .optimize = optimize,
@@ -64,6 +67,7 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("clippy", clippy);
     exe.root_module.addImport("termui", termui);
     exe.root_module.addImport("fuzzig", fuzzig);
+    exe.root_module.addImport("options", opts.createModule());
 
     if (tracy) {
         try addTracy(b, exe);
