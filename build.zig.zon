@@ -4,7 +4,7 @@
     .version = "0.2.0",
     .dependencies = .{
         .time = .{
-            .url = "https://github.com/fjebaker/zig-datetime/archive/master.tar.gz",
+            .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
             .hash = "1220f7f4a9210f6ce3949446276566b0a22775e85dc6b81daf7aae55e0ec5588f4dc",
         },
         .chrono = .{

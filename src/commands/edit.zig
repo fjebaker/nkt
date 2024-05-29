@@ -101,12 +101,14 @@ pub fn execute(
             self.opts,
         );
     } else {
-        try self.searchFileNames(
+        var dir = (try root.getDirectory(root.info.default_directory)).?;
+        const note = try searchFileNames(
+            &dir,
             allocator,
-            root,
-            writer,
-            opts,
         );
+        if (note) |n| {
+            try editNote(writer, allocator, root, n, &dir, self.opts, opts);
+        }
     }
 }
 
@@ -116,14 +118,9 @@ const SearchKey = struct {
 const NameSearcher = searching.Searcher(SearchKey);
 
 fn searchFileNames(
-    self: *Self,
+    dir: *const Root.Directory,
     allocator: std.mem.Allocator,
-    root: *Root,
-    writer: anytype,
-    opts: commands.Options,
-) !void {
-    var dir = (try root.getDirectory(root.info.default_directory)).?;
-
+) !?Root.Directory.Note {
     const search_items = try allocator.alloc(
         []const u8,
         dir.info.notes.len,
@@ -239,9 +236,9 @@ fn searchFileNames(
     try display.cleanup();
 
     if (choice) |c| {
-        const note = dir.info.notes[c];
-        try editNote(writer, allocator, root, note, &dir, self.opts, opts);
+        return dir.info.notes[c];
     }
+    return null;
 }
 
 fn editElseMaybeCreate(
