@@ -166,9 +166,23 @@ fn searchFileNames(
         const term_size = try display.display.ctrl.tui.getSize();
         try display.clear(false);
         switch (event) {
-            .Key => {
+            .Tab, .Key => {
                 needle = display.getText();
                 if (needle.len > 0) {
+                    if (event == .Tab and results != null) {
+                        // complete up to the nearest dot of the current text
+                        const rs = results.?;
+                        const start = rs.results.len -| max_rows;
+                        const slice = rs.results[start..];
+                        const index = slice.len - display.selected_index - 1;
+                        const ci = slice[index].string;
+                        const j =
+                            std.mem.indexOfScalarPos(u8, ci, needle.len, '.') orelse
+                            ci.len;
+                        std.mem.copyForwards(u8, &display.text, ci[0..j]);
+                        display.text_index = j;
+                        needle = display.getText();
+                    }
                     results = try searcher.search(needle);
                 } else {
                     results = null;

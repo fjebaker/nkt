@@ -164,6 +164,7 @@ pub const SearchDisplay = struct {
         Cursor,
         Key,
         Enter,
+        Tab,
     };
 
     pub fn update(self: *SearchDisplay) !?Event {
@@ -194,6 +195,7 @@ pub const SearchDisplay = struct {
                         break;
                     },
                     Key.Enter => return .Enter,
+                    Key.Tab => return .Tab,
                     Key.Backspace => {
                         if (self.text_index > 0) {
                             self.text_index -|= 1;
