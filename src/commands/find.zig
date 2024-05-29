@@ -191,10 +191,7 @@ pub fn doSearchLoop(
 
         if (results != null and results.?.results.len > 0) {
             const rs = results.?;
-            const rd = display.resultConfiguration(
-                rs.results.len,
-                max_rows,
-            );
+            const rd = display.resultConfiguration(rs.results.len);
 
             const s_result = rs.results[rd.index];
             const selected_item = s_result.item.*;

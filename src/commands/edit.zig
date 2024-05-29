@@ -151,14 +151,29 @@ fn searchFileNames(
     var display = try cli.SearchDisplay.init(10);
     defer display.deinit();
     const max_rows = display.display.max_rows - 1;
+    display.max_rows = max_rows;
+    const display_writer = display.display.ctrl.writer();
 
     try display.clear(false);
+    var row_itt = display.rowIterator(Root.Directory.Note, dir.info.notes);
+    while (try row_itt.next()) |ri| {
+        if (ri.selected) {
+            try color.GREEN.bold().write(display_writer, " >> ", .{});
+        } else {
+            try display_writer.writeAll("    ");
+        }
+        try color.DIM.write(
+            display_writer,
+            "[{d: >4}] {s}",
+            .{ 0, ri.item.name },
+        );
+    }
     try display.draw();
 
-    const display_writer = display.display.ctrl.writer();
     var needle: []const u8 = "";
     var results: ?NameSearcher.ResultList = null;
     var choice: ?usize = null;
+
     while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
         try display.clear(false);
@@ -167,12 +182,8 @@ fn searchFileNames(
                 needle = display.getText();
                 if (needle.len > 0) {
                     if (event == .Tab and results != null) {
-                        // complete up to the nearest dot of the current text
-                        const rs = results.?;
-                        const start = rs.results.len -| max_rows;
-                        const slice = rs.results[start..];
-                        const index = slice.len - display.selected_index - 1;
-                        const ci = slice[index].string;
+                        const rs = results.?.results;
+                        const ci = rs[display.getSelected(rs.len)].string;
                         const j =
                             std.mem.indexOfScalarPos(u8, ci, needle.len, '.') orelse
                             ci.len;
@@ -181,16 +192,21 @@ fn searchFileNames(
                         needle = display.getText();
                     }
                     results = try searcher.search(needle);
+                    if (results.?.results.len == 0) {
+                        results = null;
+                    }
                 } else {
                     results = null;
                 }
             },
             .Enter => {
                 if (results) |rs| {
-                    const start = rs.results.len -| max_rows;
-                    const slice = rs.results[start..];
-                    const index = slice.len - display.selected_index - 1;
-                    choice = slice[index].item.index;
+                    choice = rs.results[
+                        display.getSelected(rs.results.len)
+                    ].item.index;
+                    break;
+                } else if (display.getText().len == 0) {
+                    choice = display.getSelected(dir.info.notes.len);
                     break;
                 }
             },
@@ -198,34 +214,44 @@ fn searchFileNames(
         }
 
         if (results != null and results.?.results.len > 0) {
-            const rs = results.?;
-            const rd = display.resultConfiguration(
-                rs.results.len,
-                max_rows,
+            var tmp_row_itt = display.rowIterator(
+                NameSearcher.Result,
+                results.?.results,
             );
-
-            for (0..max_rows) |i| {
-                try display.moveAndClear(i);
-                if (i == rd.row) {
+            while (try tmp_row_itt.next()) |ri| {
+                if (ri.selected) {
                     try color.GREEN.bold().write(display_writer, " >> ", .{});
                 } else {
                     try display_writer.writeAll("    ");
                 }
-
-                if (i >= rd.first_row) {
-                    const res = rs.results[i + rd.start - rd.first_row];
-                    const score: usize = if (res.score) |s| @intCast(@abs(s)) else 0;
-                    try color.DIM.write(
-                        display_writer,
-                        "[{d: >4}] ",
-                        .{score},
-                    );
-                    _ = try res.printMatched(
-                        display_writer,
-                        14,
-                        term_size.ws_col,
-                    );
+                const score: usize = if (ri.item.score) |s| @intCast(@abs(s)) else 0;
+                try color.DIM.write(
+                    display_writer,
+                    "[{d: >4}] ",
+                    .{score},
+                );
+                _ = try ri.item.printMatched(
+                    display_writer,
+                    14,
+                    term_size.ws_col,
+                );
+            }
+        } else if (display.getText().len == 0) {
+            var tmp_row_itt = display.rowIterator(
+                Root.Directory.Note,
+                dir.info.notes,
+            );
+            while (try tmp_row_itt.next()) |ri| {
+                if (ri.selected) {
+                    try color.GREEN.bold().write(display_writer, " >> ", .{});
+                } else {
+                    try display_writer.writeAll("    ");
                 }
+                try color.DIM.write(
+                    display_writer,
+                    "[{d: >4}] {s}",
+                    .{ 0, ri.item.name },
+                );
             }
         }
 

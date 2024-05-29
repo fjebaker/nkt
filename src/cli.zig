@@ -51,12 +51,71 @@ pub const Commands = Clippy.Commands;
 
 pub const comptimeWrap = clippy.comptimeWrap;
 
+pub fn RowIterator(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const RowInfo = struct {
+            item: T,
+            row: usize,
+            selected: bool,
+        };
+
+        display: *SearchDisplay,
+        items: []const T,
+        cfg: ResultDisplayConfig,
+        row: usize = 0,
+
+        fn init(display: *SearchDisplay, items: []const T) Self {
+            return .{
+                .display = display,
+                .items = items,
+                .cfg = display.resultConfiguration(items.len),
+            };
+        }
+
+        /// Get the next row
+        pub fn next(self: *Self) !?RowInfo {
+            if (self.row >= self.display.max_rows) return null;
+            try self.display.moveAndClear(self.row);
+
+            while (self.row < self.cfg.first_row) {
+                self.row += 1;
+                try self.display.moveAndClear(self.row);
+            }
+
+            const row_info: RowInfo = .{
+                .item = self.items[
+                    self.row + self.cfg.start - self.cfg.first_row
+                ],
+                .row = self.row,
+                .selected = self.row == self.cfg.row,
+            };
+            self.row += 1;
+            return row_info;
+        }
+    };
+}
+
+pub const ResultDisplayConfig = struct {
+    /// The index into the array which represents the current selected
+    index: usize,
+    /// The offset to find items when drawing results into rows
+    start: usize,
+    /// The row which has the currently selected
+    row: usize,
+    /// The index of the first row from the top (used to workout where to
+    /// start drawing from)
+    first_row: usize,
+};
+
 pub const SearchDisplay = struct {
     display: termui.TermUI.RowDisplay,
     text: [128]u8 = undefined,
     text_index: usize = 0,
     selected_index: usize = 0,
     max_selection: usize = 0,
+    max_rows: usize = 10,
 
     pub fn init(rows: usize) !SearchDisplay {
         var tui = try termui.TermUI.init(
@@ -116,29 +175,16 @@ pub const SearchDisplay = struct {
         return self.text[0..self.text_index];
     }
 
-    pub const ResultDisplayConfig = struct {
-        /// The index into the array which represents the current selected
-        index: usize,
-        /// The offset to find items when drawing results into rows
-        start: usize,
-        /// The row which has the currently selected
-        row: usize,
-        /// The index of the first row from the top (used to workout where to
-        /// start drawing from)
-        first_row: usize,
-    };
-
     /// Get information about how to print the results
     pub fn resultConfiguration(
         self: *SearchDisplay,
         results_len: usize,
-        max_result_rows: usize,
     ) ResultDisplayConfig {
-        const start = results_len -| max_result_rows;
+        const start = results_len -| self.max_rows;
         const slice_len = results_len -| start;
         std.debug.assert(slice_len > 0);
 
-        const first_row = max_result_rows -| slice_len;
+        const first_row = self.max_rows -| slice_len;
 
         self.setMaxSelection(slice_len - 1);
 
@@ -152,6 +198,25 @@ pub const SearchDisplay = struct {
             .first_row = first_row,
             .row = selected_row,
         };
+    }
+
+    /// Get an iterator for drawing rows easily
+    pub fn rowIterator(
+        self: *SearchDisplay,
+        comptime T: type,
+        items: []const T,
+    ) RowIterator(T) {
+        return RowIterator(T).init(self, items);
+    }
+
+    /// Get the index of the currently selected item from an array with `len`
+    pub fn getSelected(
+        self: *const SearchDisplay,
+        len: usize,
+    ) usize {
+        const start = len -| self.max_rows;
+        const remaining = len - start;
+        return start + remaining - self.selected_index - 1;
     }
 
     /// Set the cursor to the maximum selectable
