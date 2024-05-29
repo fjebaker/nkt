@@ -1,6 +1,7 @@
 const std = @import("std");
 const termui = @import("termui");
 const fuzzig = @import("fuzzig");
+const tracy = @import("tracy.zig");
 
 const color = @import("colors.zig");
 const utils = @import("utils.zig");
@@ -128,6 +129,8 @@ pub fn Searcher(comptime Item: type) type {
         const ThreadPool = ThreadPoolT(Result, ThreadCtx, threadWork);
 
         fn threadWork(result: *Result, ctx: *ThreadCtx) void {
+            var t_ctx = tracy.trace(@src());
+            defer t_ctx.end();
             const r = ctx.finder.scoreMatches(result.string, ctx.needle);
             result.num_matches = r.matches.len;
             std.mem.copyBackwards(usize, result.matches, r.matches);
@@ -214,6 +217,10 @@ pub fn Searcher(comptime Item: type) type {
 
         /// Search for needle in all strings
         pub fn search(self: *Self, needle: []const u8) !ResultList {
+            tracy.frameMarkNamed("search");
+            var t_ctx = tracy.trace(@src());
+            defer t_ctx.end();
+
             for (self.pool.ctxs) |*ctx| ctx.needle = needle;
 
             var timer = try std.time.Timer.start();
@@ -222,7 +229,11 @@ pub fn Searcher(comptime Item: type) type {
             const runtime = timer.lap();
 
             self.previous_needle = needle;
-            std.sort.heap(Result, self.result_buffer, {}, Result.lessThan);
+            {
+                var t2_ctx = tracy.traceNamed(@src(), "sorting");
+                defer t2_ctx.end();
+                std.sort.heap(Result, self.result_buffer, {}, Result.lessThan);
+            }
             return ResultList.nonNull(self.result_buffer, runtime);
         }
     };
