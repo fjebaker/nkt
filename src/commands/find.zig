@@ -146,6 +146,7 @@ pub fn doSearchLoop(
     try display.draw();
 
     const max_rows = display.display.max_rows - 2;
+    display.max_rows = max_rows;
 
     const display_writer = display.display.ctrl.writer();
 
@@ -209,29 +210,30 @@ pub fn doSearchLoop(
                 preview_columns - PREVIEW_SIZE_PADDING - 14,
             );
 
-            for (0..max_rows) |i| {
-                try display.moveAndClear(i);
-                const max_len = term_size.ws_col -
-                    preview_columns -
-                    PREVIEW_SIZE_PADDING;
+            var tmp_row_itt = display.rowIterator(
+                Result,
+                results.?.results,
+            );
 
-                if (i == rd.row) {
-                    try color.GREEN.bold().write(display_writer, " >> ", .{});
-                } else {
-                    try display_writer.writeAll("    ");
-                }
+            const max_len = term_size.ws_col -
+                preview_columns -
+                PREVIEW_SIZE_PADDING;
 
-                if (i >= rd.first_row) {
-                    const res = rs.results[i + rd.start - rd.first_row];
-                    if (res.score) |scr| {
-                        const score: usize = @intCast(@abs(scr));
+            while (try tmp_row_itt.nextNoSkip()) |maybe_row| {
+                switch (maybe_row) {
+                    .row => |ri| {
+                        if (ri.selected) {
+                            try color.GREEN.bold().write(display_writer, " >> ", .{});
+                        } else {
+                            try display_writer.writeAll("    ");
+                        }
+                        const score: usize = if (ri.item.score) |s| @intCast(@abs(s)) else 0;
                         try color.DIM.write(
                             display_writer,
                             "[{d: >4}] ",
                             .{score},
                         );
-
-                        const written = try res.printMatched(
+                        const written = try ri.item.printMatched(
                             display_writer,
                             14,
                             max_len,
@@ -241,13 +243,19 @@ pub fn doSearchLoop(
                             ' ',
                             PREVIEW_SIZE_PADDING - 1 + max_len - written,
                         );
-                    }
-                } else {
-                    try display_writer.writeByteNTimes(
-                        ' ',
-                        PREVIEW_SIZE_PADDING - 1 + max_len + 7,
-                    );
+                    },
+                    .empty => {
+                        try display_writer.writeByteNTimes(
+                            ' ',
+                            PREVIEW_SIZE_PADDING - 1 + max_len + 7,
+                        );
+                    },
                 }
+
+                const i = switch (maybe_row) {
+                    .row => maybe_row.row.row,
+                    .empty => maybe_row.empty,
+                };
 
                 // preview
                 try display_writer.writeByte('|');

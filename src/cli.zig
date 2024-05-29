@@ -75,13 +75,13 @@ pub fn RowIterator(comptime T: type) type {
         }
 
         /// Get the next row
-        pub fn next(self: *Self) !?RowInfo {
+        pub fn nextNoSkip(self: *Self) !?union(enum) { row: RowInfo, empty: usize } {
             if (self.row >= self.display.max_rows) return null;
             try self.display.moveAndClear(self.row);
 
-            while (self.row < self.cfg.first_row) {
+            if (self.row < self.cfg.first_row) {
                 self.row += 1;
-                try self.display.moveAndClear(self.row);
+                return .{ .empty = self.row };
             }
 
             const row_info: RowInfo = .{
@@ -92,7 +92,18 @@ pub fn RowIterator(comptime T: type) type {
                 .selected = self.row == self.cfg.row,
             };
             self.row += 1;
-            return row_info;
+            return .{ .row = row_info };
+        }
+
+        /// Get the next row
+        pub fn next(self: *Self) !?RowInfo {
+            var item = (try self.nextNoSkip()) orelse
+                return null;
+            while (item == .empty) {
+                item = (try self.nextNoSkip()) orelse
+                    return null;
+            }
+            return item.row;
         }
     };
 }
