@@ -82,10 +82,8 @@ fn printExtendedHelp(
         if (field_correct) {
             try writer.print("Extended help for '{s}':\n\n", .{field.name});
 
-            const long = comptime cli.comptimeWrap(
-                @field(field.type, "long_help"),
-                .{},
-            );
+            const long = @field(field.type, "long_help");
+
             try writer.writeAll(long);
             try writer.writeAll("\n\n");
 

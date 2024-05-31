@@ -8,7 +8,20 @@ const Root = @import("../topology/Root.zig");
 const Self = @This();
 
 pub const short_help = "(Re)Initialize the home directory structure.";
-pub const long_help = short_help;
+pub const long_help =
+    \\(Re)Initialize the home directory structure.
+    \\
+    \\You can override where the home directory is with the `NKT_ROOT_DIR`
+    \\environment variable. Be sure to export it in your shell rc or profile file to
+    \\make the change permanent.
+    \\
+    \\Initializing will create a number of defaults: a directory "notes", a journal
+    \\"diary", a tasklist "todo".
+    \\
+    \\These can be changed later if desired. You must always have some defaults
+    \\defined so that nkt knows where to put things if you don't tell it otherwise.
+    \\
+;
 
 pub const arguments = cli.Arguments(&.{
     .{
