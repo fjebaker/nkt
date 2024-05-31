@@ -244,23 +244,27 @@ pub const SearchDisplay = struct {
         Ctrl: u8,
     };
 
+    fn selectDown(self: *SearchDisplay) Event {
+        self.selected_index -|= 1;
+        return .Cursor;
+    }
+
+    fn selectUp(self: *SearchDisplay) Event {
+        self.selected_index = @min(
+            self.selected_index + 1,
+            self.max_selection,
+        );
+        return .Cursor;
+    }
+
     pub fn update(self: *SearchDisplay) !?Event {
         while (true) {
             const inp = try self.display.ctrl.tui.nextInput();
             switch (inp) {
                 .char => |c| switch (c) {
                     Key.CtrlC, Key.CtrlD => return null,
-                    Key.CtrlJ => {
-                        self.selected_index -|= 1;
-                        return .Cursor;
-                    },
-                    Key.CtrlK => {
-                        self.selected_index = @min(
-                            self.selected_index + 1,
-                            self.max_selection,
-                        );
-                        return .Cursor;
-                    },
+                    Key.CtrlJ => return self.selectDown(),
+                    Key.CtrlK => return self.selectUp(),
                     // CtrlW
                     23 => {
                         const index = std.mem.lastIndexOfScalar(
@@ -290,6 +294,8 @@ pub const SearchDisplay = struct {
                         break;
                     },
                 },
+                .Up => return self.selectUp(),
+                .Down => return self.selectDown(),
                 else => {},
             }
         }
