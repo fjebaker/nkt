@@ -4,9 +4,11 @@ _A(nother) note taking solution for terminal enthusiasts._
 
 nkt is a command line tool for helping you track and build your notes, todo
 lists, habits, and more. nkt mixes a number of different note-taking idioms,
-with inspiration from applications like [Dendron](), [jrnl](), [vim-wiki]() and
-methods such as the [incremental note-taking method](), ["Dont break the
-chain"]() and [Zettelkasten]().
+with inspiration from applications like [Dendron](https://www.dendron.so/),
+[jrnl](https://github.com/jrnl-org/jrnl),
+[vim-wiki](https://github.com/vimwiki/vimwiki) and methods such as the
+incremental note-taking method, "Dont break the chain" and
+[Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten).
 
 Features:
 - Bring your own `$EDITOR`
@@ -85,31 +87,50 @@ Arguments:
 
 And that's it! You're all setup.
 
+### Shell completion
 
+nkt brings shell completion so you can use Tab to complete command line
+arguments, note names, even select specific entries from journals.
+
+There is shell completion for the following shells:
+
+- zsh:
+
+  Generate the completions file
+  ```
+  nkt completion > _nkt
+  ```
+  Then move the `_nkt` file into your zsh completion path (e.g. `~/.zsh_completions/`).
+
+- Sorry, I only really use `zsh` at the moment and writing completion files is not a hobby of mine.
 
 ## Reference
 
 General help:
 ```
 $ nkt help
-Help:
- - chains      Interact and print chains.
- - edit        Edit a note with EDITOR.
+
+Quick command reference:
+ - config      View and modify the configuration of nkt
+ - compile     Compile a note into various formats.
+ - chains      View and interact with habitual chains.
+ - edit        Edit a note or item in the editor.
  - find        Find in notes.
- - help        Print this help message.
- - import      Import a note, journal, or tasklist.
+ - help        Print this help message or help for other commands.
+ - import      Import a note.
  - init        (Re)Initialize the home directory structure.
- - list        List notes in various ways.
- - log         Quickly add a note to a journal from the command line
- - new         Create a new collection.
- - read        Display the contentes of notes in various ways
- - remove      Remove items from collections.
+ - list        List collections and other information in various ways.
+ - log         Quickly log something to a journal from the command line
+ - new         Create a new tag or collection.
+ - migrate     Migrate differing versions of nkt's topology
+ - read        Read notes, task details, and journals.
+ - remove      Remove items, tags, or entire collections themselves.
  - rename      Move or rename a note, directory, journal, or tasklist.
  - task        Add a task to a specified task list.
+ - select      Select an item or collection.
  - set         Modify attributes of entries, notes, chains, or tasks.
- - summary     Print various summaries.
  - sync        Sync root directory to remote git repository
- - completion  completion helper
+ - completion  Shell completion helper
 ```
 
 Extended help for a specific command may also be obtained:
@@ -141,18 +162,11 @@ When the `<what>` is a task list, the additional options are
      --details             also print details of the tasks
 ```
 
-### Shell completion
+### Tags
 
-nkt brings shell completion for the following shells:
+### Text compilers
 
-- zsh:
-
-  Generate the completions file
-  ```
-  nkt completion zsh > _nkt
-  ```
-  Then move the `_nkt` file into your zsh completion path (e.g. `~/.zsh_completions/`).
-
+### Semantic time
 
 ## Installation
 
@@ -162,18 +176,13 @@ Grab one of the binaries from the [release]() for your architecture:
 - Linux x86_64 (musl)
 - MacOS M1
 - MacOS Intel
-
-Requires a few additional command line tools that can be installed with your package manager of choice:
-
-```
-fzf ugrep glow
-```
-
-See [fzf](), [ugrep]().
+- I don't know how to Windows
 
 ### From source
 
-Clone this GitHub repostiory, and have [Zig]() installed. The latest version of nkt is built with Zig 0.12.0-dev.1647+325e0f5f0:
+Clone this GitHub repository, and have [Zig]() installed. nkt tracks the master
+branch of zig so the latest release should work, but just the definitive
+version can be found in the `.zigversion` file in this repository.
 
 ```bash
 git clone https://github.com/fjebaker/nkt \
