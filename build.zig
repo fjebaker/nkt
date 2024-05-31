@@ -99,6 +99,7 @@ pub fn build(b: *std.Build) !void {
     unit_tests.root_module.addImport("clippy", clippy);
     unit_tests.root_module.addImport("termui", termui);
     unit_tests.root_module.addImport("fuzzig", fuzzig);
+    unit_tests.root_module.addImport("options", opts.createModule());
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
@@ -112,4 +113,13 @@ pub fn build(b: *std.Build) !void {
     } else {
         test_step.dependOn(&run_unit_tests.step);
     }
+
+    //Build step to generate docs:
+    const docs_step = b.step("docs", "Generate docs");
+    const docs = exe.getEmittedDocs();
+    docs_step.dependOn(&b.addInstallDirectory(.{
+        .source_dir = docs,
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    }).step);
 }
