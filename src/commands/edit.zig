@@ -76,12 +76,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         null;
 
     if (args.new == false and args.ext != null) {
-        try cli.throwError(
+        return cli.throwError(
             cli.CLIErrors.InvalidFlag,
             "Cannot provide `--ext` without `--new`",
             .{},
         );
-        unreachable;
     }
 
     return .{
@@ -154,7 +153,7 @@ pub fn execute(
                 }
 
                 if (!noteNameValid(name)) {
-                    try cli.throwError(
+                    return cli.throwError(
                         error.InvalidName,
                         "Note name is invalid: '{s}'",
                         .{name},
@@ -433,12 +432,11 @@ fn editElseMaybeCreate(
                     d.journal.descriptor.name,
                     .CollectionDirectory,
                 ) orelse {
-                    try cli.throwError(
+                    return cli.throwError(
                         Root.Error.NoSuchCollection,
                         "Editing a day index as notes requires a directory of the same name as the journal ('{s}').",
                         .{d.journal.descriptor.name},
                     );
-                    unreachable;
                 };
 
                 const sub_selection: selections.Selection = .{
@@ -558,13 +556,13 @@ fn editElseMaybeCreate(
         } else {
             // make sure was trying to select a note
             if (selection.collection_type == null) {
-                try cli.throwError(
+                return cli.throwError(
                     Root.Error.NoSuchItem,
                     "Use `--new` to allow new items to be created.",
                     .{},
                 );
             } else {
-                try cli.throwError(
+                return cli.throwError(
                     Root.Error.NoSuchItem,
                     "Cannot create new item of selection type with edit.",
                     .{},
@@ -616,12 +614,11 @@ fn createNew(
             selection.selector.? == .ByIndex and
             !selection.collection_provided);
         if (ctype != .CollectionDirectory and !is_index) {
-            try cli.throwError(
+            return cli.throwError(
                 Error.InvalidEdit,
                 "Can only create new items with `edit` in directories ('{s}' is invalid).",
                 .{@tagName(ctype)},
             );
-            unreachable;
         }
     }
 
@@ -688,22 +685,20 @@ fn createNewNote(
     _: commands.Options,
 ) ![]const u8 {
     var dir = (try root.getDirectory(collection_name)) orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory by name '{s}' exists",
             .{collection_name},
         );
-        unreachable;
     };
 
     // assert the extension is a valid one
     if (!root.isKnownExtension(extension)) {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.UnknownExtension,
             "No text environment / compiler known for extension '{s}'. Consider adding one with `new`.",
             .{extension},
         );
-        unreachable;
     }
 
     const note = try dir.addNewNoteByName(

@@ -129,12 +129,11 @@ pub fn execute(
     const dir_name = self.directory orelse root.info.default_directory;
 
     var dir = (try root.getDirectory(dir_name)) orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory with name '{s}'",
             .{dir_name},
         );
-        unreachable;
     };
 
     if (self.asset) {
@@ -147,12 +146,11 @@ pub fn execute(
         try self.importAssets(allocator, writer, root, asset_dir, opts);
     } else {
         const nt = parseNoteType(self.note_type) catch {
-            try cli.throwError(
+            return cli.throwError(
                 Error.UnknownNoteType,
                 "Note type to import unknown: '{s}'",
                 .{dir_name},
             );
-            unreachable;
         };
 
         root.markModified(dir.descriptor, .CollectionDirectory);
@@ -208,12 +206,11 @@ fn importAssets(
             if (self.force) {
                 std.log.default.warn("Overwriting '{s}'", .{new_path});
             } else {
-                try cli.throwError(
+                return cli.throwError(
                     Error.AssetExists,
                     "File exists '{s}'",
                     .{new_path},
                 );
-                unreachable;
             }
         }
 
@@ -271,8 +268,7 @@ fn importNote(
         note_name,
         .{ .extension = ext },
     ) catch |err| {
-        try cli.throwError(err, "cannot import note.", .{});
-        unreachable;
+        return cli.throwError(err, "cannot import note.", .{});
     };
 
     if (self.move) {

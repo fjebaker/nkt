@@ -130,7 +130,7 @@ fn executeInternal(
                     }
                 }
             } else {
-                try cli.throwError(
+                return cli.throwError(
                     error.UnknownSelection,
                     "Invalid completion collection '{s}'",
                     .{collection},

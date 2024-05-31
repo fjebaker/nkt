@@ -378,28 +378,25 @@ pub const Selection = struct {
 fn reportResolveError(err: anyerror) !void {
     switch (err) {
         Error.AmbiguousSelection => {
-            try cli.throwError(
+            return cli.throwError(
                 err,
                 "Selection is not concrete enough to resolve to an item",
                 .{},
             );
-            unreachable;
         },
         Error.UnknownSelection => {
-            try cli.throwError(
+            return cli.throwError(
                 err,
                 "Selection is unknown.",
                 .{},
             );
-            unreachable;
         },
         Root.Error.NoSuchItem => {
-            try cli.throwError(
+            return cli.throwError(
                 err,
                 "Cannot find item.",
                 .{},
             );
-            unreachable;
         },
         else => {},
     }
@@ -768,12 +765,11 @@ fn addFlagsReportError(
         directory,
         tasklist,
     )) |info| {
-        try cli.throwError(
+        return cli.throwError(
             Error.IncompatibleSelection,
             "Item selected '{s}' but flag is for '{s}'.",
             .{ @tagName(info.has), @tagName(info.was_given) },
         );
-        unreachable;
     }
 }
 
@@ -785,23 +781,21 @@ fn addModifiersReportError(
         // assert we are selecting a journal or null
         if (selection.collection_type) |ct| {
             if (ct != .CollectionJournal) {
-                try cli.throwError(
+                return cli.throwError(
                     Error.IncompatibleSelection,
                     "Cannot select a time for collection type '{s}'",
                     .{@tagName(ct)},
                 );
-                unreachable;
             }
         }
 
         // assert the format of the time is okay
         if (!time.isTime(t)) {
-            try cli.throwError(
+            return cli.throwError(
                 cli.CLIErrors.BadArgument,
                 "Time is invalid format: '{s}' (needs to be 'HH:MM:SS')",
                 .{t},
             );
-            unreachable;
         }
         selection.modifiers.entry_time = t;
     }

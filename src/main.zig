@@ -66,6 +66,8 @@ fn handle_execution_error(writer: anytype, err: anyerror) !void {
     return err;
 }
 
+/// Get the home directory either from an environment variable or determine it
+/// relative to the user's home directory
 fn get_nkt_home_dir(allocator: std.mem.Allocator) ![]u8 {
     var envmap = try std.process.getEnvMap(allocator);
     defer envmap.deinit();
@@ -129,8 +131,10 @@ pub fn nkt_main(
     // skip first arg as is command name
     _ = try arg_iterator.next();
 
+    // read in the root of the topology
     var root = Root.new(allocator);
     defer root.deinit();
+
     // give a filesystem handle to the root
     root.fs = fs;
 

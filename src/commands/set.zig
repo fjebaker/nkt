@@ -62,22 +62,20 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
     const what = std.meta.stringToEnum(SetVerbs, args.what) orelse {
-        try cli.throwError(
+        return cli.throwError(
             cli.CLIErrors.BadArgument,
             "Unrecognized verb '{s}'",
             .{args.what},
         );
-        unreachable;
     };
 
     if (args.item) |_| {
         if (args.chain != null) {
-            try cli.throwError(
+            return cli.throwError(
                 error.AmbiguousSelection,
                 "Cannot select both an item and a chain",
                 .{},
             );
-            unreachable;
         }
         const selection = try selections.fromArgs(
             arguments.Parsed,
@@ -98,12 +96,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         } } };
     } else {
         if (args.chain == null) {
-            try cli.throwError(
+            return cli.throwError(
                 cli.CLIErrors.TooFewArguments,
                 "No item or chain selected.",
                 .{},
             );
-            unreachable;
         }
 
         return .{ .selection = .{ .Chain = .{
@@ -127,30 +124,27 @@ pub fn execute(
             switch (c.what) {
                 .done => {},
                 else => {
-                    try cli.throwError(
+                    return cli.throwError(
                         cli.CLIErrors.BadArgument,
                         "Cannot use verb '{s}' on chains.",
                         .{@tagName(c.what)},
                     );
-                    unreachable;
                 },
             }
             var chains = try root.getChainList();
             const index = chains.getIndexByNameOrAlias(c.name) orelse {
-                try cli.throwError(
+                return cli.throwError(
                     error.NoSuchCollection,
                     "No chain with name or alias '{s}'",
                     .{c.name},
                 );
-                unreachable;
             };
             if (chains.isChainComplete(index)) {
-                try cli.throwError(
+                return cli.throwError(
                     error.ChainAlreadyComplete,
                     "Chain '{s}' has already been marked as complete today.",
                     .{c.name},
                 );
-                unreachable;
             }
             try chains.addCompletionTime(index, time.Time.now());
             try root.writeChains();
@@ -206,12 +200,11 @@ fn updateTaskField(
     comptime err: anyerror,
 ) !void {
     if (@field(task, field) != null) {
-        try cli.throwError(
+        return cli.throwError(
             err,
             "Task '{s}' (/{x}) already marked as '{s}'",
             .{ task.outcome, task.hash, field },
         );
-        unreachable;
     }
 
     @field(task, field) = time.Time.now();

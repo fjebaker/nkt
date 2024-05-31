@@ -79,12 +79,11 @@ pub fn execute(
                 );
             },
             .Entry, .Day => {
-                try cli.throwError(
+                return cli.throwError(
                     error.InvalidSelection,
                     "Cannot move entries or days of journals.",
                     .{},
                 );
-                unreachable;
             },
             .Task => |*t| {
                 const old_name = t.task.outcome;

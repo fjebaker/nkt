@@ -46,6 +46,7 @@ pub const Commands = union(enum) {
     sync: @import("commands/sync.zig"),
     completion: @import("commands/completion.zig"),
 
+    /// Execute the sub command after instatiation.
     pub fn execute(
         self: *Commands,
         allocator: std.mem.Allocator,
@@ -79,7 +80,8 @@ pub const Commands = union(enum) {
 
     /// Parse a command from the `cli.ArgIterator` and return a `Commands` with
     /// the active field instantiated through calling the `fromArgs`
-    /// constructor.
+    /// constructor. This will have implicitly parsed the arguments specific to
+    /// that command.
     pub fn init(
         allocator: std.mem.Allocator,
         args: *cli.ArgIterator,
@@ -88,8 +90,7 @@ pub const Commands = union(enum) {
             return Error.NoCommandGiven;
 
         if (command.flag) {
-            try throwUnknownCommand(command.string);
-            unreachable;
+            return throwUnknownCommand(command.string);
         }
 
         inline for (@typeInfo(Commands).Union.fields) |field| {
@@ -104,19 +105,22 @@ pub const Commands = union(enum) {
             }
         }
 
-        try throwUnknownCommand(command.string);
-        unreachable;
+        return throwUnknownCommand(command.string);
     }
 };
 
-fn throwUnknownCommand(name: []const u8) !void {
-    try cli.throwError(
+fn throwUnknownCommand(name: []const u8) anyerror {
+    return cli.throwError(
         Error.UnknownCommand,
         "'{s}'\n(use 'help' for a list of commands)",
         .{name},
     );
 }
 
+/// Parse argument from the `cli.ArgIterator` and execute the command contained
+/// within over the `Root`.
+/// Requires auxillary information about where to write output, what timezone
+/// we are in for date conversions.
 pub fn execute(
     allocator: std.mem.Allocator,
     itt: *cli.ArgIterator,
@@ -129,6 +133,8 @@ pub fn execute(
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    var cmd = try Commands.init(arena.allocator(), itt);
-    try cmd.execute(arena.allocator(), root, out_fd, tz);
+    const alloc = arena.allocator();
+
+    var cmd = try Commands.init(alloc, itt);
+    try cmd.execute(alloc, root, out_fd, tz);
 }

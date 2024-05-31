@@ -49,12 +49,11 @@ pub fn execute(
 
     if (self.args.reinit) {
         if (!topology_exists) {
-            try cli.throwError(
+            return cli.throwError(
                 error.NoRootDir,
                 "No root topology exists. Cannot reinitialize.",
                 .{},
             );
-            unreachable;
         }
 
         try root.load();

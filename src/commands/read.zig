@@ -60,18 +60,16 @@ selection: selections.Selection,
 
 fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
     const tag_name = tags.getTagString(arg) catch |err| {
-        try cli.throwError(err, "{s}", .{arg});
-        unreachable;
+        return cli.throwError(err, "{s}", .{arg});
     };
     if (tag_name) |name| {
         try tag_list.append(name);
     } else {
-        try cli.throwError(
+        return cli.throwError(
             cli.CLIErrors.BadArgument,
             "tag format: tags must begin with `@`",
             .{},
         );
-        unreachable;
     }
 }
 

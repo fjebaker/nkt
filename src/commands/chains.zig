@@ -41,12 +41,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         if (args.days) |str|
     b: {
         break :b std.fmt.parseInt(usize, str, 10) catch {
-            try cli.throwError(
+            return cli.throwError(
                 cli.CLIErrors.BadArgument,
                 "Cannot parse days to integer: '{s}'",
                 .{str},
             );
-            unreachable;
         };
     } else 30;
 

@@ -63,12 +63,11 @@ pub fn execute(
     var tl = if (try root.getTasklist(tl_name)) |tl|
         tl
     else {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No tasklist named '{s}'",
             .{tl_name},
         );
-        unreachable;
     };
 
     root.markModified(tl.descriptor, .CollectionTasklist);
@@ -108,12 +107,11 @@ pub fn execute(
 
     tl.addNewTask(new_task) catch |err| {
         if (err == Tasklist.Error.DuplicateTask) {
-            try cli.throwError(
+            return cli.throwError(
                 err,
                 "Task with same hash already exists: {x}",
                 .{new_task.hash},
             );
-            unreachable;
         }
         return err;
     };

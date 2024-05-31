@@ -99,12 +99,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             SortingMethods,
             args.sort orelse "created",
         ) orelse {
-            try cli.throwError(
+            return cli.throwError(
                 error.UnknownSort,
                 "Sorting method '{s}' is unknown",
                 .{args.sort.?},
             );
-            unreachable;
         },
     };
 }
@@ -134,12 +133,11 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
     if (args.directory != null) count += 1;
     if (args.tasklist != null) count += 1;
     if (count > 1) {
-        try cli.throwError(
+        return cli.throwError(
             error.AmbiguousSelection,
             "Can only list a single collection.",
             .{},
         );
-        unreachable;
     }
 
     if (args.journal) |journal| {
@@ -199,12 +197,11 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
             );
             return .{ .Compilers = {} };
         }
-        try cli.throwError(
+        return cli.throwError(
             cli.CLIErrors.BadArgument,
             "Unknown selection: '{s}'",
             .{what},
         );
-        unreachable;
     }
 
     try utils.ensureOnly(
@@ -322,12 +319,11 @@ fn listTasklist(
 ) !void {
     const maybe_tl = try root.getTasklist(tl.name);
     var tasklist = maybe_tl orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory named '{s}'",
             .{tl.name},
         );
-        unreachable;
     };
 
     // TODO: apply sorting: get user selection
@@ -388,12 +384,11 @@ fn listDirectory(
 ) !void {
     const maybe_dir = try root.getDirectory(d.name);
     const dir = maybe_dir orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory named '{s}'",
             .{d.name},
         );
-        unreachable;
     };
 
     if (dir.info.notes.len == 0) {

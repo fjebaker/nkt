@@ -169,22 +169,20 @@ pub fn ensureOnly(
             switch (@typeInfo(f.type)) {
                 .Optional => {
                     if (@field(args, f.name) != null) {
-                        try cli.throwError(
+                        return cli.throwError(
                             error.AmbiguousSelection,
                             "Cannot provide '{s}' argument when selecting '{s}'",
                             .{ f.name, collection_type },
                         );
-                        unreachable;
                     }
                 },
                 .Bool => {
                     if (@field(args, f.name) == true) {
-                        try cli.throwError(
+                        return cli.throwError(
                             error.AmbiguousSelection,
                             "Cannot provide '{s}' argument when selecting '{s}'",
                             .{ f.name, collection_type },
                         );
-                        unreachable;
                     }
                 },
                 else => {},
@@ -305,12 +303,11 @@ pub fn parseAndAssertValidTags(
 
     var tl = try root.getTagDescriptorList();
     if (tl.findInvalidTags(parsed_tags)) |invalid_tag| {
-        try cli.throwError(
+        return cli.throwError(
             error.InvalidTag,
             "@{s} is not a known tag",
             .{invalid_tag.name},
         );
-        unreachable;
     }
 
     return parsed_tags;

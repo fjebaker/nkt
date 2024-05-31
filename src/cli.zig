@@ -7,7 +7,7 @@ const clippy = @import("clippy");
 const Key = termui.TermUI.Key;
 
 /// Wrapper for returning errors with helpful messages printed to `stderr`
-pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) !void {
+pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerror {
     var stderr = std.io.getStdErr();
     var writer = stderr.writer();
 
@@ -21,6 +21,7 @@ pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) !void 
 
     // let the OS clean up
     std.process.exit(1);
+    return err;
 }
 
 /// Write coloured output to the writer, but only if do_color is set.

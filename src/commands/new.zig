@@ -41,12 +41,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
     const ctype = std.meta.stringToEnum(NewType, args.type) orelse {
-        try cli.throwError(
+        return cli.throwError(
             cli.CLIErrors.BadArgument,
             "Not a known type: '{s}'",
             .{args.type},
         );
-        unreachable;
     };
 
     return .{ .ctype = ctype, .name = args.name };

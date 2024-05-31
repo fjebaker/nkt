@@ -135,23 +135,21 @@ fn getCompiler(
 ) !Root.TextCompiler {
     if (self.compiler) |name| {
         const compiler = root.getTextCompilerByName(name) orelse {
-            try cli.throwError(
+            return cli.throwError(
                 Root.Error.UnknownCompiler,
                 "No compiler known with name '{s}'",
                 .{name},
             );
-            unreachable;
         };
 
         if (compiler.supports(ext)) {
             return compiler;
         } else {
-            try cli.throwError(
+            return cli.throwError(
                 Root.Error.InvalidCompiler,
                 "Compiler '{s}' does not support extension '{s}'",
                 .{ name, ext },
             );
-            unreachable;
         }
     }
 
@@ -159,12 +157,11 @@ fn getCompiler(
     defer allocator.free(compilers);
 
     if (compilers.len == 0) {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.UnknownExtension,
             "No text compiler for '{s}'",
             .{ext},
         );
-        unreachable;
     }
 
     if (self.strict and compilers.len > 1) {
@@ -175,12 +172,11 @@ fn getCompiler(
             try list.writer().print("{s} ", .{cmp.name});
         }
 
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.AmbigousCompiler,
             "Use the `--compiler name` flag to disambiguate.\nAvailable options:\n{s}",
             .{list.items},
         );
-        unreachable;
     }
     return compilers[0];
 }

@@ -53,8 +53,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
     const rows = args.rows orelse 20;
     if (rows < 3) {
-        try cli.throwError(cli.CLIErrors.BadArgument, "Rows must be at least 4", .{});
-        unreachable;
+        return cli.throwError(cli.CLIErrors.BadArgument, "Rows must be at least 4", .{});
     }
     return .{
         .what = args.what,
@@ -76,12 +75,11 @@ pub fn execute(
     const dirname = root.info.default_directory;
 
     const dir = (try root.getDirectory(dirname)) orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "No such directory '{s}'",
             .{dirname},
         );
-        unreachable;
     };
 
     const paths: [][]const u8 = if (self.what) |p|

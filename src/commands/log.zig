@@ -53,8 +53,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             if (arg.flag) try itt.throwUnknownFlag();
             // tag parsing
             const tag_name = tags.getTagString(arg.string) catch |err| {
-                try cli.throwError(err, "{s}", .{arg.string});
-                unreachable;
+                return cli.throwError(err, "{s}", .{arg.string});
             };
 
             if (tag_name) |name| {
@@ -86,12 +85,11 @@ pub fn execute(
         root.info.default_journal;
 
     var j = (try root.getJournal(journal_name)) orelse {
-        try cli.throwError(
+        return cli.throwError(
             Root.Error.NoSuchCollection,
             "Journal '{s}' does not exist",
             .{journal_name},
         );
-        unreachable;
     };
 
     if (self.args.text) |t| {

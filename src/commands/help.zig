@@ -26,12 +26,11 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     if (args.command) |cmd| {
         const command = toValidCommand(cmd) orelse {
-            try cli.throwError(
+            return cli.throwError(
                 cli.CLIErrors.BadArgument,
                 "help: no such command: '{s}'",
                 .{cmd},
             );
-            unreachable;
         };
         return .{ .command = command };
     }
