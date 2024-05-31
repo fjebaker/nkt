@@ -42,7 +42,7 @@ Principally, nkt provides four different ways to record information:
   have `music.composers.Bach.md`.
 
   Each note can be compiled with a text compiler into a rendered note for easy
-  reading and navigation. See [Rendering](#Rendering).
+  reading and navigation. See [Text compilers](#Text-compilers).
 
 - Tasks
 
@@ -104,6 +104,70 @@ There is shell completion for the following shells:
 
 - Sorry, I only really use `zsh` at the moment and writing completion files is not a hobby of mine.
 
+## Getting started
+
+Before we look at how to put information _in_ to nkt, let's quickly talk about
+a few ways of getting information _out_ of nkt. For any successful note taking
+application, it's important to know how to find things again.
+
+Most nkt commands that interact with something in your knowledge base use a
+selector to do so. The selector can be a pretty general statement, and has some
+semantic additions built in; for example:
+
+- A number, like `1`, `4`, `7` means "n days ago". `1` will select yesterday. `0` is today.
+- A date `2024-01-07` (in `YYYY-MM-DD`) will also select a specific day.
+- A qualified number like `t1` or `t8` will select a specific task (we'll get
+  onto those later).
+- A name `art.pre-raphaelite` or `maths` will select an item by name. This
+  could be the name of a note or the title of a task.
+
+You can test what a selection will do using the `select` command. All of these
+can be made more granular by including, say, a `--journal work` flag to
+indicate you want to select `2` days ago in the `work` journal.
+
+To select a specific entry, you need to choose both a day and pass a `--time
+HH:MM:SS` flag. This is where shell completion comes in handy, as you can do
+`nkt select 0 --time <TAB>` and a list of times will come up to select from.
+
+Often, though, you don't know where something is stored, you just know it's
+somewhere. That's where `find` comes in useful as a fuzzy text finder. It's
+worth just having a look at `help find` to see what you can do with it, and
+also to know that it's aliased to `f` so you can just do `nkt f` when you're in
+a rush.
+
+The other commands you will likely end up using the most are `log`, `read`, and
+`edit`. So let's introduce the stars of the show:
+
+- `log` is used to add a new entry to a journal. It's there so when you need to
+  quickly jot down an idea or a thought it's there for you. Log stores a
+  timestamp for every entry so you can flick back through them easily.
+
+- `read` is used to read different things. Without any arguments read will just
+  print the last `n` entries from you journal, interweaved with any status
+  changes in your tasklists. You can also use it to read specific notes, which
+  will just get printed directly to your terminal.
+
+- `edit` is used to add new notes into a directory or to modify existing
+  information. `edit` will only create a new note if you tell it to, to avoid
+  accidentally adding notes you didn't mean to.
+
+  You can also use edit to modify an entry by selecting it by its timestamp on
+  a certain day.
+
+  If given no arguments, `edit` will go interactive (like `find`) and let you
+  fuzzy search through the names of your notes. See `help edit` for more details.
+
+This is probably enough to get going. Have a look at [Tags](#tags) to learn
+more about organising your notes effectively, and [Text
+compilers](#Text-compilers) to learn how to produce rendered versions of your
+notes.
+
+## Configuration
+
+Most things are pretty self evident regarding what they do. Check the
+`~/.nkt/topology.json` to see the configuration, and edit this file as you
+please.
+
 ## Reference
 
 General help:
@@ -137,29 +201,27 @@ Extended help for a specific command may also be obtained:
 
 ```
 $ nkt help list
-Extended help for list:
+
+Extended help for 'list':
+
+List collections and other information in various ways.
 
 Aliases: ls
 
-List notes in various ways to the terminal.
-  nkt list
-     <what>                list the notes in a directory, journal, or tasks. this option may
-                             also be `all` to list everything. To list all tasklists use
-                             `tasks` (default: all)
-     -n/--limit int        maximum number of entries to list (default: 25)
-     --all                 list all entries (ignores `--limit`)
-     --modified            sort by last modified (default)
-     --created             sort by date created
-     --alphabetical        sort by date created
-     --pretty/--nopretty   pretty format the output, or don't (default
-                           is to pretty format)
+Arguments:
 
-When the `<what>` is a task list, the additional options are
-     --due                 list in order of when something is due (default)
-     --importance          list in order of importance
-     --done                list also those tasks marked as done
-     --archived            list also archived tasks
-     --details             also print details of the tasks
+    [--sort how]              How to sort the item lists. Possible values are
+                                'alphabetical', 'modified' or 'created'. Defaults to created.
+    [what]                    Can be 'tags', 'compilers', or when directory is
+                                selected, can be used to subselect hiearchies
+    [--directory name]        Name of the directory to list.
+    [--journal name]          Name of the journal to list.
+    [--tasklist name]         Name of the tasklist to list.
+    [--hash]                  Display the full hashes instead of abbreviations.
+    [--done]                  If a tasklist is selected, enables listing tasks marked
+                                as 'done'
+    [--archived]              If a tasklist is selected, enables listing tasks marked
+                                as 'archived'
 ```
 
 ### Tags
