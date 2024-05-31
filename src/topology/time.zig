@@ -127,34 +127,31 @@ pub const Time = struct {
         return s.time == o.time;
     }
 
-    /// Turn a `YYYY-MM-DD HH:MM:SS TZZ (GMT+H)` into a `Time`
+    /// Turn a `YYYY-MM-DDTHH:MM:SS+HH:MM` into a `Time`
     pub fn fromString(s: []const u8) !Time {
         var date = try stringToDate(s[0..10]);
         const time_of_day = try toTimestamp(s[11..19]);
         date.time = time_of_day;
 
-        const tz1 = std.mem.indexOfAny(u8, s, "(").? + 4;
-        const tz2 = std.mem.indexOfScalarPos(
-            u8,
-            s,
-            tz1,
-            ')',
-        ).?;
         const time_zone_shift = try std.fmt.parseInt(
-            i32,
-            s[tz1 + 1 .. tz2],
+            i16,
+            s[20..22],
+            10,
+        );
+        const minute_shift = try std.fmt.parseInt(
+            i16,
+            s[23..],
             10,
         );
 
-        const hour_shift = if (s[tz1 - 1] == '+')
+        const hour_shift = if (s[19] == '+')
             -time_zone_shift
         else
             time_zone_shift;
 
-        const tz_designation = s[20..23];
         const tz = TimeZone.create(
-            tz_designation,
-            @intCast(hour_shift * 60),
+            "---",
+            (hour_shift * 60) + minute_shift,
         );
 
         date.zone = &tz.tz;
@@ -252,22 +249,17 @@ pub const TimeZone = struct {
     }
 
     fn printTimeImpl(self: TimeZone, writer: anytype, t: Time, comptime quoted: bool) !void {
-        const date_time = try formatDateTimeBuf(t.toDate());
-        const offset = @divFloor(self.tz.offset, 60);
+        var date = t.toDate();
+        date.zone = &self.tz;
 
-        const quote = if (quoted) "\"" else "";
+        var buf: [128]u8 = undefined;
+        const fmt = try date.formatISO8601Buf(&buf, false);
 
-        return try writer.print(
-            "{s}{s} {s} (GMT{s}{d}){s}",
-            .{
-                quote,
-                date_time,
-                self.tz.name,
-                if (offset >= 0) "+" else "-",
-                @abs(offset),
-                quote,
-            },
-        );
+        if (quoted) {
+            try writer.print("\"{s}\"", .{fmt});
+        } else {
+            try writer.print("{s}", .{fmt});
+        }
     }
 
     /// Initialize a UTC timezone
