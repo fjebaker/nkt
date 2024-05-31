@@ -241,6 +241,7 @@ pub const SearchDisplay = struct {
         Key,
         Enter,
         Tab,
+        Ctrl: u8,
     };
 
     pub fn update(self: *SearchDisplay) !?Event {
@@ -270,6 +271,8 @@ pub const SearchDisplay = struct {
                         self.text_index = index;
                         break;
                     },
+                    // CtrlN
+                    14 => return .{ .Ctrl = 'n' },
                     Key.Enter => return .Enter,
                     Key.Tab => return .Tab,
                     Key.Backspace => {

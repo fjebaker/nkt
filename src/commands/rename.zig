@@ -60,7 +60,7 @@ pub fn execute(
     var from_item = try self.from.resolveReportError(root);
 
     if (try self.to.resolveOrNull(root)) |to_item| {
-        _ = to_item;
+        std.debug.print(">>> TO: {s}\n", .{try to_item.getName(allocator)});
         unreachable;
     } else {
         const to_name = self.to.selector.?.ByName;
@@ -102,6 +102,4 @@ pub fn execute(
             else => unreachable,
         }
     }
-
-    _ = allocator;
 }

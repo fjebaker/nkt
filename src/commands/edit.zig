@@ -7,6 +7,8 @@ const selections = @import("../selections.zig");
 const searching = @import("../searching.zig");
 const color = @import("../colors.zig");
 
+const termui = @import("termui");
+
 const commands = @import("../commands.zig");
 const FileSystem = @import("../FileSystem.zig");
 const Directory = @import("../topology/Directory.zig");
@@ -21,7 +23,16 @@ pub const Error = error{InvalidEdit};
 pub const alias = [_][]const u8{"e"};
 
 pub const short_help = "Edit a note or item in the editor.";
-pub const long_help = short_help;
+pub const long_help =
+    \\Edit a note, task or log entry in the configured editor. Supports the standard
+    \\selection syntax of `select`.
+    \\
+    \\If no argument is given, an interactive fuzzy search is presented that searches
+    \\throug note names. In this mode, 'Enter' will select the highlighted note,
+    \\whereas 'Ctrl-n' will select or else create the note and give the option
+    \\to select an extension.
+    \\
+;
 
 pub const arguments = cli.Arguments(selections.selectHelp(
     "item",
@@ -102,14 +113,92 @@ pub fn execute(
         );
     } else {
         var dir = (try root.getDirectory(root.info.default_directory)).?;
-        const note = try searchFileNames(
+        const ss = try searchFileNames(
             &dir,
             allocator,
-        );
-        if (note) |n| {
-            try editNote(writer, allocator, root, n, &dir, self.opts, opts);
+        ) orelse return;
+        switch (ss) {
+            .note => |note| {
+                try editNote(writer, allocator, root, note, &dir, self.opts, opts);
+            },
+            .new => |name| {
+                defer allocator.free(name);
+                self.selection = .{
+                    .collection_type = .CollectionDirectory,
+                    .selector = .{ .ByName = name },
+                };
+                self.opts.allow_new = true;
+
+                // assert the note does not already exist
+                const maybe_item = try self.selection.?.resolveOrNull(root);
+                if (maybe_item != null) {
+                    var n = maybe_item.?.Note;
+                    try editNote(
+                        writer,
+                        allocator,
+                        root,
+                        n.note,
+                        &n.directory,
+                        self.opts,
+                        opts,
+                    );
+                    return;
+                }
+
+                var ext_list = std.StringArrayHashMap(void).init(allocator);
+                defer ext_list.deinit();
+                for (root.info.text_compilers) |comp| {
+                    for (comp.extensions) |ext| {
+                        try ext_list.put(ext, {});
+                    }
+                }
+
+                if (!noteNameValid(name)) {
+                    try cli.throwError(
+                        error.InvalidName,
+                        "Note name is invalid: '{s}'",
+                        .{name},
+                    );
+                }
+
+                const ext = (try promptExtension(ext_list.keys())) orelse {
+                    try writer.writeAll("No extension selected. Note not created.\n");
+                    return;
+                };
+                const path = try createNew(
+                    self.selection.?,
+                    allocator,
+                    root,
+                    ext,
+                    opts,
+                );
+                defer allocator.free(path);
+                try becomeEditorRelativePath(allocator, &root.fs.?, path);
+                try editElseMaybeCreate(
+                    writer,
+                    self.selection.?,
+                    allocator,
+                    root,
+                    opts,
+                    self.opts,
+                );
+            },
         }
     }
+}
+
+pub fn promptExtension(compilers: []const []const u8) !?[]const u8 {
+    var tui = try termui.TermUI.init(
+        std.io.getStdIn(),
+        std.io.getStdOut(),
+    );
+    defer tui.deinit();
+    const choice = try termui.Selector.interact(
+        &tui,
+        compilers,
+        .{ .clear = true },
+    ) orelse return null;
+    return compilers[choice];
 }
 
 const SearchKey = struct {
@@ -117,10 +206,15 @@ const SearchKey = struct {
 };
 const NameSearcher = searching.Searcher(SearchKey);
 
+const SearchSelection = union(enum) {
+    note: Root.Directory.Note,
+    new: []const u8,
+};
+
 fn searchFileNames(
     dir: *const Root.Directory,
     allocator: std.mem.Allocator,
-) !?Root.Directory.Note {
+) !?SearchSelection {
     const search_items = try allocator.alloc(
         []const u8,
         dir.info.notes.len,
@@ -173,6 +267,7 @@ fn searchFileNames(
     var needle: []const u8 = "";
     var results: ?NameSearcher.ResultList = null;
     var choice: ?usize = null;
+    var create_new: bool = false;
 
     while (try display.update()) |event| {
         const term_size = try display.display.ctrl.tui.getSize();
@@ -197,6 +292,18 @@ fn searchFileNames(
                     }
                 } else {
                     results = null;
+                }
+            },
+            .Ctrl => |key| {
+                switch (key) {
+                    'n' => {
+                        create_new = true;
+                        break;
+                    },
+                    else => {
+                        std.log.default.err("Unhandled Ctrl key: {c}", .{key});
+                        unreachable;
+                    },
                 }
             },
             .Enter => {
@@ -261,8 +368,11 @@ fn searchFileNames(
     // cleanup
     try display.cleanup();
 
+    if (create_new) {
+        return .{ .new = try allocator.dupe(u8, display.getText()) };
+    }
     if (choice) |c| {
-        return dir.info.notes[c];
+        return .{ .note = dir.info.notes[c] };
     }
     return null;
 }
@@ -626,4 +736,14 @@ fn becomeEditorRelativePath(
     defer allocator.free(abs_path);
 
     try editor.becomeWithArgs(abs_path, &.{});
+}
+
+fn noteNameValid(name: []const u8) bool {
+    for (name) |c| {
+        switch (c) {
+            ' ' => return false,
+            else => {},
+        }
+    }
+    return true;
 }
