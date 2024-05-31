@@ -29,6 +29,10 @@ pub const arguments = cli.Arguments(&.{
         .help = "Only create missing files and write missing configuration options.",
     },
     .{
+        .arg = "--reinit-all",
+        .help = "Opens and rewrite the ENTIRE nkt topology system. Useful for reformatting JSON or applying modifications. Not for general use.",
+    },
+    .{
         .arg = "--force",
         .help = "Force initializtion. Danger: this will overwrite *all* topology files.",
     },
@@ -57,6 +61,46 @@ pub fn execute(
 
     if (self.args.force) {
         try doInit(writer, root);
+        return;
+    }
+
+    if (self.args.@"reinit-all") {
+        if (!topology_exists) {
+            return cli.throwError(
+                error.NoRootDir,
+                "No root topology exists. Cannot reinitialize.",
+                .{},
+            );
+        }
+
+        try root.load();
+
+        // touch all journals
+        for (root.info.journals) |journal_info| {
+            var journal = (try root.getJournal(journal_info.name)).?;
+            for (journal.info.days) |day| {
+                _ = try journal.getEntries(day);
+            }
+            try journal.writeDays();
+            root.markModified(journal_info, .CollectionJournal);
+        }
+        // touch all directories
+        for (root.info.directories) |directory_info| {
+            _ = (try root.getDirectory(directory_info.name)).?;
+            root.markModified(directory_info, .CollectionDirectory);
+        }
+        // touch all tasklists
+        for (root.info.tasklists) |tasklist_info| {
+            _ = (try root.getTasklist(tasklist_info.name)).?;
+            root.markModified(tasklist_info, .CollectionTasklist);
+        }
+        // touch all chains
+        _ = try root.getChainList();
+        _ = try root.getTagDescriptorList();
+        try root.writeTags();
+        try root.writeChains();
+        try root.writeChanges();
+        try root.writeRoot();
         return;
     }
 
