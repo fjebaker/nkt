@@ -127,6 +127,7 @@ pub const SearchDisplay = struct {
     selected_index: usize = 0,
     max_selection: usize = 0,
     max_rows: usize = 10,
+    scroll_offset: usize = 0,
 
     pub fn init(rows: usize) !SearchDisplay {
         var tui = try termui.TermUI.init(
@@ -191,7 +192,7 @@ pub const SearchDisplay = struct {
         self: *SearchDisplay,
         results_len: usize,
     ) ResultDisplayConfig {
-        const start = results_len -| self.max_rows;
+        const start = results_len -| (self.max_rows + self.scroll_offset);
         const slice_len = results_len -| start;
         std.debug.assert(slice_len > 0);
 
@@ -245,15 +246,40 @@ pub const SearchDisplay = struct {
     };
 
     fn selectDown(self: *SearchDisplay) Event {
+        if (self.selected_index <= self.scroll_offset) {
+            self.scroll_offset -|= 1;
+            self.selected_index = self.scroll_offset;
+            return .Cursor;
+        }
         self.selected_index -|= 1;
         return .Cursor;
     }
 
     fn selectUp(self: *SearchDisplay) Event {
+        if (self.selected_index == self.max_selection) {
+            self.scroll_offset += 1;
+            self.selected_index += 1;
+            return .Cursor;
+        }
+
         self.selected_index = @min(
             self.selected_index + 1,
             self.max_selection,
         );
+        return .Cursor;
+    }
+
+    fn pageUp(self: *SearchDisplay) Event {
+        for (0..10) |_| {
+            _ = self.selectUp();
+        }
+        return .Cursor;
+    }
+
+    fn pageDown(self: *SearchDisplay) Event {
+        for (0..10) |_| {
+            _ = self.selectDown();
+        }
         return .Cursor;
     }
 
@@ -262,7 +288,9 @@ pub const SearchDisplay = struct {
             const inp = try self.display.ctrl.tui.nextInput();
             switch (inp) {
                 .char => |c| switch (c) {
-                    Key.CtrlC, Key.CtrlD => return null,
+                    Key.CtrlC => return null,
+                    Key.CtrlD => return self.pageDown(),
+                    Key.CtrlU => return self.pageUp(),
                     Key.CtrlJ => return self.selectDown(),
                     Key.CtrlK => return self.selectUp(),
                     // CtrlW
