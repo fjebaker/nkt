@@ -373,7 +373,7 @@ fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
 
 /// Used to retrieve specific items from a journal
 pub fn select(self: *Tasklist, selector: Selector, config: SelectionConfig) !Task {
-    _ = config;
+    try config.noModifiers();
     const maybe_task: ?Tasklist.Task = switch (selector) {
         .ByName => |n| try self.getTask(n),
         .ByIndex, .ByQualifiedIndex => try self.getTaskByIndex(

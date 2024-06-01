@@ -228,7 +228,7 @@ fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
 
 /// Used to retrieve specific items from a journal
 pub fn select(self: *Directory, selector: Selector, config: SelectionConfig) !Note {
-    _ = config;
+    try config.noModifiers();
     const name: []const u8 = switch (selector) {
         .ByName => |n| n,
         .ByDate => |d| &(try time.formatDateBuf(d)),

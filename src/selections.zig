@@ -144,13 +144,34 @@ test "Selector.initFromString" {
 /// resolved
 pub const Modifiers = struct {
     time: ?[]const u8 = null,
-    last: ?bool = false,
+    last: bool = false,
 };
 
 /// Configuration given to the collections to help resolve a `select`
 pub const SelectionConfig = struct {
     now: time.Time,
     mod: Modifiers,
+
+    /// Used to assert no modifiers have been set
+    pub fn noModifiers(s: SelectionConfig) !void {
+        const cond =
+            s.mod.last == false and
+            s.mod.time == null;
+
+        if (!cond) {
+            return error.InvalidSelection;
+        }
+    }
+
+    /// Used to assert only one modifier is set
+    pub fn zeroOrOne(s: SelectionConfig) !void {
+        var count: usize = 0;
+        if (s.mod.last == true) count += 1;
+        if (s.mod.time != null) count += 1;
+        if (count > 1) {
+            return error.InvalidSelection;
+        }
+    }
 };
 
 const ResolveResult = struct {
@@ -803,6 +824,12 @@ fn implArgsPrefixed(
         }
         selection.modifiers.time = t;
     }
+
+    const last = @field(args, prefix ++ "last");
+    if (last) {
+        selection.modifiers.last = last;
+    }
+
     return selection;
 }
 

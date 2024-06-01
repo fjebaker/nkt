@@ -413,6 +413,7 @@ pub const DayEntry = struct {
 
 /// Used to retrieve specific items from a journal
 pub fn select(self: *Journal, selector: Selector, config: SelectionConfig) !DayEntry {
+    try config.zeroOrOne();
     const maybe_day = switch (selector) {
         .ByQualifiedIndex, .ByIndex => b: {
             const index = selector.getIndex();
@@ -428,6 +429,7 @@ pub fn select(self: *Journal, selector: Selector, config: SelectionConfig) !DayE
     };
 
     const day = maybe_day orelse return error.InvalidSelection;
+
     if (config.mod.time) |t| {
         const entries = try self.getEntries(day);
         for (entries) |entry| {
@@ -437,6 +439,11 @@ pub fn select(self: *Journal, selector: Selector, config: SelectionConfig) !DayE
             }
         }
         return error.NoSuchItem;
+    }
+
+    if (config.mod.last) {
+        const entries = try self.getEntries(day);
+        return .{ .day = day, .entry = entries[entries.len - 1] };
     }
 
     return .{ .day = day };
