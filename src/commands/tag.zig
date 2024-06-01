@@ -107,6 +107,9 @@ pub fn execute(
     }
 
     try root.writeChanges();
-    _ = writer;
+
+    const name = try item.getName(allocator);
+    defer allocator.free(name);
+    try writer.print("Applied tags to '{s}'\n", .{name});
     _ = opts;
 }
