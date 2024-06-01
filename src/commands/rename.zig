@@ -33,16 +33,16 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
     const from = try selections.fromArgsPrefixed(
+        "from-",
         arguments.Parsed,
         args.from,
         args,
-        "from-",
     );
     const to = try selections.fromArgsPrefixed(
+        "to-",
         arguments.Parsed,
         args.to,
         args,
-        "to-",
     );
 
     return .{ .from = from, .to = to };

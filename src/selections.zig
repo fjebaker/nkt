@@ -753,84 +753,6 @@ test "selection parsing" {
     );
 }
 
-fn addFlagsReportError(
-    selection: *Selection,
-    journal: ?[]const u8,
-    directory: ?[]const u8,
-    tasklist: ?[]const u8,
-) !void {
-    if (try addFlags(
-        selection,
-        journal,
-        directory,
-        tasklist,
-    )) |info| {
-        return cli.throwError(
-            Error.IncompatibleSelection,
-            "Item selected '{s}' but flag is for '{s}'.",
-            .{ @tagName(info.has), @tagName(info.was_given) },
-        );
-    }
-}
-
-fn addModifiersReportError(
-    selection: *Selection,
-    entry_time: ?[]const u8,
-) !void {
-    if (entry_time) |t| {
-        // assert we are selecting a journal or null
-        if (selection.collection_type) |ct| {
-            if (ct != .CollectionJournal) {
-                return cli.throwError(
-                    Error.IncompatibleSelection,
-                    "Cannot select a time for collection type '{s}'",
-                    .{@tagName(ct)},
-                );
-            }
-        }
-
-        // assert the format of the time is okay
-        if (!time.isTime(t)) {
-            return cli.throwError(
-                cli.CLIErrors.BadArgument,
-                "Time is invalid format: '{s}' (needs to be 'HH:MM:SS')",
-                .{t},
-            );
-        }
-        selection.modifiers.entry_time = t;
-    }
-}
-
-fn fromArgsFields(
-    comptime T: type,
-    selector_string: ?[]const u8,
-    args: T,
-    comptime journal_field: []const u8,
-    comptime directory_field: []const u8,
-    comptime tasklist_field: []const u8,
-    comptime time_field: []const u8,
-) !Selection {
-    var selection: Selection = .{};
-
-    if (selector_string) |ss| {
-        const selector = try asSelector(ss);
-        try addSelector(&selection, selector);
-    }
-
-    try addFlagsReportError(
-        &selection,
-        @field(args, journal_field),
-        @field(args, directory_field),
-        @field(args, tasklist_field),
-    );
-
-    try addModifiersReportError(
-        &selection,
-        @field(args, time_field),
-    );
-    return selection;
-}
-
 /// Parse the selection from a `cli.Parsed` structure that has been
 /// augmented with `selectHelp`. Will report errors to stderr.
 pub fn fromArgs(
@@ -838,15 +760,7 @@ pub fn fromArgs(
     selector_string: ?[]const u8,
     args: T,
 ) !Selection {
-    return fromArgsFields(
-        T,
-        selector_string,
-        args,
-        "journal",
-        "directory",
-        "tasklist",
-        "time",
-    );
+    return implArgsPrefixed("", T, selector_string, args, false);
 }
 
 /// Just like `fromArgs` but will not throw any errors from validation.
@@ -855,7 +769,29 @@ pub fn fromArgsForgiving(
     selector_string: ?[]const u8,
     args: T,
 ) !Selection {
+    return implArgsPrefixed("", T, selector_string, args, true);
+}
+
+/// Like `fromArgs` but with the flags prefixed with a given string.
+/// Like `fromArgs` but with the flags prefixed with a given string.
+pub fn fromArgsPrefixed(
+    comptime prefix: []const u8,
+    comptime T: type,
+    selector_string: ?[]const u8,
+    args: T,
+) !Selection {
+    return implArgsPrefixed(prefix, T, selector_string, args, false);
+}
+
+fn implArgsPrefixed(
+    comptime prefix: []const u8,
+    comptime T: type,
+    selector_string: ?[]const u8,
+    args: T,
+    forgiving: bool,
+) !Selection {
     var selection: Selection = .{};
+
     if (selector_string) |ss| {
         const selector = try asSelector(ss);
         try addSelector(&selection, selector);
@@ -863,34 +799,46 @@ pub fn fromArgsForgiving(
 
     if (try addFlags(
         &selection,
-        args.journal,
-        args.directory,
-        args.tasklist,
-    )) |_| {}
-
-    if (args.time) |t| {
-        selection.modifiers.entry_time = t;
+        @field(args, prefix ++ "journal"),
+        @field(args, prefix ++ "directory"),
+        @field(args, prefix ++ "tasklist"),
+    )) |info| {
+        if (!forgiving) {
+            return cli.throwError(
+                Error.IncompatibleSelection,
+                "Item selected '{s}' but flag is for '{s}'.",
+                .{ @tagName(info.has), @tagName(info.was_given) },
+            );
+        }
     }
 
-    return selection;
-}
+    const entry_time = @field(args, prefix ++ "time");
+    // add the various modifiers to the selection
+    if (entry_time) |t| {
+        if (!forgiving) {
+            // assert we are selecting a journal or null
+            if (selection.collection_type) |ct| {
+                if (ct != .CollectionJournal) {
+                    return cli.throwError(
+                        Error.IncompatibleSelection,
+                        "Cannot select a time for collection type '{s}'",
+                        .{@tagName(ct)},
+                    );
+                }
+            }
 
-/// Like `fromArgs` but with the flags prefixed with a given string.
-pub fn fromArgsPrefixed(
-    comptime T: type,
-    selector_string: ?[]const u8,
-    args: T,
-    comptime prefix: []const u8,
-) !Selection {
-    return fromArgsFields(
-        T,
-        selector_string,
-        args,
-        prefix ++ "journal",
-        prefix ++ "directory",
-        prefix ++ "tasklist",
-        prefix ++ "time",
-    );
+            // assert the format of the time is okay
+            if (!time.isTime(t)) {
+                return cli.throwError(
+                    cli.CLIErrors.BadArgument,
+                    "Time is invalid format: '{s}' (needs to be 'HH:MM:SS')",
+                    .{t},
+                );
+            }
+        }
+        selection.modifiers.entry_time = t;
+    }
+    return selection;
 }
 
 pub const SelectHelpOptions = struct {
@@ -922,6 +870,10 @@ pub fn selectHelp(
             .arg = "--" ++ opts.flag_prefix ++ "time HH:MM:SS",
             .help = "Augments a given selection with a given time, used for selecting e.g. individual entries.",
             .completion = "{compadd $(nkt completion item $words)}",
+        },
+        .{
+            .arg = "--" ++ opts.flag_prefix ++ "last",
+            .help = "Used to select the last modified item in a collection or day.",
         },
         .{
             .arg = "--" ++ opts.flag_prefix ++ "directory directory",
