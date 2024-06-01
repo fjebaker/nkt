@@ -79,7 +79,66 @@ pub const Selector = union(Method) {
             else => unreachable,
         };
     }
+
+    /// Turn an argument string into a `Selector`
+    pub fn initFromString(arg: []const u8) !Selector {
+        // are we an index
+        if (utils.allNumeric(arg)) {
+            return .{ .ByIndex = try std.fmt.parseInt(usize, arg, 10) };
+        } else if (arg.len > 1 and
+            arg[0] == '/' and
+            utils.allAlphanumeric(arg[1..]))
+        {
+            return .{
+                .ByHash = try std.fmt.parseInt(u64, arg[1..], 16),
+            };
+        } else if (arg.len > 1 and
+            std.ascii.isAlphabetic(arg[0]) and
+            utils.allNumeric(arg[1..]))
+        {
+            return .{ .ByQualifiedIndex = .{
+                .qualifier = arg[0],
+                .index = try std.fmt.parseInt(usize, arg[1..], 10),
+            } };
+        } else if (time.isDate(arg)) {
+            return .{ .ByDate = try time.stringToDate(arg) };
+        } else {
+            return .{ .ByName = arg };
+        }
+    }
 };
+
+fn testAsSelector(arg: []const u8, comptime expected: Selector) !void {
+    const s = try Selector.initFromString(arg);
+    try std.testing.expectEqualDeep(expected, s);
+}
+
+test "Selector.initFromString" {
+    try testAsSelector("123", .{ .ByIndex = 123 });
+    try testAsSelector("k123", .{ .ByQualifiedIndex = .{
+        .qualifier = 'k',
+        .index = 123,
+    } });
+    try testAsSelector(
+        "h123.",
+        .{ .ByName = "h123." },
+    );
+    try testAsSelector("2023-12-31", .{
+        .ByDate = try time.newDate(2023, 12, 31),
+    });
+    try testAsSelector(
+        "202312-31",
+        .{ .ByName = "202312-31" },
+    );
+    try testAsSelector(
+        "hello",
+        .{ .ByName = "hello" },
+    );
+    try testAsSelector(
+        "/123ab",
+        .{ .ByHash = 0x123ab },
+    );
+}
 
 /// Modifers for the selction that can impact how specifics of a selection are
 /// resolved
@@ -123,17 +182,14 @@ fn retrieveFromCollection(
         "Looking up collection {s}->'{s}'",
         .{ @tagName(ct), name },
     );
-
     var col = (try root.getCollection(name, ct)) orelse
         return ResolveResult.throw(Error.UnknownSelection);
-
     const item = col.select(selector, config) catch |err| {
         switch (err) {
             error.NoSuchItem, error.InvalidSelection => return ResolveResult.throw(err),
             else => return err,
         }
     };
-
     const it: Item = switch (ct) {
         .CollectionJournal => if (item.entry) |entry|
             .{ .Entry = .{
@@ -377,7 +433,7 @@ fn testSelectionResolve(
 ) !void {
     var selection = Selection.init();
     if (s) |str| {
-        const selector = try asSelector(str);
+        const selector = try Selector.initFromString(str);
         try addSelector(&selection, selector);
     }
 
@@ -453,64 +509,6 @@ test "resolve selections" {
     );
 }
 
-fn asSelector(arg: []const u8) !Selector {
-    // are we an index
-    if (utils.allNumeric(arg)) {
-        return .{ .ByIndex = try std.fmt.parseInt(usize, arg, 10) };
-    } else if (arg.len > 1 and
-        arg[0] == '/' and
-        utils.allAlphanumeric(arg[1..]))
-    {
-        return .{
-            .ByHash = try std.fmt.parseInt(u64, arg[1..], 16),
-        };
-    } else if (arg.len > 1 and
-        std.ascii.isAlphabetic(arg[0]) and
-        utils.allNumeric(arg[1..]))
-    {
-        return .{ .ByQualifiedIndex = .{
-            .qualifier = arg[0],
-            .index = try std.fmt.parseInt(usize, arg[1..], 10),
-        } };
-    } else if (time.isDate(arg)) {
-        return .{ .ByDate = try time.stringToDate(arg) };
-    } else {
-        return .{ .ByName = arg };
-    }
-}
-
-fn testAsSelector(arg: []const u8, comptime expected: Selector) !void {
-    const s = try asSelector(arg);
-    try std.testing.expectEqualDeep(expected, s);
-}
-
-test "asSelector" {
-    try testAsSelector("123", .{ .ByIndex = 123 });
-    try testAsSelector("k123", .{ .ByQualifiedIndex = .{
-        .qualifier = 'k',
-        .index = 123,
-    } });
-    try testAsSelector(
-        "h123.",
-        .{ .ByName = "h123." },
-    );
-    try testAsSelector("2023-12-31", .{
-        .ByDate = try time.newDate(2023, 12, 31),
-    });
-    try testAsSelector(
-        "202312-31",
-        .{ .ByName = "202312-31" },
-    );
-    try testAsSelector(
-        "hello",
-        .{ .ByName = "hello" },
-    );
-    try testAsSelector(
-        "/123ab",
-        .{ .ByHash = 0x123ab },
-    );
-}
-
 /// Translate the qualifier character to a `Root.CollectionType` For example
 /// `t` becomes `.CollectionTasklist`
 fn qualifierToCollection(q: u8) !Root.CollectionType {
@@ -559,7 +557,9 @@ fn addFlags(
                     // want to allow `ByIndex` selections for directories
                     if (selection.selector) |s| switch (s) {
                         .ByIndex => |i| {
-                            selection.selector = .{ .ByDate = time.shiftBack(time.Time.now(), i) };
+                            selection.selector = .{
+                                .ByDate = time.shiftBack(time.Time.now(), i),
+                            };
                             selection.collection_name = directory;
                             selection.collection_type = .CollectionDirectory;
                             selection.collection_provided = directory != null;
@@ -634,7 +634,7 @@ fn addFlags(
 
 fn testParser(string: []const u8, comptime expected: Selection) !void {
     var selection: Selection = .{};
-    const selector = try asSelector(string);
+    const selector = try Selector.initFromString(string);
     try addSelector(&selection, selector);
 
     try std.testing.expectEqualDeep(expected, selection);
@@ -672,7 +672,7 @@ fn testSelectionParsing(
     comptime expected: Selection,
 ) !void {
     var selection: Selection = .{};
-    const selector = try asSelector(item);
+    const selector = try Selector.initFromString(item);
 
     try addSelector(&selection, selector);
     if (try addFlags(
@@ -758,7 +758,7 @@ fn implArgsPrefixed(
     var selection = Selection.init();
 
     if (selector_string) |ss| {
-        const selector = try asSelector(ss);
+        const selector = try Selector.initFromString(ss);
         try addSelector(&selection, selector);
     }
 
