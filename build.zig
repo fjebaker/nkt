@@ -1,5 +1,11 @@
 const std = @import("std");
 
+const VERSION: std.SemanticVersion = .{
+    .major = 0,
+    .minor = 1,
+    .patch = 0,
+};
+
 pub fn addTracy(b: *std.Build, step: *std.Build.Step.Compile) !void {
     step.want_lto = false;
     step.addCSourceFile(
@@ -23,6 +29,7 @@ pub fn build(b: *std.Build) !void {
 
     var opts = b.addOptions();
     opts.addOption(bool, "tracy_enabled", tracy);
+    opts.addOption(std.SemanticVersion, "version", VERSION);
 
     const time = b.dependency("time", .{
         .target = target,
