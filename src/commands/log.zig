@@ -33,7 +33,7 @@ pub const arguments = cli.Arguments(&.{
         .help = "The name of the journal to add the entry to (else uses default journal).",
     },
     .{
-        .arg = "@tag1,@tag2,...",
+        .arg = "@tag1 [@tag2 ...]",
         .help = "Additional tags to add.",
         .parse = false,
     },

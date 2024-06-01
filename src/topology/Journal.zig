@@ -86,7 +86,15 @@ pub fn addNewDay(self: *Journal, day: Day) !void {
 
 /// Get a day by name. Returns `null` if day not found.
 pub fn getDay(self: *Journal, name: []const u8) ?Day {
-    for (self.info.days) |d| {
+    if (self.getDayPtr(name)) |ptr| {
+        return ptr.*;
+    }
+    return null;
+}
+
+/// Get a pointer to a day by name. Returns `null` if day not found.
+pub fn getDayPtr(self: *Journal, name: []const u8) ?*Day {
+    for (self.info.days) |*d| {
         if (std.mem.eql(u8, d.name, name)) {
             return d;
         }
@@ -257,7 +265,7 @@ fn readDayFromPath(
 }
 
 fn writeEntriesToPath(
-    self: *Journal,
+    self: *const Journal,
     fs: FileSystem,
     entries: []const Entry,
     path: []const u8,
@@ -370,8 +378,29 @@ pub fn addNewEntryFromText(
     });
 }
 
+/// Add new tags to an `Entry`
+pub fn addTagsToEntry(
+    self: *Journal,
+    day: Day,
+    entry: Entry,
+    ts: []const tags.Tag,
+) !void {
+    const ptr = try self.getEntryPtr(day, entry);
+    ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
+}
+
+/// Add new tags to a `Day`
+pub fn addTagsToDay(
+    self: *Journal,
+    day: Day,
+    ts: []const tags.Tag,
+) !void {
+    const ptr = self.getDayPtr(day.name).?;
+    ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
+}
+
 /// Write all days that have staged changes to disk
-pub fn writeDays(self: *Journal) !void {
+pub fn writeDays(self: *const Journal) !void {
     const fs = self.fs orelse return error.NeedsFileSystem;
     var map = self.staged_entries orelse {
         std.log.default.debug("No staged entries for Journal '{s}'", .{self.descriptor.name});

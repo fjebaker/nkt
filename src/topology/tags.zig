@@ -443,7 +443,7 @@ pub fn setUnion(
     allocator: std.mem.Allocator,
     list_A: []const Tag,
     list_B: []const Tag,
-) ![]const Tag {
+) ![]Tag {
     var list = std.ArrayList(Tag).init(allocator);
 
     // TODO: this algorithm can be made much more efficient

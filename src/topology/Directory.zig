@@ -179,6 +179,12 @@ pub fn rename(
     return ptr.*;
 }
 
+/// Add new tags to a `Note`
+pub fn addTagsToNote(self: *const Directory, note: Note, ts: []const tags.Tag) !void {
+    const ptr = self.getNotePtr(note.name).?;
+    ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
+}
+
 /// Update the modified time of a note
 pub fn touchNote(self: *Directory, note: Note, t: time.Time) !Note {
     var new = note;

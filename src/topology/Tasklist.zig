@@ -146,7 +146,7 @@ pub fn getTaskByHash(self: *Tasklist, h: u64) ?Task {
 }
 
 /// Get a pointer to a task by hash. Returns `null` if no task found.
-pub fn getTaskByHashPtr(self: *Tasklist, h: u64) ?*Task {
+pub fn getTaskByHashPtr(self: *const Tasklist, h: u64) ?*Task {
     for (self.info.tasks) |*task| {
         if (task.hash == h) return task;
     }
@@ -320,6 +320,12 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 /// Caller owns memory
 pub fn serialize(self: *const Tasklist, allocator: std.mem.Allocator) ![]const u8 {
     return try serializeInfo(self.info.*, allocator);
+}
+
+/// Add tags to a given `Task`
+pub fn addTagsToTask(self: *const Tasklist, task: Task, new_tags: []const tags.Tag) !void {
+    const ptr = self.getTaskByHashPtr(task.hash).?;
+    ptr.tags = try tags.setUnion(self.allocator, task.tags, new_tags);
 }
 
 fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {

@@ -4,6 +4,7 @@ const Root = @import("topology/Root.zig");
 const Journal = @import("topology/Journal.zig");
 const Directory = @import("topology/Directory.zig");
 const Tasklist = @import("topology/Tasklist.zig");
+const tags = @import("topology/tags.zig");
 
 const FileSystem = @import("FileSystem.zig");
 
@@ -167,6 +168,25 @@ pub const Item = union(enum) {
             },
             .Entry => |entry| {
                 return entry.entry.text;
+            },
+            else => unreachable,
+        }
+    }
+
+    /// Add tags to an `Item`
+    pub fn addTags(self: *Item, new_tags: []const tags.Tag) !void {
+        switch (self.*) {
+            .Note => |note| {
+                try note.directory.addTagsToNote(note.note, new_tags);
+            },
+            .Entry => |*entry| {
+                try entry.journal.addTagsToEntry(entry.day, entry.entry, new_tags);
+            },
+            .Day => |*day| {
+                try day.journal.addTagsToDay(day.day, new_tags);
+            },
+            .Task => |task| {
+                try task.tasklist.addTagsToTask(task.task, new_tags);
             },
             else => unreachable,
         }
