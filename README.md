@@ -226,7 +226,115 @@ Arguments:
 
 ### Tags
 
+Tags are used to group notes together to make finding what you know about a
+certain thing a little more structured. Tags are always prefixed with an `@`
+symbol, such as `@tag`. To avoid spuriously introducing new tags, nkt forces
+you to define a set of tags that you are going to use. You can do this with the
+`new` command.
+
+```
+nkt new tag project.sewing
+```
+
+will create a new _hierarchical tag_ `project.sewing`. This means that the tag
+is matched if you search for `@project` or `@project.sewing`. Similar to the
+hierarchical naming convention of the notes themselves, the naming is to help
+you subgroup and make clusters of information increasingly granular.
+
+You can tag pretty much _anything_. To tag a selected item use
+
+```
+nkt tag --journal work 2 @meeting.town-hall
+```
+
+This will tag the day before yesterday in the work journal with
+`@meeting.town-hall`.
+
+When writing entries or tasks, you can also use inline tag syntax
+
+```
+nkt log "wrote an @email back to dorothy"
+nkt task "learn more @vim shortcuts" --due tuesday
+```
+
+These are automatically parsed and the entry / task is tagged with the
+corresponding tag. The intended use is to make **tags semantically
+meaningful**, so they can be embedded into sentences as you type the note.
+
+The `log` command also supports out-of-place tagging
+
+```
+nkt log "arrived at the office" @work
+```
+
+These tags will not appear in the body of the entry but are the equivalent of having used
+
+```
+nkt log "arrived at the office"
+nkt tag 0 --last @work
+```
+
+You can use tags to guide your searches, or list everything tagged with a
+certain tag using the `list` command
+```
+nkt ls @work
+```
+
 ### Text compilers
+
+Text compilers are used to render a note. You can use pretty much any program
+under the sun to do this, but for example you might want to use `typst` or
+`pandoc` for specific note types.
+
+You can compile a note with
+```
+nkt compile --directory recipes dip.hummus --open
+```
+
+This will use a text compiler to render a PDF of your note. The `--open` flag
+will then open the compiled note in your configured `pdf` viewer.
+
+See `help compile` for more information.
+
+nkt comes with some default text compilers. You can list those available as
+well as the note extensions they support with
+```
+$ nkt (main) $ nkt ls compilers
+
+Compiler:         markdown
+ - Extensions:    md
+
+Compiler:         typst
+ - Extensions:    typ
+```
+
+Let's add a new one that will print the note out of an Epson thermal printer,
+so e.g. we can export our recipes quickly. We have to edit
+`~/.nkt/topology.json` to do this, and under the `text_compilers` heading add
+```json
+{
+    "name": "epson",
+    "command": [
+        "/home/lilith/Developer/printing/print.py",
+        "--print",
+        "%<"
+    ],
+    "link": "%NAME",
+    "extensions": [
+        "md",
+        "txt"
+    ]
+}
+```
+We give the name of the text compiler, the shell command used to execute the compiler (using `%<` and `%@` to denote the input and output file respective, similar to Make), and specify any other flags we might want to add.
+
+Next the `link` entry tells nkt how to translate links. See the `markdown` and `typst` entries for examples. These are used to build links between one compiled note and another.
+
+Finally we give a list of extensions that this text compiler is valid for. We can use it by specifying the compiler, or it will be default selected if no other compilers for a given extension are available
+
+```
+nkt compile --directory recipes dip.hummus --compiler epson
+```
 
 ### Semantic time
 
