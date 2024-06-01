@@ -6,6 +6,9 @@ const Time = time.Time;
 const utils = @import("../utils.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
+const Selector = @import("../selections.zig").Selector;
+const SelectionConfig = @import("../selections.zig").SelectionConfig;
+
 const Tasklist = @This();
 
 pub const TASKLIST_DIRECTORY = "tasklists";
@@ -366,4 +369,25 @@ fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
 
     const due = sortDue({}, lhs, rhs);
     return due;
+}
+
+/// Used to retrieve specific items from a journal
+pub fn select(self: *Tasklist, selector: Selector, config: SelectionConfig) !Task {
+    _ = config;
+    const maybe_task: ?Tasklist.Task = switch (selector) {
+        .ByName => |n| try self.getTask(n),
+        .ByIndex, .ByQualifiedIndex => try self.getTaskByIndex(
+            selector.getIndex(),
+        ),
+        .ByDate => return error.InvalidSelection,
+        .ByHash => |h| b: {
+            if (h <= Tasklist.MINI_HASH_MAX_VALUE) {
+                break :b try self.getTaskByMiniHash(h);
+            } else {
+                break :b self.getTaskByHash(h);
+            }
+        },
+    };
+
+    return maybe_task orelse error.NoSuchItem;
 }

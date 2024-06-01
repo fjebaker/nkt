@@ -178,7 +178,7 @@ fn isSelectingTime(
     unused: []const []const u8,
     selection: selections.Selection,
 ) bool {
-    return (selection.modifiers.entry_time != null or
+    return (selection.modifiers.time != null or
         utils.contains([]const u8, unused, "time"));
 }
 
@@ -189,8 +189,8 @@ fn listTimesFor(
     _: std.mem.Allocator,
 ) !void {
     var s = selection;
-    const tstring = s.modifiers.entry_time;
-    s.modifiers.entry_time = null;
+    const tstring = s.modifiers.time;
+    s.modifiers.time = null;
 
     std.log.default.debug("Listing times for: '{s}'", .{tstring orelse ""});
 

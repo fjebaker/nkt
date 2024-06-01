@@ -874,3 +874,13 @@ pub fn ensureCompiledDirectory(self: *Root) !void {
         return Error.NeedsFileSystem;
     try fs.makeDirIfNotExists(self.info.compiled_directory);
 }
+
+// check that all of the collections have a consistent interface
+comptime {
+    const Types = [_]type{ Directory, Journal, Tasklist };
+    for (&Types) |T| {
+        if (!@hasDecl(T, "select")) @compileError(
+            std.fmt.comptimePrint("{any} is missing `select` method!", .{T}),
+        );
+    }
+}

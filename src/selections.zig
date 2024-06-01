@@ -32,14 +32,28 @@ pub const Error = error{
     UnspecifiedCollection,
 };
 
+/// The different methods that can be used to select items in the topology
 pub const Method = enum {
+    /// An index is a single number, like `1`, `21`
     ByIndex,
+
+    /// A qualified index is a number with some single character in front of
+    /// it, like `t3`, or `k8`
     ByQualifiedIndex,
+
+    /// Date is a parsed (semantic) time-like
     ByDate,
+
+    /// Name is the name of an entry or item
     ByName,
+
+    /// Select by a hash `/ab24f`
     ByHash,
 };
 
+/// An implementation of the different `Method` of selection. Used to return
+/// what a user has selected and through which method their selection will be
+/// resolved.
 pub const Selector = union(Method) {
     ByIndex: usize,
     ByQualifiedIndex: struct {
@@ -50,10 +64,34 @@ pub const Selector = union(Method) {
     ByName: []const u8,
     ByHash: u64,
 
+    /// Get a selector that represent the date today
     pub fn today() Method {
         const date = time.Date.now();
         return .{ .ByDate = date };
     }
+
+    /// Get the index of a `ByIndex` or `ByQualifiedIndex` selector. Will hit
+    /// an unreachable if the selector is of the wrong type.
+    pub fn getIndex(self: *const Selector) usize {
+        return switch (self.*) {
+            .ByIndex => |i| i,
+            .ByQualifiedIndex => |i| i.index,
+            else => unreachable,
+        };
+    }
+};
+
+/// Modifers for the selction that can impact how specifics of a selection are
+/// resolved
+pub const Modifiers = struct {
+    time: ?[]const u8 = null,
+    last: ?bool = false,
+};
+
+/// Configuration given to the collections to help resolve a `select`
+pub const SelectionConfig = struct {
+    now: time.Time,
+    mod: Modifiers,
 };
 
 const ResolveResult = struct {
@@ -74,93 +112,48 @@ const ResolveResult = struct {
     }
 };
 
-fn retrieveFromJournal(
-    s: Selector,
-    journal: *Journal,
-    entry_time: ?[]const u8,
+fn retrieveFromCollection(
+    selector: Selector,
+    root: *Root,
+    comptime ct: Root.CollectionType,
+    name: []const u8,
+    config: SelectionConfig,
 ) !ResolveResult {
-    const now = time.Time.now();
-    const day = switch (s) {
-        .ByQualifiedIndex, .ByIndex => b: {
-            const index = if (s == .ByIndex)
-                s.ByIndex
-            else
-                s.ByQualifiedIndex.index;
-            std.log.default.debug("Looking up by index: {d}", .{index});
-            break :b journal.getDayOffsetIndex(now, index) orelse
-                return ResolveResult.throw(Root.Error.NoSuchItem);
-        },
-        .ByDate => |d| b: {
-            const name = try time.formatDateBuf(d);
-            break :b journal.getDay(&name) orelse
-                return ResolveResult.throw(Root.Error.NoSuchItem);
-        },
-        .ByName => |name| journal.getDay(name) orelse
-            return ResolveResult.throw(Root.Error.NoSuchItem),
-        .ByHash => return ResolveResult.throw(Error.InvalidSelection),
-    };
+    std.log.default.debug(
+        "Looking up collection {s}->'{s}'",
+        .{ @tagName(ct), name },
+    );
 
-    if (entry_time) |t| {
-        const entries = try journal.getEntries(day);
-        for (entries) |entry| {
-            const etime = try entry.created.formatTime();
+    var col = (try root.getCollection(name, ct)) orelse
+        return ResolveResult.throw(Error.UnknownSelection);
 
-            if (std.mem.eql(u8, t, &etime)) {
-                return ResolveResult.ok(.{ .Entry = .{
-                    .journal = journal.*,
-                    .day = day,
-                    .entry = entry,
-                } });
-            }
+    const item = col.select(selector, config) catch |err| {
+        switch (err) {
+            error.NoSuchItem, error.InvalidSelection => return ResolveResult.throw(err),
+            else => return err,
         }
-        return ResolveResult.throw(Root.Error.NoSuchItem);
-    }
-
-    return ResolveResult.ok(
-        .{ .Day = .{ .journal = journal.*, .day = day } },
-    );
-}
-
-fn retrieveFromDirectory(s: Selector, directory: *Directory) !ResolveResult {
-    const name: []const u8 = switch (s) {
-        .ByHash => return ResolveResult.throw(Error.InvalidSelection),
-        .ByName => |n| n,
-        .ByDate => |d| &(try time.formatDateBuf(d)),
-        else => return Error.InvalidSelection,
     };
-    const note = directory.getNote(name) orelse
-        return ResolveResult.throw(Root.Error.NoSuchItem);
-    return ResolveResult.ok(
-        .{ .Note = .{ .directory = directory.*, .note = note } },
-    );
-}
 
-fn retrieveFromTasklist(s: Selector, tasklist: *Tasklist) !ResolveResult {
-    const task: ?Tasklist.Task = switch (s) {
-        .ByName => |n| try tasklist.getTask(n),
-        .ByIndex, .ByQualifiedIndex => b: {
-            const index = if (s == .ByIndex)
-                s.ByIndex
-            else
-                s.ByQualifiedIndex.index;
-
-            break :b try tasklist.getTaskByIndex(index);
+    const it: Item = switch (ct) {
+        .CollectionJournal => if (item.entry) |entry|
+            .{ .Entry = .{
+                .journal = col,
+                .day = item.day,
+                .entry = entry,
+            } }
+        else
+            .{ .Day = .{
+                .journal = col,
+                .day = item.day,
+            } },
+        .CollectionDirectory => .{
+            .Note = .{ .directory = col, .note = item },
         },
-        .ByDate => return ResolveResult.throw(Error.InvalidSelection),
-        .ByHash => |h| b: {
-            if (h <= Tasklist.MINI_HASH_MAX_VALUE) {
-                break :b tasklist.getTaskByMiniHash(h) catch |e|
-                    return ResolveResult.throw(e);
-            } else {
-                break :b tasklist.getTaskByHash(h);
-            }
+        .CollectionTasklist => .{
+            .Task = .{ .tasklist = col, .task = item },
         },
     };
-    const t = task orelse
-        return ResolveResult.throw(Root.Error.NoSuchItem);
-    return ResolveResult.ok(
-        .{ .Task = .{ .tasklist = tasklist.*, .task = t } },
-    );
+    return ResolveResult.ok(it);
 }
 
 /// Internal utility method used to turn various "failed to resolve" errors
@@ -194,12 +187,16 @@ pub const Selection = struct {
     /// The selector used to select the item
     selector: ?Selector = null,
 
-    modifiers: struct {
-        entry_time: ?[]const u8 = null,
-    } = .{},
+    /// Configuration for the selection query
+    modifiers: Modifiers = .{},
 
     /// True if the collection was specified on the command line
     collection_provided: bool = false,
+
+    /// Initialize a selection query
+    pub fn init() Selection {
+        return .{};
+    }
 
     fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
         const name = s.collection_name orelse
@@ -230,104 +227,72 @@ pub const Selection = struct {
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
-    fn lookInCollection(
-        s: Selection,
-        root: *Root,
-        comptime ct: Root.CollectionType,
-        name: []const u8,
-    ) !ResolveResult {
-        std.log.default.debug(
-            "Looking up collection {s}->'{s}'",
-            .{ @tagName(ct), name },
-        );
-
-        var col = (try root.getCollection(name, ct)) orelse
-            return ResolveResult.throw(Error.UnknownSelection);
-        const selector = s.selector.?;
-
-        switch (ct) {
-            .CollectionJournal => {
-                return try retrieveFromJournal(
-                    selector,
-                    &col,
-                    s.modifiers.entry_time,
-                );
-            },
-            .CollectionDirectory => {
-                return try retrieveFromDirectory(selector, &col);
-            },
-            .CollectionTasklist => {
-                return try retrieveFromTasklist(selector, &col);
-            },
-        }
-    }
-
-    fn resolve(s: Selection, root: *Root) !ResolveResult {
+    fn implResolve(s: Selection, root: *Root, config: SelectionConfig) !ResolveResult {
         // if no item selection is given, we resolve a whole collection instead
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
         std.log.default.debug("Selector: {s}", .{@tagName(selector)});
 
-        if (s.collection_type) |ct| {
-            switch (ct) {
-                inline else => |t| {
-                    if (s.collection_name) |name| {
-                        return s.lookInCollection(root, t, name);
-                    } else {
-                        std.log.default.debug(
-                            "No collection name given, using default search order",
-                            .{},
-                        );
+        const ct = s.collection_type orelse {
+            return ResolveResult.throw(Error.UnknownSelection);
+        };
 
-                        // first look in the default, then look in all the rest
-                        const default_name = root.defaultCollectionName(t);
-                        const default_r = try s.lookInCollection(root, t, default_name);
-                        if (unwrapCanary(default_r)) |rr| {
+        switch (ct) {
+            inline else => |t| {
+                if (s.collection_name) |name| {
+                    return try retrieveFromCollection(
+                        s.selector.?,
+                        root,
+                        t,
+                        name,
+                        config,
+                    );
+                } else {
+                    std.log.default.debug(
+                        "No collection name given, using default search order",
+                        .{},
+                    );
+
+                    // first look in the default, then look in all the rest
+                    const default_name = root.defaultCollectionName(t);
+                    const default_r = try retrieveFromCollection(
+                        s.selector.?,
+                        root,
+                        t,
+                        default_name,
+                        config,
+                    );
+                    if (unwrapCanary(default_r)) |rr| {
+                        return rr;
+                    }
+                    // now try all the others
+                    for (root.getAllDescriptor(t)) |d| {
+                        const r = try retrieveFromCollection(
+                            s.selector.?,
+                            root,
+                            t,
+                            d.name,
+                            config,
+                        );
+                        if (unwrapCanary(r)) |rr| {
                             return rr;
                         }
-                        // now try all the others
-                        for (root.getAllDescriptor(t)) |d| {
-                            const r = try s.lookInCollection(root, t, d.name);
-                            if (unwrapCanary(r)) |rr| {
-                                return rr;
-                            }
-                        }
                     }
-                },
-            }
+                }
+            },
+        }
+        return ResolveResult.throw(Error.UnknownSelection);
+    }
 
-            switch (ct) {
-                .CollectionJournal => {
-                    const name = s.collection_name orelse
-                        root.info.default_journal;
-                    std.log.default.debug("Looking up journal '{s}'", .{name});
-                    var journal = (try root.getJournal(name)) orelse
-                        return ResolveResult.throw(Error.UnknownSelection);
-                    return try retrieveFromJournal(
-                        selector,
-                        &journal,
-                        s.modifiers.entry_time,
-                    );
-                },
-                .CollectionDirectory => {
-                    const name = s.collection_name orelse
-                        root.info.default_directory;
-                    std.log.default.debug("Looking up directory '{s}'", .{name});
-                    var directory = (try root.getDirectory(name)) orelse
-                        return ResolveResult.throw(Error.UnknownSelection);
-                    return try retrieveFromDirectory(selector, &directory);
-                },
-                .CollectionTasklist => {
-                    const name = s.collection_name orelse
-                        root.info.default_tasklist;
-                    std.log.default.debug("Looking up tasklist '{s}'", .{name});
+    fn resolve(s: Selection, root: *Root) !ResolveResult {
+        const config: SelectionConfig = .{
+            .now = time.Time.now(),
+            .mod = s.modifiers,
+        };
 
-                    var tasklist = (try root.getTasklist(name)) orelse
-                        return ResolveResult.throw(Error.UnknownSelection);
-                    return try retrieveFromTasklist(selector, &tasklist);
-                },
-            }
+        if (unwrapCanary(try s.implResolve(root, config))) |rr| {
+            return rr;
         }
 
         // try different collections and see if one resolves
@@ -338,7 +303,7 @@ pub const Selection = struct {
         }) |ct| {
             var canary = s;
             canary.collection_type = ct;
-            const r = try canary.resolve(root);
+            const r = try canary.implResolve(root, config);
             if (unwrapCanary(r)) |rr| {
                 return rr;
             }
@@ -410,7 +375,7 @@ fn testSelectionResolve(
     tasklist: ?[]const u8,
     expected: Item,
 ) !void {
-    var selection: Selection = .{};
+    var selection = Selection.init();
     if (s) |str| {
         const selector = try asSelector(str);
         try addSelector(&selection, selector);
@@ -790,7 +755,7 @@ fn implArgsPrefixed(
     args: T,
     forgiving: bool,
 ) !Selection {
-    var selection: Selection = .{};
+    var selection = Selection.init();
 
     if (selector_string) |ss| {
         const selector = try asSelector(ss);
@@ -836,7 +801,7 @@ fn implArgsPrefixed(
                 );
             }
         }
-        selection.modifiers.entry_time = t;
+        selection.modifiers.time = t;
     }
     return selection;
 }

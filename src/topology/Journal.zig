@@ -6,6 +6,9 @@ const Tag = tags.Tag;
 const FileSystem = @import("../FileSystem.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
+const Selector = @import("../selections.zig").Selector;
+const SelectionConfig = @import("../selections.zig").SelectionConfig;
+
 const Journal = @This();
 
 pub const TOPOLOGY_FILENAME = "topology.json";
@@ -401,4 +404,40 @@ fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
         info,
         .{ .whitespace = .indent_4 },
     );
+}
+
+pub const DayEntry = struct {
+    day: Day,
+    entry: ?Entry = null,
+};
+
+/// Used to retrieve specific items from a journal
+pub fn select(self: *Journal, selector: Selector, config: SelectionConfig) !DayEntry {
+    const maybe_day = switch (selector) {
+        .ByQualifiedIndex, .ByIndex => b: {
+            const index = selector.getIndex();
+            std.log.default.debug(
+                "Looking up in journal '{s}' by index: {d}",
+                .{ self.descriptor.name, index },
+            );
+            break :b self.getDayOffsetIndex(config.now, index);
+        },
+        .ByDate => |d| self.getDay(&(try time.formatDateBuf(d))),
+        .ByName => |name| self.getDay(name),
+        .ByHash => return error.InvalidSelection,
+    };
+
+    const day = maybe_day orelse return error.InvalidSelection;
+    if (config.mod.time) |t| {
+        const entries = try self.getEntries(day);
+        for (entries) |entry| {
+            const etime = try entry.created.formatTime();
+            if (std.mem.eql(u8, t, &etime)) {
+                return .{ .day = day, .entry = entry };
+            }
+        }
+        return error.NoSuchItem;
+    }
+
+    return .{ .day = day };
 }

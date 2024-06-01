@@ -6,6 +6,9 @@ const Time = time.Time;
 const FileSystem = @import("../FileSystem.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
+const Selector = @import("../selections.zig").Selector;
+const SelectionConfig = @import("../selections.zig").SelectionConfig;
+
 const Directory = @This();
 
 pub const TOPOLOGY_FILENAME = "topology.json";
@@ -221,4 +224,16 @@ fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
         info,
         .{ .whitespace = .indent_4 },
     );
+}
+
+/// Used to retrieve specific items from a journal
+pub fn select(self: *Directory, selector: Selector, config: SelectionConfig) !Note {
+    _ = config;
+    const name: []const u8 = switch (selector) {
+        .ByName => |n| n,
+        .ByDate => |d| &(try time.formatDateBuf(d)),
+        else => return error.InvalidSelection,
+    };
+    return self.getNote(name) orelse
+        return error.NoSuchItem;
 }
