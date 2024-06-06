@@ -145,9 +145,9 @@ pub const Time = struct {
         );
 
         const hour_shift = if (s[19] == '+')
-            -time_zone_shift
+            time_zone_shift
         else
-            time_zone_shift;
+            -time_zone_shift;
 
         const tz = TimeZone.create(
             "---",
