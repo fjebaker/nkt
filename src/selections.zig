@@ -372,17 +372,19 @@ pub const Selection = struct {
             return rr;
         }
 
-        // try different collections and see if one resolves
-        for (&[_]Root.CollectionType{
-            .CollectionDirectory,
-            .CollectionJournal,
-            .CollectionTasklist,
-        }) |ct| {
-            var canary = s;
-            canary.collection_type = ct;
-            const r = try canary.implResolve(root, config);
-            if (unwrapCanary(r)) |rr| {
-                return rr;
+        if (s.collection_name == null) {
+            // try different collections and see if one resolves
+            for (&[_]Root.CollectionType{
+                .CollectionDirectory,
+                .CollectionJournal,
+                .CollectionTasklist,
+            }) |ct| {
+                var canary = s;
+                canary.collection_type = ct;
+                const r = try canary.implResolve(root, config);
+                if (unwrapCanary(r)) |rr| {
+                    return rr;
+                }
             }
         }
 
