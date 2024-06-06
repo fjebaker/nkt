@@ -32,7 +32,8 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "what",
-        .help = "Can be 'tags', 'compilers', or when directory is selected, can be used to subselect hiearchies",
+        .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a tasklist.",
+        .completion = "{compadd $(nkt completion list --collection tasklist)}",
     },
     .{
         .arg = "--directory name",
@@ -79,6 +80,7 @@ const ListSelection = union(enum) {
     },
     Collections: void,
     Tags: void,
+    Tag: []const u8,
     Compilers: void,
 };
 
@@ -124,6 +126,7 @@ pub fn execute(
         .Directory => |i| try self.listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
+        .Tag => |t| try listTagged(allocator, t, root, writer, opts),
     }
 }
 
@@ -185,7 +188,7 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
                 arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
-                "tags",
+                what,
             );
             return .{ .Tags = {} };
         } else if (std.mem.eql(u8, what, "compilers")) {
@@ -193,15 +196,33 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
                 arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
-                "compilers",
+                what,
             );
             return .{ .Compilers = {} };
+        } else if (what[0] == '@') {
+            try utils.ensureOnly(
+                arguments.Parsed,
+                args,
+                (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
+                what,
+            );
+            return .{ .Tag = what };
         }
-        return cli.throwError(
-            cli.CLIErrors.BadArgument,
-            "Unknown selection: '{s}'",
-            .{what},
+
+        // make sure none of the incompatible fields are selected
+        try utils.ensureOnly(
+            arguments.Parsed,
+            args,
+            (MUTUAL_FIELDS ++ [_][]const u8{ "what", "done", "archived", "hash" }),
+            what,
         );
+
+        return .{ .Tasklist = .{
+            .name = what,
+            .done = args.done,
+            .hash = args.hash,
+            .archived = args.archived,
+        } };
     }
 
     try utils.ensureOnly(
@@ -437,5 +458,29 @@ fn listDirectory(
         try writer.print(" - {s}", .{try note.modified.formatDateTime()});
         try writer.writeAll("\n");
     }
+    _ = opts;
+}
+
+fn listTagged(
+    allocator: std.mem.Allocator,
+    t: []const u8,
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    const now = time.Time.now();
+    const st = try tags.parseInlineTags(allocator, t, now);
+    defer allocator.free(st);
+
+    var tl = try root.getTagDescriptorList();
+    if (tl.findInvalidTags(st)) |_t| {
+        return cli.throwError(
+            error.InvalidTag,
+            "'{s}' is not a valid tag",
+            .{_t.name},
+        );
+    }
+
+    _ = writer;
     _ = opts;
 }
