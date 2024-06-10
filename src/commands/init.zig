@@ -97,9 +97,11 @@ pub fn execute(
         // touch all chains
         _ = try root.getChainList();
         _ = try root.getTagDescriptorList();
+        _ = try root.getStackList();
         try root.writeTags();
         try root.writeChains();
         try root.writeChanges();
+        try root.writeStacks();
         try root.writeRoot();
         return;
     }
