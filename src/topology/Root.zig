@@ -49,7 +49,7 @@ pub const Error = error{
 pub const SCHEMA_VERSION = std.SemanticVersion{
     .major = 0,
     .minor = 4,
-    .patch = 0,
+    .patch = 1,
 };
 
 pub fn schemaVersion() []const u8 {
@@ -214,7 +214,10 @@ pub fn loadFromString(self: *Root, string: []const u8) !void {
         Info,
         alloc,
         string,
-        .{ .allocate = .alloc_always },
+        .{
+            .allocate = .alloc_always,
+            .ignore_unknown_fields = true,
+        },
     );
     std.log.default.debug(
         "Read {d} journals, {d} directories, {d} tasklists",
