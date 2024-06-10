@@ -243,6 +243,8 @@ fn searchFileNames(
         search_items,
         .{
             .wildcard_spaces = true,
+            .case_sensitive = false,
+            .case_penalize = true,
         },
     );
     defer searcher.deinit();
