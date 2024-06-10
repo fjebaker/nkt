@@ -1,7 +1,10 @@
 const std = @import("std");
 const selections = @import("../selections.zig");
 const cli = @import("../cli.zig");
+const utils = @import("../utils.zig");
+const time = @import("../topology/time.zig");
 
+const stacks = @import("../topology/stacks.zig");
 const Root = @import("../topology/Root.zig");
 
 const commands = @import("../commands.zig");
@@ -20,10 +23,15 @@ pub const Push = struct {
             .help = "Name of the stack to push to.",
             .required = true,
         },
+        .{
+            .arg = "-m/--message text",
+            .help = "An additional message to attach to the item when pushed.",
+        },
     });
 
     selection: selections.Selection,
     stack: []const u8,
+    message: ?[]const u8,
 
     pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Push {
         const args = try arguments.parseAll(itt);
@@ -32,7 +40,11 @@ pub const Push = struct {
             args.item,
             args,
         );
-        return .{ .selection = selection, .stack = args.stack };
+        return .{
+            .selection = selection,
+            .stack = args.stack,
+            .message = args.message,
+        };
     }
 
     pub fn execute(
@@ -55,7 +67,7 @@ pub const Push = struct {
                 .{self.stack},
             );
         };
-        try sl.addItemToStack(stack, item);
+        try sl.addItemToStack(stack, item, self.message, time.Time.now());
 
         const path = item.getPath();
 
@@ -191,11 +203,15 @@ pub const Peek = struct {
                 .{self.args.stack},
             );
         };
-        for (0.., stack.items) |i, item| {
+
+        var itt = utils.ReverseIterator(stacks.ItemDescriptor).init(stack.items);
+        while (itt.next()) |item| {
+            const i = stack.items.len - (itt.index);
             try writer.print(
-                "[{d}] : {s} (from {s} '{s}')\n",
+                "[{d}] : {s} | {s} from {s} '{s}'\n",
                 .{
                     i,
+                    try item.added.formatDateTime(),
                     item.name,
                     switch (item.collection) {
                         .CollectionDirectory => "directory",
@@ -205,6 +221,12 @@ pub const Peek = struct {
                     item.parent,
                 },
             );
+            if (item.message.len > 0) {
+                try writer.print(
+                    "  Message: {s}\n",
+                    .{item.message},
+                );
+            }
         }
     }
 };

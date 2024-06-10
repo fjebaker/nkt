@@ -16,7 +16,9 @@ pub const ItemDescriptor = struct {
     /// What is the name of this item
     name: []const u8,
     /// Associated metadata as a note
-    note: []const u8 = "",
+    message: []const u8 = "",
+    /// The time the item was added to the stack
+    added: Time,
 };
 
 pub const Stack = struct {
@@ -85,12 +87,16 @@ pub const StackList = struct {
         self: *StackList,
         stack: *Stack,
         item: abstractions.Item,
+        message: ?[]const u8,
+        time_added: time.Time,
     ) !void {
         const allocator = self.mem.allocator();
         const descr: ItemDescriptor = .{
             .collection = item.getCollectionType(),
             .parent = item.getCollectionName(),
             .name = try item.getName(allocator),
+            .message = message orelse "",
+            .added = time_added,
         };
 
         var list = std.ArrayList(ItemDescriptor).fromOwnedSlice(
