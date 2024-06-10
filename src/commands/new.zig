@@ -7,6 +7,7 @@ const selections = @import("../selections.zig");
 
 const commands = @import("../commands.zig");
 const Root = @import("../topology/Root.zig");
+const stacks = @import("../topology/stacks.zig");
 
 const Self = @This();
 
@@ -32,6 +33,7 @@ const NewType = enum {
     tasklist,
     chain,
     tag,
+    stack,
 };
 
 ctype: NewType,
@@ -81,10 +83,14 @@ pub fn execute(
         .tag => {
             try root.addNewTag(tags.Tag.Descriptor.new(self.name));
         },
+        .stack => {
+            try root.addNewStack(stacks.Stack.new(self.name));
+        },
     }
 
     switch (self.ctype) {
         .chain => try root.writeChains(),
+        .stack => try root.writeStacks(),
         .tag => try root.writeTags(),
         else => try root.writeChanges(),
     }

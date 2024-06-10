@@ -432,6 +432,14 @@ pub fn addNewChain(self: *Root, chain: chains.Chain) !void {
     try list.addChain(chain);
 }
 
+/// Add a new `Stack`. Will raise a `DuplicateItem` error if a stack by the
+/// same name or alias already exists. Added stack is not copied, so must
+/// outlive the `Root` context
+pub fn addNewStack(self: *Root, stack: stacks.Stack) !void {
+    var list = try self.getStackList();
+    try list.addStack(stack);
+}
+
 /// Serialize into a string for writing to file.  Caller owns the memory.
 pub fn serialize(self: *const Root, allocator: std.mem.Allocator) ![]const u8 {
     var arena = std.heap.ArenaAllocator.init(allocator);

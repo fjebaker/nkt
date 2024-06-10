@@ -80,6 +80,7 @@ const ListSelection = union(enum) {
     },
     Collections: void,
     Tags: void,
+    Stacks: void,
     Tag: []const u8,
     Compilers: void,
 };
@@ -126,6 +127,7 @@ pub fn execute(
         .Directory => |i| try self.listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
+        .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
         .Tag => |t| try listTagged(allocator, t, root, writer, opts),
     }
 }
@@ -191,6 +193,14 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
                 what,
             );
             return .{ .Tags = {} };
+        } else if (std.mem.eql(u8, what, "stacks")) {
+            try utils.ensureOnly(
+                arguments.Parsed,
+                args,
+                (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
+                what,
+            );
+            return .{ .Stacks = {} };
         } else if (std.mem.eql(u8, what, "compilers")) {
             try utils.ensureOnly(
                 arguments.Parsed,
@@ -329,6 +339,26 @@ fn listJournal(
     _ = j;
     _ = root;
     _ = opts;
+}
+
+fn listStacks(
+    allocator: std.mem.Allocator,
+    tl: utils.TagType(ListSelection, "Stacks"),
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    _ = allocator;
+    _ = tl;
+    _ = opts;
+    const sl = try root.getStackList();
+    if (sl.stacks.len == 0) {
+        try writer.writeAll("No stacks. Use `new stack NAME` to add a new stack\n");
+        return;
+    }
+    for (sl.stacks) |stack| {
+        try writer.print("{s}: {d} items\n", .{ stack.name, stack.items.len });
+    }
 }
 
 fn listTasklist(

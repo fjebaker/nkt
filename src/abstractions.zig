@@ -120,6 +120,31 @@ pub const Item = union(enum) {
         return self.getAttributeOfItem("created", time.Time);
     }
 
+    /// Get the name of the collection of this item
+    pub fn getCollectionName(self: *const Item) []const u8 {
+        return switch (self.*) {
+            .Note => |n| n.directory.descriptor.name,
+            .Task => |tl| tl.tasklist.descriptor.name,
+            .Day => |ed| ed.journal.descriptor.name,
+            .Entry => |ed| ed.journal.descriptor.name,
+            .Collection => |c| c.getDescriptor().name,
+        };
+    }
+
+    /// Get the collection type of the item
+    pub fn getCollectionType(self: *const Item) Root.CollectionType {
+        return switch (self.*) {
+            .Note => .CollectionDirectory,
+            .Task => .CollectionTasklist,
+            .Entry, .Day => .CollectionJournal,
+            .Collection => |c| switch (c) {
+                .directory => .CollectionDirectory,
+                .journal => .CollectionJournal,
+                .tasklist => .CollectionTasklist,
+            },
+        };
+    }
+
     /// Get path to the item
     pub fn getPath(self: *const Item) []const u8 {
         switch (self.*) {
