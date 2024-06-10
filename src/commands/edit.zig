@@ -60,20 +60,18 @@ const EditOptions = struct {
     path_only: bool,
 };
 
-selection: ?selections.Selection,
+selection: selections.Selection,
 opts: EditOptions,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
 
-    const selection = if (args.item) |item|
+    const selection =
         try selections.fromArgs(
-            arguments.Parsed,
-            item,
-            args,
-        )
-    else
-        null;
+        arguments.Parsed,
+        args.item,
+        args,
+    );
 
     if (args.new == false and args.ext != null) {
         return cli.throwError(
@@ -101,17 +99,25 @@ pub fn execute(
     opts: commands.Options,
 ) !void {
     try root.load();
-    if (self.selection) |selection| {
+    if (self.selection.selector != null) {
         try editElseMaybeCreate(
             writer,
-            selection,
+            self.selection,
             allocator,
             root,
             opts,
             self.opts,
         );
     } else {
-        var dir = (try root.getDirectory(root.info.default_directory)).?;
+        const dir_name = if (self.selection.collection_type) |ct| b: {
+            if (ct == .CollectionDirectory) {
+                break :b self.selection.collection_name;
+            }
+            return cli.throwError(cli.CLIErrors.IncompatibleTypes, "Currently can only select from directories interactively", .{});
+        } else null;
+
+        const selected_directory = dir_name orelse root.info.default_directory;
+        var dir = (try root.getDirectory(selected_directory)).?;
         const ss = try searchFileNames(
             &dir,
             allocator,
@@ -129,7 +135,7 @@ pub fn execute(
                 self.opts.allow_new = true;
 
                 // assert the note does not already exist
-                const maybe_item = try self.selection.?.resolveOrNull(root);
+                const maybe_item = try self.selection.resolveOrNull(root);
                 if (maybe_item != null) {
                     var n = maybe_item.?.Note;
                     try editNote(
@@ -165,7 +171,7 @@ pub fn execute(
                     return;
                 };
                 const path = try createNew(
-                    self.selection.?,
+                    self.selection,
                     allocator,
                     root,
                     ext,
@@ -175,7 +181,7 @@ pub fn execute(
                 try becomeEditorRelativePath(allocator, &root.fs.?, path);
                 try editElseMaybeCreate(
                     writer,
-                    self.selection.?,
+                    self.selection,
                     allocator,
                     root,
                     opts,
