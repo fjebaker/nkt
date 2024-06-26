@@ -119,6 +119,12 @@ fn executeInternal(
                     try writer.writeAll(c.name);
                     try writer.writeAll(" ");
                 }
+            } else if (std.mem.eql(u8, collection, "stacks")) {
+                const sl = try root.getStackList();
+                for (sl.stacks) |s| {
+                    try writer.writeAll(s.name);
+                    try writer.writeAll(" ");
+                }
             } else if (std.mem.eql(u8, collection, "chains")) {
                 const chainlist = try root.getChainList();
                 for (chainlist.chains) |c| {

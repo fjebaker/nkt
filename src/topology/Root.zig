@@ -10,6 +10,7 @@ pub const Tasklist = @import("Tasklist.zig");
 pub const TextCompiler = @import("TextCompiler.zig");
 
 const chains = @import("chains.zig");
+const stacks = @import("stacks.zig");
 const tags = @import("tags.zig");
 pub const Tag = tags.Tag;
 const time = @import("time.zig");
@@ -48,7 +49,7 @@ pub const Error = error{
 pub const SCHEMA_VERSION = std.SemanticVersion{
     .major = 0,
     .minor = 4,
-    .patch = 0,
+    .patch = 1,
 };
 
 pub fn schemaVersion() []const u8 {
@@ -116,6 +117,7 @@ const Info = struct {
     // path to where we store the chains file
     chainpath: []const u8 = "chains.json",
     tagpath: []const u8 = "tags.json",
+    stackspath: []const u8 = "stacks.json",
 
     // different text compilers
     text_compilers: []const TextCompiler = &.{
@@ -172,6 +174,7 @@ allocator: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
 tag_descriptors: ?tags.DescriptorList = null,
 chain_list: ?chains.ChainList = null,
+stack_list: ?stacks.StackList = null,
 fs: ?FileSystem = null,
 
 /// Initialize a new `Root` with all default values
@@ -211,7 +214,10 @@ pub fn loadFromString(self: *Root, string: []const u8) !void {
         Info,
         alloc,
         string,
-        .{ .allocate = .alloc_always },
+        .{
+            .allocate = .alloc_always,
+            .ignore_unknown_fields = true,
+        },
     );
     std.log.default.debug(
         "Read {d} journals, {d} directories, {d} tasklists",
@@ -227,6 +233,7 @@ pub fn deinit(self: *Root) void {
     self.cache.deinit();
     if (self.tag_descriptors) |*td| td.deinit();
     if (self.chain_list) |*cl| cl.deinit();
+    if (self.stack_list) |*sl| sl.deinit();
     self.arena.deinit();
     self.* = undefined;
 }
@@ -270,6 +277,26 @@ fn getTagDescriptorListPtr(self: *Root) !*tags.DescriptorList {
         }
     }
     return &self.tag_descriptors.?;
+}
+
+fn readStackList(self: *Root, fs: *FileSystem) !void {
+    const content = try fs.readFileAlloc(self.allocator, self.info.stackspath);
+    defer self.allocator.free(content);
+    self.stack_list = try stacks.readStackList(self.allocator, content);
+}
+
+/// Get the `StackList`
+pub fn getStackList(self: *Root) !*stacks.StackList {
+    if (self.stack_list == null) {
+        if (self.getFileSystem()) |fs| {
+            try self.readStackList(fs);
+        } else {
+            self.stack_list = stacks.StackList{
+                .mem = std.heap.ArenaAllocator.init(self.allocator),
+            };
+        }
+    }
+    return &self.stack_list.?;
 }
 
 fn readChainList(self: *Root, fs: *FileSystem) !void {
@@ -406,6 +433,14 @@ pub fn addNewTag(self: *Root, tag: Tag.Descriptor) !void {
 pub fn addNewChain(self: *Root, chain: chains.Chain) !void {
     var list = try self.getChainList();
     try list.addChain(chain);
+}
+
+/// Add a new `Stack`. Will raise a `DuplicateItem` error if a stack by the
+/// same name or alias already exists. Added stack is not copied, so must
+/// outlive the `Root` context
+pub fn addNewStack(self: *Root, stack: stacks.Stack) !void {
+    var list = try self.getStackList();
+    try list.addStack(stack);
 }
 
 /// Serialize into a string for writing to file.  Caller owns the memory.
@@ -667,6 +702,10 @@ pub fn addInitialCollections(self: *Root) !void {
     self.chain_list = chains.ChainList{
         .mem = std.heap.ArenaAllocator.init(self.allocator),
     };
+    // initialize an empty stacks list
+    self.stack_list = stacks.StackList{
+        .mem = std.heap.ArenaAllocator.init(self.allocator),
+    };
 
     _ = try self.addNewCollection(
         self.info.default_directory,
@@ -705,6 +744,9 @@ pub fn createFilesystem(self: *Root) !void {
 
     // create the chain file
     try self.writeChains();
+
+    // create the stacks file
+    try self.writeStacks();
 
     // journals
     try self.writeAllDescriptors(fs, .CollectionJournal);
@@ -788,6 +830,18 @@ pub fn writeChains(self: *Root) !void {
     const chain_content = try list.serialize(self.allocator);
     defer self.allocator.free(chain_content);
     try fs.overwrite(self.info.chainpath, chain_content);
+}
+
+/// Write the stack changes to the stack file.
+pub fn writeStacks(self: *Root) !void {
+    var fs = self.getFileSystem() orelse
+        return Error.NeedsFileSystem;
+
+    // create the chain file
+    var list = try self.getStackList();
+    const stack_content = try list.serialize(self.allocator);
+    defer self.allocator.free(stack_content);
+    try fs.overwrite(self.info.stackspath, stack_content);
 }
 
 /// Write the tag descriptor changes to the tags file

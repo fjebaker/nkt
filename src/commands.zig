@@ -4,6 +4,7 @@ const utils = @import("utils.zig");
 
 const time = @import("topology/time.zig");
 const Root = @import("topology/Root.zig");
+const cmd_stacks = @import("commands/stacks.zig");
 
 pub const Error = error{ NoCommandGiven, UnknownCommand };
 
@@ -24,9 +25,9 @@ pub const Options = struct {
 };
 
 pub const Commands = union(enum) {
-    config: @import("commands/config.zig"),
-    compile: @import("commands/compile.zig"),
     chains: @import("commands/chains.zig"),
+    compile: @import("commands/compile.zig"),
+    config: @import("commands/config.zig"),
     edit: @import("commands/edit.zig"),
     find: @import("commands/find.zig"),
     help: @import("commands/help.zig"),
@@ -34,14 +35,17 @@ pub const Commands = union(enum) {
     init: @import("commands/init.zig"),
     list: @import("commands/list.zig"),
     log: @import("commands/log.zig"),
-    new: @import("commands/new.zig"),
     migrate: @import("commands/migrate.zig"),
+    new: @import("commands/new.zig"),
+    peek: cmd_stacks.Peek,
+    pop: cmd_stacks.Pop,
+    push: cmd_stacks.Push,
     read: @import("commands/read.zig"),
     remove: @import("commands/remove.zig"),
     rename: @import("commands/rename.zig"),
+    select: @import("commands/select.zig"),
     tag: @import("commands/tag.zig"),
     task: @import("commands/task.zig"),
-    select: @import("commands/select.zig"),
     set: @import("commands/set.zig"),
     // summary: @import("commands/summary.zig"),
     sync: @import("commands/sync.zig"),
