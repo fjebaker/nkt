@@ -3,6 +3,7 @@ const selections = @import("../selections.zig");
 const cli = @import("../cli.zig");
 const utils = @import("../utils.zig");
 const time = @import("../topology/time.zig");
+const colors = @import("../colors.zig");
 
 const stacks = @import("../topology/stacks.zig");
 const Root = @import("../topology/Root.zig");
@@ -22,6 +23,7 @@ pub const Push = struct {
             .arg = "stack",
             .help = "Name of the stack to push to.",
             .required = true,
+            .completion = "{compadd $(nkt completion list --collection stacks)}",
         },
         .{
             .arg = "-m/--message text",
@@ -86,6 +88,7 @@ pub const Pop = struct {
             .arg = "stack",
             .help = "Name of the stack to pop from.",
             .required = true,
+            .completion = "{compadd $(nkt completion list --collection stacks)}",
         },
         .{
             .arg = "index",
@@ -175,6 +178,7 @@ pub const Peek = struct {
             .arg = "stack",
             .help = "Name of the stack peek at.",
             .required = true,
+            .completion = "{compadd $(nkt completion list --collection stacks)}",
         },
     });
 
@@ -193,7 +197,6 @@ pub const Peek = struct {
     ) !void {
         try root.load();
         _ = allocator;
-        _ = opts;
 
         const sl = try root.getStackList();
         const stack = sl.getStackPtr(self.args.stack) orelse {
@@ -207,26 +210,42 @@ pub const Peek = struct {
         var itt = utils.ReverseIterator(stacks.ItemDescriptor).init(stack.items);
         while (itt.next()) |item| {
             const i = stack.items.len - (itt.index);
+            const container_type_name = switch (item.collection) {
+                .CollectionDirectory => "directory",
+                .CollectionJournal => "journal",
+                .CollectionTasklist => "tasklist",
+            };
             try writer.print(
-                "[{d}] : {s} | {s} from {s} '{s}'\n",
+                "[{d}] : {s} | ",
                 .{
                     i,
                     try item.added.formatDateTime(),
-                    item.name,
-                    switch (item.collection) {
-                        .CollectionDirectory => "directory",
-                        .CollectionJournal => "journal",
-                        .CollectionTasklist => "tasklist",
-                    },
-                    item.parent,
                 },
             );
+
+            if (!opts.piped) {
+                try colors.CYAN.bold().write(writer, "{s}", .{item.name});
+
+                try colors.DIM.write(
+                    writer,
+                    " from {s} '{s}'",
+                    .{ container_type_name, item.parent },
+                );
+            } else {
+                try writer.print(
+                    "{s} from {s} '{s}'",
+                    .{ item.name, container_type_name, item.parent },
+                );
+            }
+
+            try writer.writeAll("\n");
             if (item.message.len > 0) {
                 try writer.print(
-                    "  Message: {s}\n",
+                    " └ {s}\n",
                     .{item.message},
                 );
             }
+            try writer.writeAll("\n");
         }
     }
 };
