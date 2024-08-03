@@ -117,7 +117,17 @@ pub fn fileExists(self: *const Self, path: []const u8) !bool {
 
 pub fn removeFile(self: *const Self, path: []const u8) !void {
     std.log.default.debug("Removing file '{s}'", .{path});
-    try self.dir.deleteFile(path);
+    self.dir.deleteFile(path) catch |err| {
+        switch (err) {
+            error.FileNotFound => {
+                std.log.default.debug(
+                    "Could not remove '{s}', file does not exist",
+                    .{path},
+                );
+            },
+            else => return err,
+        }
+    };
 }
 
 /// Overwrite the contents of a file. Will create the file if it does not exist.
@@ -208,5 +218,6 @@ pub fn move(
     rel_from: []const u8,
     rel_to: []const u8,
 ) !void {
+    std.log.default.debug("Moving '{s}' to '{s}'", .{ rel_from, rel_to });
     try self.dir.rename(rel_from, rel_to);
 }

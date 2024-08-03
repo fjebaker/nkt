@@ -372,7 +372,7 @@ fn listTasklist(
     var tasklist = maybe_tl orelse {
         return cli.throwError(
             Root.Error.NoSuchCollection,
-            "No directory named '{s}'",
+            "No tasklist named '{s}'",
             .{tl.name},
         );
     };
