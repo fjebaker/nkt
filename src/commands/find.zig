@@ -159,7 +159,7 @@ pub fn doSearchLoop(
 
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
-            (term_size.ws_col * self.preview_size),
+            (term_size.col * self.preview_size),
             100,
         );
 
@@ -213,7 +213,7 @@ pub fn doSearchLoop(
                 results.?.results,
             );
 
-            const max_len = term_size.ws_col -
+            const max_len = term_size.col -
                 preview_columns -
                 PREVIEW_SIZE_PADDING;
 

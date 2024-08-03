@@ -291,7 +291,7 @@ fn importNote(
     const content = try dir.readNote(allocator, note);
     defer allocator.free(content);
 
-    var itt = std.mem.tokenize(u8, content, "\n");
+    var itt = std.mem.tokenizeAny(u8, content, "\n");
 
     switch (nt) {
         .none => unreachable,

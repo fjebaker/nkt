@@ -26,6 +26,11 @@ pub const Push = struct {
             .completion = "{compadd $(nkt completion list --collection stacks)}",
         },
         .{
+            .arg = "index",
+            .help = "The index position to insert into the stack. Index 0 is the default, and inserts the item at the top of the stack as the latest item.",
+            .argtype = usize,
+        },
+        .{
             .arg = "-m/--message text",
             .help = "An additional message to attach to the item when pushed.",
         },
@@ -33,6 +38,7 @@ pub const Push = struct {
 
     selection: selections.Selection,
     stack: []const u8,
+    position: usize,
     message: ?[]const u8,
 
     pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Push {
@@ -45,6 +51,7 @@ pub const Push = struct {
         return .{
             .selection = selection,
             .stack = args.stack,
+            .position = args.index orelse 0,
             .message = args.message,
         };
     }
@@ -69,7 +76,7 @@ pub const Push = struct {
                 .{self.stack},
             );
         };
-        try sl.addItemToStack(stack, item, self.message, time.Time.now());
+        try sl.addItemToStack(stack, item, self.message, self.position, time.Time.now());
 
         const path = item.getPath();
 

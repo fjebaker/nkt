@@ -485,7 +485,7 @@ pub const Colloquial = struct {
         var arg = try c.next();
 
         if (_eq(arg, "soon")) {
-            var prng = std.rand.DefaultPrng.init(Time.now().time);
+            var prng = std.Random.DefaultPrng.init(Time.now().time);
             const days_different = prng.random().intRangeAtMost(
                 i32,
                 3,
@@ -609,14 +609,14 @@ fn testWeekday(now: Weekday, arg: []const u8, diff: i32) !void {
 }
 
 fn parseTimelikeDate(relative: Date, timelike: []const u8) !Date {
-    const itt = std.mem.tokenize(u8, timelike, " ");
+    const itt = std.mem.tokenizeAny(u8, timelike, " ");
     var col = Colloquial{ .tkn = itt, .now = relative };
     return try col.parse();
 }
 
 /// Parse a time-like string into a time. See also `Colloquial`. Any relative time-like will be relative to the time in `relative`.
 pub fn parseTimelike(relative: Time, timelike: []const u8) !Time {
-    const itt = std.mem.tokenize(u8, timelike, " ");
+    const itt = std.mem.tokenizeAny(u8, timelike, " ");
 
     var col = Colloquial{ .tkn = itt, .now = relative.toDate() };
     const parsed = try col.parse();

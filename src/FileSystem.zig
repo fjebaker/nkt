@@ -193,7 +193,7 @@ pub fn tmpFile(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn tmpFilePath(allocator: std.mem.Allocator) ![]const u8 {
-    var prng = std.rand.DefaultPrng.init(0);
+    var prng = std.Random.DefaultPrng.init(0);
     const id_num = prng.random().int(u16);
 
     var list = std.ArrayList(u8).init(allocator);

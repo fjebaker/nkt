@@ -347,7 +347,7 @@ fn searchFileNames(
                 _ = try ri.item.printMatched(
                     display_writer,
                     14,
-                    term_size.ws_col,
+                    term_size.col,
                 );
             }
         } else if (display.getText().len == 0) {

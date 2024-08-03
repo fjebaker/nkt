@@ -150,7 +150,7 @@ const LogInput = struct {
 };
 
 fn onlyTags(content: []const u8) bool {
-    var word_itt = std.mem.tokenize(u8, content, " ");
+    var word_itt = std.mem.tokenizeAny(u8, content, " ");
     while (word_itt.next()) |tkn| {
         if (tkn[0] != '@') return false;
     }
@@ -176,13 +176,13 @@ fn fromEditor(allocator: std.mem.Allocator) !LogInput {
     var text_list = std.ArrayList(u8).init(alloc);
     defer text_list.deinit();
 
-    var itt = std.mem.tokenize(u8, input, "\n");
+    var itt = std.mem.tokenizeAny(u8, input, "\n");
     var on_tags: bool = false;
     while (itt.next()) |line| {
         const content = std.mem.trim(u8, line, " ");
         if (content[0] == '@' and onlyTags(content)) {
             on_tags = true;
-            var word_itt = std.mem.tokenize(u8, content, " ");
+            var word_itt = std.mem.tokenizeAny(u8, content, " ");
             while (word_itt.next()) |tkn| {
                 try tag_list.append(tkn);
             }

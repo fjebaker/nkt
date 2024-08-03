@@ -46,7 +46,7 @@ pub const DIM = ComptimeFarbe.init().dim();
 pub const UNDERLINED = ComptimeFarbe.init().underlined();
 
 pub fn randomColor() Color {
-    var prng = std.rand.DefaultPrng.init(
+    var prng = std.Random.DefaultPrng.init(
         @intCast(std.time.milliTimestamp()),
     );
     var rand = prng.random();

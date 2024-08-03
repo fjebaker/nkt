@@ -88,6 +88,7 @@ pub const StackList = struct {
         stack: *Stack,
         item: abstractions.Item,
         message: ?[]const u8,
+        index: usize,
         time_added: time.Time,
     ) !void {
         const allocator = self.mem.allocator();
@@ -106,7 +107,7 @@ pub const StackList = struct {
         // TODO: this needs reworking to avoid invalidating the pointer if the
         // append fails
         defer list.deinit();
-        try list.insert(0, descr);
+        try list.insert(index, descr);
         stack.items = try list.toOwnedSlice();
     }
 
