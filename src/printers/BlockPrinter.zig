@@ -65,9 +65,9 @@ pub fn addToCurrent(bp: *BlockPrinter, text: []const u8, opts: FormatPrinter.Tex
 }
 
 const HEADING_FORMAT = (colors
-    .ComptimeFarbe.init()
+    .Farbe.init()
     .fgRgb(205, 175, 102)
-    .bold().fixed());
+    .bold());
 
 pub fn addFormatted(
     bp: *BlockPrinter,

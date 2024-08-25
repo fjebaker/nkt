@@ -133,7 +133,10 @@ pub fn doSearchLoop(
 ) !?Result {
     var searcher = try chunk_machine.searcher(
         allocator,
-        .{ .case_sensitive = self.case_sensitive },
+        .{
+            .case_sensitive = self.case_sensitive,
+            .case_penalize = true,
+        },
     );
     defer searcher.deinit();
 

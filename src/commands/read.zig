@@ -403,8 +403,7 @@ fn printEntry(
         try printer.addToCurrent(" ", .{ .is_counted = false });
         for (entry.tags) |tag| {
             try printer.addToCurrent("@", .{
-                .fmt = try FormatPrinter.getTagFormat(
-                    printer.format_printer.mem.allocator(),
+                .fmt = FormatPrinter.getTagFormat(
                     tag_descriptors,
                     tag.name,
                 ),
@@ -443,17 +442,17 @@ fn printTaskEvent(
             t.task.outcome,
             @as(u20, @intCast(utils.getMiniHash(t.task.hash, 5))),
         },
-        .{ .fmt = colors.DIM.italic().fixed() },
+        .{ .fmt = colors.DIM.italic() },
     );
 
     try printer.addToCurrent("\n", .{ .is_counted = false });
 }
 
-const HEADING_FORMAT = colors.UNDERLINED.bold().fixed();
-const URGENT_FORMAT = colors.RED.bold().fixed();
-const WARN_FORMAT = colors.YELLOW.fixed();
-const DIM_FORMAT = colors.DIM.fixed();
-const COMPLETED_FORMAT = colors.GREEN.fixed();
+const HEADING_FORMAT = colors.UNDERLINED.bold();
+const URGENT_FORMAT = colors.RED.bold();
+const WARN_FORMAT = colors.YELLOW;
+const DIM_FORMAT = colors.DIM;
+const COMPLETED_FORMAT = colors.GREEN;
 
 fn printTask(
     _: *Self,

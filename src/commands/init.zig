@@ -125,7 +125,7 @@ pub fn execute(
             writer,
             "!!! WARNING !!!\n",
             .{},
-            colors.RED.bold().fixed(),
+            colors.RED.bold(),
             !opts.piped,
         );
         try writer.writeAll(

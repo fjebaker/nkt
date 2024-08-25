@@ -192,13 +192,11 @@ fn printTask(
     details: bool,
     full_hash: bool,
 ) !void {
-    const allocator = fp.mem.allocator();
-
     if (entry.index) |index| {
         try fp.addFmtText(
             " {d: >3}",
             .{index},
-            .{ .fmt = colors.DIM.runtime(allocator) },
+            .{ .fmt = colors.DIM },
         );
     } else {
         try fp.addText("    ", .{});
@@ -224,7 +222,7 @@ fn printTask(
     try fp.addFmtText(
         "{s} {s}",
         .{ string, indicator },
-        .{ .fmt = if (due_color) |c| c.fixed() else null },
+        .{ .fmt = due_color },
     );
 
     try fp.addText(" | ", .{});
@@ -233,13 +231,13 @@ fn printTask(
         try fp.addFmtText(
             "/{x:0>16}",
             .{entry.task.hash},
-            .{ .fmt = colors.DIM.fixed() },
+            .{ .fmt = colors.DIM },
         );
     } else {
         try fp.addFmtText(
             "/{x:0>5}",
             .{@as(u20, @intCast(utils.getMiniHash(entry.task.hash, 5)))},
-            .{ .fmt = colors.DIM.fixed() },
+            .{ .fmt = colors.DIM },
         );
     }
 
@@ -259,13 +257,13 @@ fn printTask(
     try fp.addFmtText(
         "{s} {s}",
         .{ importance, entry.task.outcome },
-        .{ .fmt = if (importance_color) |c| c.fixed() else null },
+        .{ .fmt = importance_color },
     );
     if (entry.task.action) |act| {
         try fp.addFmtText(
             " - {s}",
             .{act},
-            .{ .fmt = colors.DIM.fixed() },
+            .{ .fmt = colors.DIM },
         );
     }
 
@@ -274,7 +272,7 @@ fn printTask(
     const text_pad: usize = p: {
         if (!details and has_details) {
             try fp.addText(" [+]", .{
-                .fmt = colors.DIM.fixed(),
+                .fmt = colors.DIM,
             });
             break :p 4;
         } else break :p 0;

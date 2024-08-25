@@ -13,7 +13,7 @@
         },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
-            .hash = "1220d21d53393ee55f3f66f11181622db7551bfb94f3f526457ad0cef850415ab248",
+            .hash = "1220b85506cc63baa520e52ea7558cdbdf2fe2f5efb0b456f2cc6a5c984623b380be",
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",

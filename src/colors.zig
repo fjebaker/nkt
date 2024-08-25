@@ -2,30 +2,25 @@ const std = @import("std");
 const farbe = @import("farbe");
 
 pub const Farbe = farbe.Farbe;
-pub const ComptimeFarbe = farbe.ComptimeFarbe;
 
 pub const Color = struct {
     r: u8,
     g: u8,
     b: u8,
 
-    pub fn toFarbe(c: Color, allocator: std.mem.Allocator) !Farbe {
-        var clr = Farbe.init(allocator);
-        errdefer clr.deinit();
-        try clr.fgRgb(c.r, c.g, c.b);
-        return clr;
+    pub fn toFarbe(c: Color) Farbe {
+        var clr = Farbe.init();
+        return clr.fgRgb(c.r, c.g, c.b);
     }
 
-    pub fn toBackgroundFarbe(c: Color, allocator: std.mem.Allocator) !Farbe {
-        var clr = Farbe.init(allocator);
-        errdefer clr.deinit();
-        try clr.bgRgb(c.r, c.g, c.b);
-        return clr;
+    pub fn toBackgroundFarbe(c: Color) Farbe {
+        var clr = Farbe.init();
+        return clr.bgRgb(c.r, c.g, c.b);
     }
 };
 
-fn colorToFarbe(color: Color) ComptimeFarbe {
-    return ComptimeFarbe.init().fgRgb(color.r, color.g, color.b);
+fn colorToFarbe(color: Color) Farbe {
+    return Farbe.init().fgRgb(color.r, color.g, color.b);
 }
 
 pub const C_BLUE = Color{ .r = 0, .g = 0, .b = 255 };
@@ -42,8 +37,8 @@ pub const PURPLE = colorToFarbe(C_PURPLE);
 pub const RED = colorToFarbe(C_RED);
 pub const YELLOW = colorToFarbe(C_YELLOW);
 
-pub const DIM = ComptimeFarbe.init().dim();
-pub const UNDERLINED = ComptimeFarbe.init().underlined();
+pub const DIM = Farbe.init().dim();
+pub const UNDERLINED = Farbe.init().underlined();
 
 pub fn randomColor() Color {
     var prng = std.Random.DefaultPrng.init(

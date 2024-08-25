@@ -50,43 +50,36 @@ pub fn add(fp: *FormatPrinter, rich: RichText) !void {
     try fp.texts.append(rich);
 }
 
-const PRE_COLOR = colors.ComptimeFarbe.init().bgRgb(48, 48, 48).fgRgb(236, 106, 101);
-const URI_COLOR = colors.ComptimeFarbe.init().fgRgb(58, 133, 134).underlined();
+const PRE_COLOR = colors.Farbe.init().bgRgb(48, 48, 48).fgRgb(236, 106, 101);
+const URI_COLOR = colors.Farbe.init().fgRgb(58, 133, 134).underlined();
 
 /// Get the `Farbe` attributed to a given tag from the list of tag descriptors.
 pub fn getTagFormat(
-    allocator: std.mem.Allocator,
     tag_descriptors: []const tags.Tag.Descriptor,
     tag_name: []const u8,
-) !?Farbe {
+) ?Farbe {
     const descriptor: tags.Tag.Descriptor = for (tag_descriptors) |td| {
         if (std.mem.eql(u8, td.name, tag_name)) {
             break td;
         }
     } else return null;
 
-    var f = try descriptor.color.toFarbe(allocator);
-    errdefer f.deinit();
-    try f.bold();
-    return f;
+    return descriptor.color.toFarbe().bold();
 }
 
 fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
     const text = parser.text;
     const start = parser.i - 1;
-    const allocator = fp.mem.allocator();
     switch (text[start]) {
         '@' => {
             if (tags.getTagString(text[start..]) catch null) |tag_name| {
                 const tag_descriptors = fp.opts.tag_descriptors orelse
                     return null;
 
-                const fmt = (try getTagFormat(
-                    allocator,
+                const fmt = getTagFormat(
                     tag_descriptors,
                     tag_name,
-                )) orelse
-                    return null;
+                ) orelse return null;
 
                 const end = tag_name.len + start + 1;
                 parser.skipN(end - start - 1);
@@ -108,7 +101,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
                     .mark = .Pre,
                     .start = start,
                     .end = end + 1,
-                    .fmt = PRE_COLOR.runtime(allocator),
+                    .fmt = PRE_COLOR,
                 };
             }
         },
@@ -119,7 +112,7 @@ fn identifySubBlock(fp: *FormatPrinter, parser: *Parser) !?Block {
                     .mark = .Uri,
                     .start = uri.start,
                     .end = uri.end,
-                    .fmt = URI_COLOR.runtime(allocator),
+                    .fmt = URI_COLOR,
                 };
             }
         },
@@ -269,7 +262,7 @@ pub fn addText(fp: *FormatPrinter, text: []const u8, opts: TextOptions) !void {
     if (text.len == 0) return;
     // store a copy
     var alloc = fp.mem.allocator();
-    const fmt = opts.fmt orelse Farbe.init(alloc);
+    const fmt = opts.fmt orelse Farbe.init();
     try fp.addTextImpl(try alloc.dupe(u8, text), fmt, opts.is_counted);
 }
 

@@ -16,8 +16,8 @@ const chains = @import("../topology/chains.zig");
 const Chain = chains.Chain;
 const Weekday = time.Weekday;
 
-const COMPLETED_FORMAT = colors.GREEN.fixed();
-const WEEKEND_FORMAT = colors.YELLOW.fixed();
+const COMPLETED_FORMAT = colors.GREEN;
+const WEEKEND_FORMAT = colors.YELLOW;
 
 const Self = @This();
 

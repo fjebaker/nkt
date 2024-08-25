@@ -294,10 +294,10 @@ fn listCompilers(
 
     for (root.info.text_compilers) |cmp| {
         try printer.addText("Compiler:         ", .{});
-        try printer.addFmtText("{s}\n", .{cmp.name}, .{ .fmt = colors.YELLOW.fixed() });
+        try printer.addFmtText("{s}\n", .{cmp.name}, .{ .fmt = colors.YELLOW });
         try printer.addText(" - Extensions:    ", .{});
         for (cmp.extensions) |ext| {
-            try printer.addFmtText("{s} ", .{ext}, .{ .fmt = colors.CYAN.fixed() });
+            try printer.addFmtText("{s} ", .{ext}, .{ .fmt = colors.CYAN });
         }
         try printer.addText("\n\n", .{});
     }

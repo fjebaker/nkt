@@ -46,7 +46,7 @@ pub fn loggerFn(
     const writer = stderr.writer();
 
     if (stderr.isTty()) {
-        const c = color.ComptimeFarbe.init().dim();
+        const c = color.Farbe.init().dim();
         nosuspend c.write(writer, prefix ++ format ++ "\n", args) catch return;
     } else {
         nosuspend writer.print(prefix ++ format ++ "\n", args) catch return;

@@ -13,9 +13,9 @@ pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerr
 
     const err_string = @errorName(err);
 
-    const f = farbe.ComptimeFarbe.init().fgRgb(255, 0, 0).bold();
+    const f = farbe.Farbe.init().fgRgb(255, 0, 0).bold();
 
-    try writeFmtd(writer, "Error {s}: ", .{err_string}, f.fixed(), stderr.isTty());
+    try writeFmtd(writer, "Error {s}: ", .{err_string}, f, stderr.isTty());
 
     try writer.print(fmt ++ "\n", args);
 
