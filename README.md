@@ -56,6 +56,13 @@ Principally, nkt provides four different ways to record information:
   Chains are for building habits. A chain is given a task or habit you are
   trying to build and then it can be checked off each day you complete that tasks.
 
+- Stacks
+
+  Stacks are for keeping track of how you got to the current state of
+  something. They are stacks of notes that maintain a FIFO ordering. The use
+  case they were supposed to address was for keeping track of reference trails
+  when reading a paper.
+
 ## Usage
 
 To setup `nkt`, use the `init` command.
@@ -175,9 +182,9 @@ General help:
 $ nkt help
 
 Quick command reference:
- - config      View and modify the configuration of nkt
- - compile     Compile a note into various formats.
  - chains      View and interact with habitual chains.
+ - compile     Compile a note into various formats.
+ - config      View and modify the configuration of nkt
  - edit        Edit a note or item in the editor.
  - find        Find in notes.
  - help        Print this help message or help for other commands.
@@ -185,13 +192,17 @@ Quick command reference:
  - init        (Re)Initialize the home directory structure.
  - list        List collections and other information in various ways.
  - log         Quickly log something to a journal from the command line
- - new         Create a new tag or collection.
  - migrate     Migrate differing versions of nkt's topology
+ - new         Create a new tag or collection.
+ - peek        Peek at a stack
+ - pop         Pop from a stack
+ - push        Push onto a stack
  - read        Read notes, task details, and journals.
  - remove      Remove items, tags, or entire collections themselves.
  - rename      Move or rename a note, directory, journal, or tasklist.
- - task        Add a task to a specified task list.
  - select      Select an item or collection.
+ - tag         Tag an item or collection.
+ - task        Add a task to a specified task list.
  - set         Modify attributes of entries, notes, chains, or tasks.
  - sync        Sync root directory to remote git repository
  - completion  Shell completion helper

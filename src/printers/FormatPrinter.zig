@@ -14,7 +14,10 @@ pub const RichText = struct {
     fmt: ?Farbe,
     pub fn write(t: RichText, writer: anytype, pretty: bool) !void {
         if (pretty and t.fmt != null) {
-            try t.fmt.?.write(writer, "{s}", .{t.text});
+            const fmt = t.fmt.?;
+            try fmt.writeOpen(writer);
+            _ = try writer.writeAll(t.text);
+            try fmt.writeClose(writer);
         } else {
             _ = try writer.writeAll(t.text);
         }
