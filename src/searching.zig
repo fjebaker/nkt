@@ -5,7 +5,7 @@ const tracy = @import("tracy.zig");
 
 const color = @import("colors.zig");
 const utils = @import("utils.zig");
-const ThreadPoolT = @import("threads.zig").ThreadPool;
+const ThreadMap = @import("threads.zig").ThreadMap;
 
 const MatchIterator = utils.Iterator(usize);
 
@@ -121,26 +121,28 @@ pub fn Searcher(comptime Item: type) type {
             }
         };
 
-        const ThreadCtx = struct {
-            finder: FuzzyFinder,
-            needle: []const u8 = "",
+        const WorkClosure = struct {
+            finders: []FuzzyFinder,
+            needle: []const u8,
+
+            fn work(c: *WorkClosure, result: *Result, id: usize) void {
+                var t_ctx = tracy.trace(@src());
+                defer t_ctx.end();
+
+                const finder = &c.finders[id];
+
+                const r = finder.scoreMatches(result.string, c.needle);
+                result.num_matches = r.matches.len;
+                std.mem.copyBackwards(usize, result.matches, r.matches);
+                result.score = r.score;
+            }
         };
-
-        const ThreadPool = ThreadPoolT(Result, ThreadCtx, threadWork);
-
-        fn threadWork(result: *Result, ctx: *ThreadCtx) void {
-            var t_ctx = tracy.trace(@src());
-            defer t_ctx.end();
-            const r = ctx.finder.scoreMatches(result.string, ctx.needle);
-            result.num_matches = r.matches.len;
-            std.mem.copyBackwards(usize, result.matches, r.matches);
-            result.score = r.score;
-        }
 
         heap: std.heap.ArenaAllocator,
         items: []const Item,
         result_buffer: []Result,
-        pool: ThreadPool,
+        closure: *WorkClosure,
+        pool: *ThreadMap,
         previous_needle: []const u8 = "",
 
         const ResultBufferInfo = struct {
@@ -169,7 +171,10 @@ pub fn Searcher(comptime Item: type) type {
 
                 max_content_length = @max(max_content_length, string.len);
             }
-            return .{ .result_buffer = results, .max_content_length = max_content_length };
+            return .{
+                .result_buffer = results,
+                .max_content_length = max_content_length,
+            };
         }
 
         /// Initialize a finder
@@ -183,28 +188,39 @@ pub fn Searcher(comptime Item: type) type {
             errdefer heap.deinit();
             const info = try initResultsBuffer(heap.allocator(), items, strings);
 
+            // TODO: read from an env var or configuration for the maximum
+            // number of threads
             const n_threads = std.Thread.getCpuCount() catch 1;
 
-            var threads = try ThreadPool.init(
+            var threads = try ThreadMap.init(
                 allocator,
                 .{ .num_threads = n_threads },
             );
             errdefer threads.deinit();
 
-            for (threads.ctxs) |*ctx| {
-                ctx.finder = try FuzzyFinder.init(
+            // initialize a fuzzy finder for each thread
+            const c_ptr = try heap.allocator().create(WorkClosure);
+            c_ptr.* = .{
+                .finders = try heap.allocator().alloc(
+                    FuzzyFinder,
+                    n_threads,
+                ),
+                .needle = "",
+            };
+            for (c_ptr.finders) |*finder| {
+                finder.* = try FuzzyFinder.init(
                     heap.allocator(),
                     info.max_content_length,
                     128,
                     opts,
                 );
-                ctx.needle = "";
             }
 
             return .{
                 .heap = heap,
                 .items = items,
                 .pool = threads,
+                .closure = c_ptr,
                 .result_buffer = info.result_buffer,
             };
         }
@@ -221,10 +237,16 @@ pub fn Searcher(comptime Item: type) type {
             var t_ctx = tracy.trace(@src());
             defer t_ctx.end();
 
-            for (self.pool.ctxs) |*ctx| ctx.needle = needle;
+            self.closure.needle = needle;
 
             var timer = try std.time.Timer.start();
-            try self.pool.map(self.result_buffer);
+            try self.pool.map(
+                Result,
+                self.result_buffer,
+                self.closure,
+                WorkClosure.work,
+                .{},
+            );
             self.pool.blockUntilDone();
             const runtime = timer.lap();
 
@@ -278,6 +300,9 @@ pub const ChunkMachine = struct {
     };
 
     pub const SearcherType = Searcher(SearchKey);
+    pub const Result = SearcherType.Result;
+    pub const ResultList = SearcherType.ResultList;
+
     const ItemList = std.ArrayList(SearchKey);
 
     const StringList = std.ArrayList([]const u8);

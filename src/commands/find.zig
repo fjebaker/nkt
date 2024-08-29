@@ -124,7 +124,8 @@ pub fn execute(
     }
 }
 
-const Result = searching.ChunkMachine.SearcherType.Result;
+const Result = searching.ChunkMachine.Result;
+const ResultList = searching.ChunkMachine.ResultList;
 
 pub fn doSearchLoop(
     self: *Self,
@@ -152,7 +153,7 @@ pub fn doSearchLoop(
     const display_writer = display.display.ctrl.writer();
 
     var needle: []const u8 = "";
-    var results: ?searching.ChunkMachine.SearcherType.ResultList = null;
+    var results: ?ResultList = null;
     var runtime: u64 = 0;
     var choice: ?Result = null;
     tracy.frameMarkNamed("setup_completed");

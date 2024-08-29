@@ -1,209 +1,107 @@
 const std = @import("std");
 
-pub fn ThreadPool(
-    comptime RetType: type,
-    comptime Ctx: type,
-    comptime WorkFunc: fn (*RetType, *Ctx) void,
-) type {
-    const Shared = struct {
-        output: []RetType,
-        batch_size: usize,
+/// Used to parallelize work over threads using a batching algorith
+pub const ThreadMap = struct {
+    pub const Options = struct {
+        num_threads: usize,
     };
 
-    const ThreadLocal = struct {
-        const Self = @This();
+    pool: std.Thread.Pool,
+    allocator: std.mem.Allocator,
+    sync: std.Thread.Mutex = .{},
+    shared_index: usize = 0,
+    opts: Options,
+    wg: std.Thread.WaitGroup = .{},
 
-        shared: *Shared,
-        ctx: *Ctx,
+    /// Join all threads, cleanup allocated resources, and destroy self.
+    pub fn deinit(self: *ThreadMap) void {
+        self.pool.deinit();
+        self.allocator.destroy(self);
+    }
 
-        // lock for synchronizing work
-        lock: *std.Thread.Mutex,
-
-        // lock for synchronizing communications
-        comm_lock: *std.Thread.Mutex,
-
-        cont_barrier: *std.Thread.Condition,
-
-        // used to communicate from the workers to the main thread
-        main_barrier: *std.Thread.Condition,
-
-        work_available: *bool,
-
-        completed: *usize,
-        index: *usize,
-
-        fn getIndex(s: Self) usize {
-            s.lock.lock();
-            defer s.lock.unlock();
-            const index = s.index.*;
-            s.index.* += s.shared.batch_size;
-            return index;
-        }
-
-        fn markComplete(s: Self) void {
-            s.lock.lock();
-            defer s.lock.unlock();
-            s.completed.* += 1;
-            s.main_barrier.signal();
-        }
-
-        fn getReturnSlot(s: Self) ?[]RetType {
-            const index = s.getIndex();
-            const len = s.shared.output.len;
-            if (index >= len) return null;
-            return s.shared.output[index..@min(len, index + s.shared.batch_size)];
-        }
-
-        fn workAvailable(s: Self) bool {
-            s.comm_lock.lock();
-            defer s.comm_lock.unlock();
-            s.cont_barrier.wait(s.comm_lock);
-            return s.work_available.*;
-        }
-
-        inline fn doWork(s: Self) void {
-            while (s.getReturnSlot()) |ret_slots| {
-                for (ret_slots) |*rptr| {
-                    WorkFunc(rptr, s.ctx);
-                }
-            }
-            s.markComplete();
-        }
-
-        fn worker(s: Self) void {
-            s.doWork();
-            while (s.workAvailable()) {
-                s.doWork();
-            }
-        }
-    };
-
-    return struct {
-        const Self = @This();
-
-        pub const Options = struct {
-            num_threads: usize,
-            batch_size: usize = 64,
-        };
-
+    /// Initialize a new thread map
+    pub fn init(
         allocator: std.mem.Allocator,
         opts: Options,
-        threads: []?std.Thread,
+    ) !*ThreadMap {
+        const ptr = try allocator.create(ThreadMap);
+        errdefer allocator.destroy(ptr);
 
-        shared: *Shared,
-
-        ctxs: []Ctx,
-        index: usize = 0,
-        completed: usize = 0,
-        workload_length: usize = 0,
-        work_available: bool = true,
-
-        index_lock: std.Thread.Mutex = .{},
-        comm_lock: std.Thread.Mutex = .{},
-        main_barrier: std.Thread.Condition = .{},
-        cont_barrier: std.Thread.Condition = .{},
-
-        pub fn deinit(self: *Self) void {
-            self.join();
-            self.allocator.free(self.threads);
-            self.allocator.free(self.ctxs);
-            self.allocator.destroy(self.shared);
-            self.* = undefined;
-        }
-
-        fn join(self: *Self) void {
-            {
-                // this should always be thread safe, but better safe than sorry
-                self.comm_lock.lock();
-                defer self.comm_lock.unlock();
-                self.work_available = false;
-            }
-            // signal all to end
-            self.cont_barrier.broadcast();
-            for (self.threads) |thread| {
-                if (thread) |t| t.join();
-            }
-        }
-
-        fn makeThreadLocal(
-            self: *Self,
-            ctx: *Ctx,
-        ) ThreadLocal {
-            const tl: ThreadLocal = .{
-                .ctx = ctx,
-                .lock = &self.index_lock,
-                .comm_lock = &self.comm_lock,
-                .cont_barrier = &self.cont_barrier,
-                .main_barrier = &self.main_barrier,
-                .work_available = &self.work_available,
-                .completed = &self.completed,
-                .index = &self.index,
-                .shared = self.shared,
-            };
-            return tl;
-        }
-
-        fn spawnThreads(self: *Self) !void {
-            for (self.threads, self.ctxs) |*thread, *ctx| {
-                if (thread.* != null) @panic("Thread already launched!");
-                const tl = self.makeThreadLocal(ctx);
-                thread.* = try std.Thread.spawn(
-                    .{},
-                    ThreadLocal.worker,
-                    .{tl},
-                );
-            }
-        }
-
-        /// Map the thread function for each item in the output
-        pub fn map(self: *Self, outputs: []RetType) !void {
-            {
-                // this should always be thread safe, but better safe than sorry
-                self.index_lock.lock();
-                defer self.index_lock.unlock();
-
-                self.index = 0;
-                self.completed = 0;
-                self.shared.output = outputs;
-                self.shared.batch_size = self.opts.batch_size;
-            }
-
-            if (self.threads[0] == null) {
-                try self.spawnThreads();
-            } else {
-                self.comm_lock.lock();
-                defer self.comm_lock.unlock();
-                self.cont_barrier.broadcast();
-            }
-
-            self.workload_length = outputs.len;
-        }
-
-        pub fn blockUntilDone(self: *Self) void {
-            {
-                self.comm_lock.lock();
-                defer self.comm_lock.unlock();
-                while (self.completed != self.threads.len) {
-                    self.main_barrier.wait(&self.comm_lock);
-                }
-            }
-        }
-
-        pub fn init(allocator: std.mem.Allocator, opts: Options) !Self {
-            const threads = try allocator.alloc(?std.Thread, opts.num_threads);
-            errdefer allocator.free(threads);
-            for (threads) |*t| t.* = null;
-
-            const ctxs = try allocator.alloc(Ctx, opts.num_threads);
-            errdefer allocator.free(ctxs);
-
-            return .{
+        ptr.allocator = allocator;
+        ptr.opts = opts;
+        try ptr.pool.init(
+            .{
                 .allocator = allocator,
-                .threads = threads,
-                .ctxs = ctxs,
-                .shared = try allocator.create(Shared),
-                .opts = opts,
-            };
-        }
+                .n_jobs = opts.num_threads,
+            },
+        );
+
+        return ptr;
+    }
+
+    pub const MapOptions = struct {
+        chunk_size: usize = 128,
     };
-}
+
+    /// In-place map: maps the function `f` onto each element of `slice`
+    pub fn map(
+        self: *ThreadMap,
+        comptime T: type,
+        slice: []T,
+        ctx: anytype,
+        comptime f: fn (@TypeOf(ctx), *T, usize) void,
+        opts: MapOptions,
+    ) !void {
+        const Context = @TypeOf(ctx);
+
+        const Wrapper = struct {
+            parent: *ThreadMap,
+            user_ctx: Context,
+            data: []T,
+            index: usize = 0,
+            chunk_size: usize,
+            id: usize,
+
+            fn getNextIndex(w: @This()) usize {
+                w.parent.sync.lock();
+                defer w.parent.sync.unlock();
+                const i = w.parent.shared_index;
+                w.parent.shared_index += w.chunk_size;
+                return i;
+            }
+
+            fn doWork(w: @This()) void {
+                var ind = w.index;
+                while (ind <= w.data.len) {
+                    const s = w.data[ind..@min(w.data.len, ind + w.chunk_size)];
+                    for (s) |*v| f(w.user_ctx, v, w.id);
+                    ind = w.getNextIndex();
+                }
+
+                w.parent.wg.finish();
+            }
+        };
+
+        self.shared_index = 0;
+        self.wg = .{};
+        for (0..self.opts.num_threads) |i| {
+            self.wg.start();
+
+            const w: Wrapper = .{
+                .parent = self,
+                .user_ctx = ctx,
+                .data = slice,
+                .index = self.shared_index,
+                .chunk_size = opts.chunk_size,
+                .id = i,
+            };
+            self.shared_index += opts.chunk_size;
+            try self.pool.spawn(Wrapper.doWork, .{w});
+        }
+    }
+
+    /// Blocks the calling thread until the work group has finished
+    pub fn blockUntilDone(self: *ThreadMap) void {
+        self.pool.waitAndWork(&self.wg);
+    }
+};
