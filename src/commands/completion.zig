@@ -267,9 +267,9 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
             try writer.writeAll(cmpl);
 
             try switch_writer.print(
-                \\        {s})
-                \\            _arguments_{s}
-                \\        ;;
+                \\    {s})
+                \\        _arguments_{s}
+                \\    ;;
                 \\
             , .{ name_or_alias, name });
         }
@@ -304,16 +304,14 @@ const ZSH_TEMPLATE =
     \\    _describe 'command' commands
     \\}}
     \\
-    \\_nkt() {{
-    \\    local line state
+    \\local line state
     \\
-    \\    _arguments \
-    \\        '1:command:_subcommands' \
-    \\        '*::arg:->args'
+    \\_arguments \
+    \\    '1:command:_subcommands' \
+    \\    '*::arg:->args'
     \\
-    \\    case $line[1] in
+    \\case $line[1] in
     \\{s}
-    \\    esac
-    \\}}
+    \\esac
     \\
 ;
