@@ -232,7 +232,12 @@ fn searchFileNames(
     );
     defer allocator.free(search_keys);
 
-    for (dir.info.notes, search_items, search_keys, 0..) |note, *item, *key, i| {
+    // sort a copy of the notes list
+    const notes_list = try allocator.dupe(Directory.Note, dir.info.notes);
+    defer allocator.free(notes_list);
+    std.sort.heap(Directory.Note, notes_list, {}, Directory.Note.sortModified);
+
+    for (notes_list, search_items, search_keys, 0..) |note, *item, *key, i| {
         item.* = note.name;
         key.*.index = i;
     }
@@ -256,7 +261,7 @@ fn searchFileNames(
     const display_writer = display.display.ctrl.writer();
 
     try display.clear(false);
-    var row_itt = display.rowIterator(Root.Directory.Note, dir.info.notes);
+    var row_itt = display.rowIterator(Root.Directory.Note, notes_list);
     while (try row_itt.next()) |ri| {
         if (ri.selected) {
             try color.GREEN.bold().write(display_writer, " >> ", .{});
@@ -283,6 +288,7 @@ fn searchFileNames(
             .Tab, .Key => {
                 needle = display.getText();
                 if (needle.len > 0) {
+                    // tab complete up to the next `.`
                     if (event == .Tab and results != null) {
                         const rs = results.?.results;
                         const ci = rs[display.getSelected(rs.len)].string;
@@ -296,6 +302,16 @@ fn searchFileNames(
                     results = try searcher.search(needle);
                     if (results.?.results.len == 0) {
                         results = null;
+                    }
+
+                    if (results != null) {
+                        // sort the results by last modified
+                        std.sort.heap(
+                            NameSearcher.Result,
+                            results.?.results,
+                            notes_list,
+                            sortLastModified,
+                        );
                     }
                 } else {
                     results = null;
@@ -320,7 +336,7 @@ fn searchFileNames(
                     ].item.index;
                     break;
                 } else if (display.getText().len == 0) {
-                    choice = display.getSelected(dir.info.notes.len);
+                    choice = display.getSelected(notes_list.len);
                     break;
                 }
             },
@@ -353,7 +369,7 @@ fn searchFileNames(
         } else if (display.getText().len == 0) {
             var tmp_row_itt = display.rowIterator(
                 Root.Directory.Note,
-                dir.info.notes,
+                notes_list,
             );
             while (try tmp_row_itt.next()) |ri| {
                 if (ri.selected) {
@@ -379,9 +395,22 @@ fn searchFileNames(
         return .{ .new = try allocator.dupe(u8, display.getText()) };
     }
     if (choice) |c| {
-        return .{ .note = dir.info.notes[c] };
+        return .{ .note = notes_list[c] };
     }
     return null;
+}
+
+fn sortLastModified(
+    note_descriptors: []const Directory.Note,
+    lhs: NameSearcher.Result,
+    rhs: NameSearcher.Result,
+) bool {
+    if (lhs.scoreEqual(rhs)) {
+        const lhs_info = note_descriptors[lhs.item.index];
+        const rhs_info = note_descriptors[rhs.item.index];
+        return Directory.Note.sortModified({}, lhs_info, rhs_info);
+    }
+    return lhs.scoreLessThan(rhs);
 }
 
 fn editElseMaybeCreate(
