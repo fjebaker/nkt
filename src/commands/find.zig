@@ -214,6 +214,12 @@ pub fn doSearchLoop(
         if (results != null and results.?.results.len > 0) {
             const rs = results.?;
 
+            // make sure the cursor is not past the end of the number of
+            // results
+            if (display.selected_index >= rs.results.len) {
+                display.selected_index = rs.results.len - 1;
+            }
+
             const rd = display.resultConfiguration(rs.results.len);
 
             const s_result = rs.results[rd.index];
@@ -269,7 +275,7 @@ pub fn doSearchLoop(
                     .empty => {
                         try display_writer.writeByteNTimes(
                             ' ',
-                            PREVIEW_SIZE_PADDING - 1 + max_len + 7,
+                            PREVIEW_SIZE_PADDING - 1 + max_len + 11,
                         );
                     },
                 }

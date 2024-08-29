@@ -284,6 +284,9 @@ pub const SearchDisplay = struct {
         return .Cursor;
     }
 
+    /// Updates the display. Listens for key presses and acts accordingly,
+    /// returning unhandled keys to the caller. Should be called as part of the
+    /// main display loop.
     pub fn update(self: *SearchDisplay) !?Event {
         while (true) {
             const inp = try self.display.ctrl.tui.nextInput();

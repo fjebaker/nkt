@@ -128,7 +128,7 @@ pub fn Searcher(comptime Item: type) type {
 
             /// Return only those results that have a score (i.e. drop all
             /// those that have null score). Assumes the results array is
-            /// sorted in descending order.
+            /// sorted in ascending order (nulls at the front).
             fn nonNull(results: []Result, runtime: u64) ResultList {
                 var index: usize = 0;
                 for (results, 0..) |r, i| {
@@ -164,6 +164,7 @@ pub fn Searcher(comptime Item: type) type {
         closure: *WorkClosure,
         pool: *ThreadMap,
         previous_needle: []const u8 = "",
+        num_previous_matches: usize = 0,
 
         const ResultBufferInfo = struct {
             result_buffer: []Result,
@@ -251,18 +252,33 @@ pub fn Searcher(comptime Item: type) type {
             self.* = undefined;
         }
 
+        fn getSearchSlice(self: *Self, needle: []const u8) []Result {
+            if (self.num_previous_matches == 0) return self.result_buffer;
+
+            // if the new needle is the old needle with some new characters, no
+            // need to research everything, just search in the previous results
+            if (std.mem.startsWith(u8, needle, self.previous_needle)) {
+                const start = self.result_buffer.len - self.num_previous_matches;
+                return self.result_buffer[start..];
+            }
+            return self.result_buffer;
+        }
+
         /// Search for needle in all strings
         pub fn search(self: *Self, needle: []const u8) !ResultList {
             tracy.frameMarkNamed("search");
             var t_ctx = tracy.trace(@src());
             defer t_ctx.end();
 
+            const res_slice = self.getSearchSlice(needle);
+
+            // prime the threads with the new search string
             self.closure.needle = needle;
 
             var timer = try std.time.Timer.start();
             try self.pool.map(
                 Result,
-                self.result_buffer,
+                res_slice,
                 self.closure,
                 WorkClosure.work,
                 .{},
@@ -274,9 +290,13 @@ pub fn Searcher(comptime Item: type) type {
             {
                 var t2_ctx = tracy.traceNamed(@src(), "sorting");
                 defer t2_ctx.end();
-                std.sort.heap(Result, self.result_buffer, {}, Result.lessThan);
+                std.sort.heap(Result, res_slice, {}, Result.lessThan);
             }
-            return ResultList.nonNull(self.result_buffer, runtime);
+
+            const res_list = ResultList.nonNull(res_slice, runtime);
+            self.num_previous_matches = res_list.results.len;
+
+            return res_list;
         }
     };
 }
