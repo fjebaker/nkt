@@ -38,7 +38,8 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "-i/--importance imp",
-        .help = "Choice of `low`, `medium`, and `high` (default: `low`).",
+        .help = "Choice of `low`, `medium`, and `high`",
+        .default = "low",
     },
 });
 

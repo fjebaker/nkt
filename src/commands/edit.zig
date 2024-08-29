@@ -46,7 +46,7 @@ pub const arguments = cli.Arguments(selections.selectHelp(
     },
     .{
         .arg = "--ext extension",
-        .help = "The file extension for the new note (default: 'md').",
+        .help = "The file extension for the new note (default: 'md')",
     },
     .{
         .arg = "--path-only",

@@ -18,8 +18,6 @@ const BlockPrinter = @import("../printers.zig").BlockPrinter;
 
 const Self = @This();
 
-pub const DEFAULT_LINE_COUNT = 20;
-
 pub const alias = [_][]const u8{ "r", "rp" };
 
 pub const short_help = "Read notes, task details, and journals.";
@@ -38,7 +36,9 @@ pub const arguments = cli.Arguments(selections.selectHelp(
     },
     .{
         .arg = "-n/--limit limit",
-        .help = "The maximum number of entries to display of a journal (default: 25).",
+        .help = "The maximum number of entries to display of a journal",
+        .default = "25",
+        .argtype = usize,
     },
     .{
         .arg = "-d/--date",
@@ -203,10 +203,7 @@ pub fn execute(
 
 fn extractLineLimit(args: arguments.Parsed) !?usize {
     if (args.all) return null;
-    if (args.limit) |str| {
-        return try std.fmt.parseInt(usize, str, 10);
-    }
-    return DEFAULT_LINE_COUNT;
+    return args.limit;
 }
 
 fn readJournal(

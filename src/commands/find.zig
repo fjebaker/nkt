@@ -30,17 +30,19 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "--case",
-        .help = "Seach should be case sensitive (Default: false)",
+        .help = "Seach should be case sensitive",
     },
     .{
         .arg = "--rows n",
-        .help = "Number of rows to show results in (Default: 20)",
+        .help = "Number of rows to show results in",
         .argtype = usize,
+        .default = "20",
     },
     .{
         .arg = "--preview width",
-        .help = "Preview width as a percentage of the total terminal (Default: 60)",
+        .help = "Preview width as a percentage of the total terminal",
         .argtype = usize,
+        .default = "60",
     },
 });
 
@@ -51,7 +53,7 @@ preview_size: usize,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
-    const rows = args.rows orelse 20;
+    const rows = args.rows;
     if (rows < 3) {
         return cli.throwError(cli.CLIErrors.BadArgument, "Rows must be at least 4", .{});
     }
@@ -59,7 +61,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .what = args.what,
         .case_sensitive = args.case,
         .rows = rows,
-        .preview_size = args.preview orelse 60,
+        .preview_size = args.preview,
     };
 }
 

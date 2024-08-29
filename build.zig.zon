@@ -5,7 +5,7 @@
     .dependencies = .{
         .time = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
-            .hash = "1220f7f4a9210f6ce3949446276566b0a22775e85dc6b81daf7aae55e0ec5588f4dc",
+            .hash = "122077215ce36e125a490e59ec1748ffd4f6ba00d4d14f7308978e5360711d72d77f",
         },
         .chrono = .{
             .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
@@ -17,7 +17,7 @@
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
-            .hash = "1220637a6eeba2e7f9f267d0b934f7cac5375a7d5d316fe9bb87e3f0c6507fc9d3c9",
+            .hash = "1220fcbf7362a6b032579d7e5c35c1fe9f28af42a7b1885841e2a91082fd59899220",
         },
         .termui = .{
             .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
