@@ -174,7 +174,6 @@ pub fn execute(
                 "Imported '{s}' to '{s}'\n",
                 .{ name, dir.descriptor.name },
             );
-            try opts.flushOutput();
         }
 
         try root.writeChanges();
@@ -187,7 +186,7 @@ fn importAssets(
     writer: anytype,
     root: *Root,
     dir_path: []const u8,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -233,7 +232,6 @@ fn importAssets(
             "Imported '{s}' as asset in '{s}'\n",
             .{ name, dir_path },
         );
-        try opts.flushOutput();
     }
 }
 

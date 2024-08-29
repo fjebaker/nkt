@@ -16,12 +16,6 @@ pub const Options = struct {
 
     /// The local timezone for converting dates
     tz: time.TimeZone,
-
-    buffered_writer: *std.io.BufferedWriter(4096, std.fs.File.Writer),
-    // Flush the buffered writer
-    pub fn flushOutput(opts: Options) !void {
-        try opts.buffered_writer.flush();
-    }
 };
 
 pub const Commands = union(enum) {
@@ -56,19 +50,18 @@ pub const Commands = union(enum) {
         self: *Commands,
         allocator: std.mem.Allocator,
         root: *Root,
-        out_fd: anytype,
+        out_writer: anytype,
+        is_tty: bool,
         tz: time.TimeZone,
     ) !void {
-
         // create a buffered writer
-        var out_buffered = std.io.bufferedWriter(out_fd.writer());
+        var out_buffered = std.io.bufferedWriter(out_writer);
         const out = out_buffered.writer();
 
         // construct runtime options
         const opts: Options = .{
-            .piped = !out_fd.isTty(),
+            .piped = !is_tty,
             .tz = tz,
-            .buffered_writer = &out_buffered,
         };
 
         switch (self.*) {
@@ -130,7 +123,8 @@ pub fn execute(
     allocator: std.mem.Allocator,
     itt: *cli.ArgIterator,
     root: *Root,
-    out_fd: std.fs.File,
+    out_writer: anytype,
+    is_tty: bool,
     tz: time.TimeZone,
 ) !void {
     // an allocator that doesn't need to be tracked by the command
@@ -141,5 +135,5 @@ pub fn execute(
     const alloc = arena.allocator();
 
     var cmd = try Commands.init(alloc, itt);
-    try cmd.execute(alloc, root, out_fd, tz);
+    try cmd.execute(alloc, root, out_writer, is_tty, tz);
 }

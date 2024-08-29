@@ -62,7 +62,7 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     writer: anytype,
-    opts: commands.Options,
+    _: commands.Options,
 ) !void {
     try root.load();
 
@@ -83,8 +83,6 @@ pub fn execute(
                 "Compiled '{s}' to '{s}'\n",
                 .{ n.note.name, outpath },
             );
-
-            try opts.flushOutput();
 
             if (self.open) {
                 try viewFile(allocator, root, outpath);
@@ -108,6 +106,7 @@ fn viewFile(allocator: std.mem.Allocator, root: *Root, outpath: []const u8) !voi
 
     std.log.default.debug("Viewing: '{s}'", .{list.items});
 
+    // TODO: maybe shell this instead of execve?
     return std.process.execve(allocator, cmd, &env_map);
 }
 

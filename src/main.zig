@@ -24,6 +24,7 @@ test "main" {
     _ = time;
     _ = processing;
     _ = searching;
+    _ = @import("test/main.zig");
 }
 
 // configure logging
@@ -139,82 +140,14 @@ pub fn nkt_main(
     root.fs = fs;
 
     // execute the command
-    commands.execute(allocator, &arg_iterator, &root, out_fd, tz) catch |err| {
+    commands.execute(
+        allocator,
+        &arg_iterator,
+        &root,
+        out_fd.writer(),
+        out_fd.isTty(),
+        tz,
+    ) catch |err| {
         try handle_execution_error(out_fd.writer(), err);
     };
-}
-
-const TestState = struct {
-    allocator: std.mem.Allocator,
-    root: *Root,
-    out_fd: std.fs.File,
-    tz: time.TimeZone,
-};
-
-fn testExecute(
-    state: TestState,
-    comptime args: []const [:0]const u8,
-) !void {
-    var arg_iterator = cli.ArgIterator.init(args);
-    // no skip first since tests exclude the command name
-    try commands.execute(
-        state.allocator,
-        &arg_iterator,
-        state.root,
-        state.out_fd,
-        state.tz,
-    );
-}
-
-test "end-to-end" {
-    // make a temporary `nkt` instance
-    var allocator = std.testing.allocator;
-    var tmpdir = std.testing.tmpDir(.{});
-    defer tmpdir.cleanup();
-
-    const root_path = try tmpdir.dir.realpathAlloc(allocator, ".");
-    defer allocator.free(root_path);
-
-    // create a place to write the outputs
-    var outfile = try tmpdir.dir.createFile("output.log", .{});
-    defer outfile.close();
-
-    // always UTC for tests
-    const tz = try time.initTimeZone(allocator);
-    defer time.deinitTimeZone();
-
-    var fs = try FileSystem.init(root_path);
-    defer fs.deinit();
-
-    var root: Root = Root.new(allocator);
-    defer root.deinit();
-    root.fs = fs;
-
-    const state = TestState{
-        .allocator = allocator,
-        .root = &root,
-        .out_fd = outfile,
-        .tz = tz,
-    };
-
-    // basic commands work
-    try testExecute(state, &.{"help"});
-    try testExecute(state, &.{"init"});
-    try testExecute(state, &.{"config"});
-    try testExecute(state, &.{ "log", "hello world" });
-    try testExecute(state, &.{ "new", "tag", "abc" });
-
-    // inline tags
-    try testExecute(state, &.{ "log", "hello world @abc" });
-
-    // seperate tags
-    try testExecute(state, &.{ "log", "hello", "@abc" });
-
-    // task creation
-    try testExecute(state, &.{ "task", "do something", "--due", "monday" });
-    try testExecute(state, &.{ "task", "do something", "soon", "--due", "monday" });
-
-    // retrieval
-    try testExecute(state, &.{ "ls", "--tasklist", "todo" });
-    try testExecute(state, &.{"read"});
 }
