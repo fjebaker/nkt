@@ -82,15 +82,15 @@ pub fn execute(
         );
     };
 
-    const paths: [][]const u8 = if (self.what) |p|
+    const note_descriptors: []Directory.Note = if (self.what) |p|
         try directoryNotesUnder(
             allocator,
             p,
             dir,
         )
     else
-        try getAllPaths(allocator, root);
-    defer allocator.free(paths);
+        try getAllInfos(allocator, root);
+    defer allocator.free(note_descriptors);
 
     var heap = std.heap.ArenaAllocator.init(allocator);
     defer heap.deinit();
@@ -103,16 +103,19 @@ pub fn execute(
     var chunk_machine = searching.ChunkMachine.init(allocator);
     defer chunk_machine.deinit();
 
-    // read all note contents into buffers
-    for (paths) |p| {
-        const content = try root.fs.?.readFileAlloc(tmp_alloc, p);
-        try chunk_machine.add(p, content);
+    // read all note contents, and split with the chunk machine into small
+    // chunks to be searched in
+    for (note_descriptors) |info| {
+        const content = try root.fs.?.readFileAlloc(tmp_alloc, info.path);
+        try chunk_machine.add(info.path, content);
     }
 
-    const choice = try self.doSearchLoop(allocator, &chunk_machine);
+    // run the search loop to get the users chocie
+    const choice = try self.doSearchLoop(allocator, note_descriptors, &chunk_machine);
 
     if (choice) |c| {
-        const path = chunk_machine.getKeyFromChunk(c.item.*);
+        const info = note_descriptors[c.item.index];
+        const path = info.path;
         const line_no = c.item.line_no;
         std.log.default.debug(
             "Selected: {s}:{d}",
@@ -127,9 +130,12 @@ pub fn execute(
 const Result = searching.ChunkMachine.Result;
 const ResultList = searching.ChunkMachine.ResultList;
 
+/// Run the interactive search loop that allows the user to search and have the
+/// results displayed interactively.
 pub fn doSearchLoop(
     self: *Self,
     allocator: std.mem.Allocator,
+    note_descriptors: []const Directory.Note,
     chunk_machine: *searching.ChunkMachine,
 ) !?Result {
     var searcher = try chunk_machine.searcher(
@@ -156,7 +162,9 @@ pub fn doSearchLoop(
     var results: ?ResultList = null;
     var runtime: u64 = 0;
     var choice: ?Result = null;
+
     tracy.frameMarkNamed("setup_completed");
+
     while (try display.update()) |event| {
         var t_ctx = tracy.trace(@src());
         defer t_ctx.end();
@@ -175,6 +183,17 @@ pub fn doSearchLoop(
                 if (needle.len > 0) {
                     var timer = try std.time.Timer.start();
                     results = try searcher.search(needle);
+
+                    if (results) |rs| {
+                        // sort by last modified
+                        std.sort.heap(
+                            Result,
+                            rs.results,
+                            note_descriptors,
+                            sortLastModified,
+                        );
+                    }
+
                     runtime = timer.lap();
                 } else {
                     results = null;
@@ -194,6 +213,7 @@ pub fn doSearchLoop(
 
         if (results != null and results.?.results.len > 0) {
             const rs = results.?;
+
             const rd = display.resultConfiguration(rs.results.len);
 
             const s_result = rs.results[rd.index];
@@ -214,7 +234,7 @@ pub fn doSearchLoop(
 
             var tmp_row_itt = display.rowIterator(
                 Result,
-                results.?.results,
+                rs.results,
             );
 
             const max_len = term_size.col -
@@ -264,8 +284,11 @@ pub fn doSearchLoop(
                 try display_writer.writeByteNTimes(' ', 1);
 
                 if (i == 0) {
-                    const path = chunk_machine.getKeyFromChunk(selected_item);
-                    try display_writer.print("File: {s}", .{path});
+                    const info = note_descriptors[selected_item.index];
+                    try display_writer.print("File: {s} (modified: {s})", .{
+                        info.path,
+                        try info.modified.formatDateTime(),
+                    });
                     //
                 } else if (i > 1) {
                     try preview.writeNext(display_writer);
@@ -292,32 +315,45 @@ pub fn doSearchLoop(
     return choice;
 }
 
+fn sortLastModified(
+    note_descriptors: []const Directory.Note,
+    lhs: Result,
+    rhs: Result,
+) bool {
+    if (lhs.scoreEqual(rhs)) {
+        const lhs_info = note_descriptors[lhs.item.index];
+        const rhs_info = note_descriptors[rhs.item.index];
+        return Directory.Note.sortModified({}, lhs_info, rhs_info);
+    }
+    return lhs.scoreLessThan(rhs);
+}
+
 fn directoryNotesUnder(
     alloc: std.mem.Allocator,
     root: []const u8,
     dir: Directory,
-) ![][]const u8 {
-    var paths = std.ArrayList([]const u8).init(alloc);
+) ![]Directory.Note {
+    var note_descriptors = std.ArrayList(Directory.Note).init(alloc);
     for (dir.info.notes) |note| {
         if (std.mem.startsWith(u8, note.name, root)) {
-            try paths.append(note.path);
+            try note_descriptors.append(note);
         }
     }
-    return paths.toOwnedSlice();
+    return note_descriptors.toOwnedSlice();
 }
 
-fn getAllPaths(alloc: std.mem.Allocator, root: *Root) ![][]const u8 {
-    var paths = std.ArrayList([]const u8).init(alloc);
-    errdefer paths.deinit();
+fn getAllInfos(alloc: std.mem.Allocator, root: *Root) ![]Directory.Note {
+    var note_descriptors = std.ArrayList(Directory.Note).init(alloc);
+    errdefer note_descriptors.deinit();
 
     for (root.info.directories) |d| {
         const dir = (try root.getDirectory(d.name)).?;
         for (dir.info.notes) |note| {
-            try paths.append(note.path);
+            try note_descriptors.append(note);
         }
     }
 
-    return try paths.toOwnedSlice();
+    return try note_descriptors.toOwnedSlice();
 }
 
 fn editFileAt(

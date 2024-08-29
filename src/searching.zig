@@ -52,6 +52,23 @@ pub fn Searcher(comptime Item: type) type {
             num_matches: usize,
             score: ?i32,
 
+            /// Compares scores, returns true if `lhs` has a lower score that
+            /// `rhs`
+            pub fn scoreLessThan(lhs: Result, rhs: Result) bool {
+                return Result.lessThan({}, lhs, rhs);
+            }
+
+            /// Compares scores, returns true if `lhs` has an equal score to
+            /// `rhs`
+            pub fn scoreEqual(lhs: Result, rhs: Result) bool {
+                if (rhs.score == null) {
+                    return lhs.score == null;
+                } else if (lhs.score == null) {
+                    return false;
+                }
+                return lhs.score.? == rhs.score.?;
+            }
+
             fn lessThan(_: void, lhs: Result, rhs: Result) bool {
                 if (rhs.score == null) {
                     return false;
@@ -106,10 +123,13 @@ pub fn Searcher(comptime Item: type) type {
         };
 
         pub const ResultList = struct {
-            results: []const Result,
+            results: []Result,
             runtime: u64,
 
-            fn nonNull(results: []const Result, runtime: u64) ResultList {
+            /// Return only those results that have a score (i.e. drop all
+            /// those that have null score). Assumes the results array is
+            /// sorted in descending order.
+            fn nonNull(results: []Result, runtime: u64) ResultList {
                 var index: usize = 0;
                 for (results, 0..) |r, i| {
                     if (r.score != null) {
@@ -341,14 +361,10 @@ pub const ChunkMachine = struct {
         }
     }
 
+    /// Get the full string associated with a given chunk
     pub fn getValueFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
         std.debug.assert(key.index < self.values.items.len);
         return self.values.items[key.index];
-    }
-
-    pub fn getKeyFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
-        std.debug.assert(key.index < self.keys.items.len);
-        return self.keys.items[key.index];
     }
 
     /// Get a searcher for the chunks. Searcher will use the passed allocator
