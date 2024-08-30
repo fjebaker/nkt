@@ -188,6 +188,12 @@ pub const SearchDisplay = struct {
         return self.text[0..self.text_index];
     }
 
+    /// Set the text in the user buffer
+    pub fn setText(self: *SearchDisplay, text: []const u8) void {
+        @memcpy(self.text[0..text.len], text);
+        self.text_index = text.len;
+    }
+
     /// Get information about how to print the results
     pub fn resultConfiguration(
         self: *SearchDisplay,

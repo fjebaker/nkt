@@ -5,6 +5,7 @@ const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
 const searching = @import("../searching.zig");
+const stringsearch = @import("../stringsearch.zig");
 const color = @import("../colors.zig");
 
 const termui = @import("termui");
@@ -216,6 +217,60 @@ const SearchSelection = union(enum) {
     new: []const u8,
 };
 
+const Result = stringsearch.StringSearch.Search.Result;
+
+const InteractiveControl = struct {
+    create_new: bool = false,
+    name: ?[]const u8 = null,
+    allocator: std.mem.Allocator,
+
+    pub fn deinit(self: *InteractiveControl) void {
+        if (self.name) |name| {
+            self.allocator.free(name);
+        }
+        self.* = undefined;
+    }
+
+    pub fn handleControl(
+        self: *InteractiveControl,
+        key: u8,
+        needle: []const u8,
+    ) !bool {
+        switch (key) {
+            'n' => {
+                self.name = try self.allocator.dupe(u8, needle);
+                self.create_new = true;
+                return true;
+            },
+            else => {},
+        }
+        return false;
+    }
+
+    pub fn drawNote(
+        _: *const InteractiveControl,
+        writer: anytype,
+        note: Directory.Note,
+        c: color.Farbe,
+    ) !void {
+        try c.write(writer, "{s}", .{note.name});
+    }
+
+    pub fn sortResults(
+        _: *const InteractiveControl,
+        results: []Result,
+        notes: []const Directory.Note,
+    ) void {
+        // sort the results by last modified
+        std.sort.heap(
+            Result,
+            results,
+            notes,
+            sortLastModified,
+        );
+    }
+};
+
 fn searchFileNames(
     dir: *const Root.Directory,
     allocator: std.mem.Allocator,
@@ -226,25 +281,17 @@ fn searchFileNames(
     );
     defer allocator.free(search_items);
 
-    const search_keys = try allocator.alloc(
-        SearchKey,
-        dir.info.notes.len,
-    );
-    defer allocator.free(search_keys);
-
     // sort a copy of the notes list
     const notes_list = try allocator.dupe(Directory.Note, dir.info.notes);
     defer allocator.free(notes_list);
     std.sort.heap(Directory.Note, notes_list, {}, Directory.Note.sortModified);
 
-    for (notes_list, search_items, search_keys, 0..) |note, *item, *key, i| {
+    for (notes_list, search_items) |note, *item| {
         item.* = note.name;
-        key.*.index = i;
     }
 
-    var searcher = try NameSearcher.initItems(
+    var ss = try stringsearch.StringSearch.init(
         allocator,
-        search_keys,
         search_items,
         .{
             .wildcard_spaces = true,
@@ -252,158 +299,38 @@ fn searchFileNames(
             .case_penalize = true,
         },
     );
-    defer searcher.deinit();
+    defer ss.deinit();
 
-    var display = try cli.SearchDisplay.init(10);
-    defer display.deinit();
-    const max_rows = display.display.max_rows - 1;
-    display.max_rows = max_rows;
-    const display_writer = display.display.ctrl.writer();
+    var interactive_control: InteractiveControl = .{ .allocator = allocator };
+    errdefer interactive_control.deinit();
 
-    try display.clear(false);
-    var row_itt = display.rowIterator(Root.Directory.Note, notes_list);
-    while (try row_itt.next()) |ri| {
-        if (ri.selected) {
-            try color.GREEN.bold().write(display_writer, " >> ", .{});
-        } else {
-            try display_writer.writeAll("    ");
-        }
-        try color.DIM.write(
-            display_writer,
-            "[{d: >4}] {s}",
-            .{ 0, ri.item.name },
-        );
-    }
-    try display.draw();
+    const index = try ss.interactiveDisplay(
+        &interactive_control,
+        Directory.Note,
+        notes_list,
+        .{
+            .handleControl = InteractiveControl.handleControl,
+            .drawItem = InteractiveControl.drawNote,
+            .sortResults = InteractiveControl.sortResults,
+        },
+    );
 
-    var needle: []const u8 = "";
-    var results: ?NameSearcher.ResultList = null;
-    var choice: ?usize = null;
-    var create_new: bool = false;
-
-    while (try display.update()) |event| {
-        const term_size = try display.display.ctrl.tui.getSize();
-        try display.clear(false);
-        switch (event) {
-            .Tab, .Key => {
-                needle = display.getText();
-                if (needle.len > 0) {
-                    // tab complete up to the next `.`
-                    if (event == .Tab and results != null) {
-                        const rs = results.?.results;
-                        const ci = rs[display.getSelected(rs.len)].string;
-                        const j =
-                            std.mem.indexOfScalarPos(u8, ci, needle.len, '.') orelse
-                            ci.len;
-                        std.mem.copyForwards(u8, &display.text, ci[0..j]);
-                        display.text_index = j;
-                        needle = display.getText();
-                    }
-                    results = try searcher.search(needle);
-                    if (results.?.results.len == 0) {
-                        results = null;
-                    }
-
-                    if (results != null) {
-                        // sort the results by last modified
-                        std.sort.heap(
-                            NameSearcher.Result,
-                            results.?.results,
-                            notes_list,
-                            sortLastModified,
-                        );
-                    }
-                } else {
-                    results = null;
-                }
-            },
-            .Ctrl => |key| {
-                switch (key) {
-                    'n' => {
-                        create_new = true;
-                        break;
-                    },
-                    else => {
-                        std.log.default.err("Unhandled Ctrl key: {c}", .{key});
-                        unreachable;
-                    },
-                }
-            },
-            .Enter => {
-                if (results) |rs| {
-                    choice = rs.results[
-                        display.getSelected(rs.results.len)
-                    ].item.index;
-                    break;
-                } else if (display.getText().len == 0) {
-                    choice = display.getSelected(notes_list.len);
-                    break;
-                }
-            },
-            else => {},
-        }
-
-        if (results != null and results.?.results.len > 0) {
-            var tmp_row_itt = display.rowIterator(
-                NameSearcher.Result,
-                results.?.results,
-            );
-            while (try tmp_row_itt.next()) |ri| {
-                if (ri.selected) {
-                    try color.GREEN.bold().write(display_writer, " >> ", .{});
-                } else {
-                    try display_writer.writeAll("    ");
-                }
-                const score: usize = if (ri.item.score) |s| @intCast(@abs(s)) else 0;
-                try color.DIM.write(
-                    display_writer,
-                    "[{d: >4}] ",
-                    .{score},
-                );
-                _ = try ri.item.printMatched(
-                    display_writer,
-                    14,
-                    term_size.col,
-                );
-            }
-        } else if (display.getText().len == 0) {
-            var tmp_row_itt = display.rowIterator(
-                Root.Directory.Note,
-                notes_list,
-            );
-            while (try tmp_row_itt.next()) |ri| {
-                if (ri.selected) {
-                    try color.GREEN.bold().write(display_writer, " >> ", .{});
-                } else {
-                    try display_writer.writeAll("    ");
-                }
-                try color.DIM.write(
-                    display_writer,
-                    "[{d: >4}] {s}",
-                    .{ 0, ri.item.name },
-                );
-            }
-        }
-
-        try display.draw();
+    if (interactive_control.create_new) {
+        return .{ .new = interactive_control.name.? };
     }
 
-    // cleanup
-    try display.cleanup();
-
-    if (create_new) {
-        return .{ .new = try allocator.dupe(u8, display.getText()) };
-    }
-    if (choice) |c| {
-        return .{ .note = notes_list[c] };
+    // cleanup the interactive control if we're not going be using it
+    interactive_control.deinit();
+    if (index) |i| {
+        return .{ .note = notes_list[i] };
     }
     return null;
 }
 
 fn sortLastModified(
     note_descriptors: []const Directory.Note,
-    lhs: NameSearcher.Result,
-    rhs: NameSearcher.Result,
+    lhs: Result,
+    rhs: Result,
 ) bool {
     if (lhs.scoreEqual(rhs)) {
         const lhs_info = note_descriptors[lhs.item.index];

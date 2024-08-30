@@ -1,7 +1,7 @@
 const utils = @import("utils.zig");
 const testExecute = utils.testExecute;
 
-test "end-to-end" {
+test "smoke" {
     var state = try utils.TestState.init();
     defer state.deinit();
 
