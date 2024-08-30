@@ -109,7 +109,7 @@ pub fn execute(
     // chunks to be searched in
     for (note_descriptors) |info| {
         const content = try root.fs.?.readFileAlloc(tmp_alloc, info.path);
-        try chunk_machine.add(info.path, content);
+        try chunk_machine.add(content);
     }
 
     // run the search loop to get the users chocie

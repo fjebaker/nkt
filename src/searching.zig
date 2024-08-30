@@ -9,7 +9,10 @@ const ThreadMap = @import("threads.zig").ThreadMap;
 
 const MatchIterator = utils.Iterator(usize);
 
-pub fn writeHighlightMatched(
+/// The maximum needle length for fuzzy finder search queries.
+pub const NEEDLE_MAX = 128;
+
+fn writeHighlightMatched(
     writer: anytype,
     text: []const u8,
     match_itt: *MatchIterator,
@@ -40,16 +43,27 @@ pub const FuzzyFinder = fuzzig.Algorithm(
     fuzzig.AsciiOptions,
 );
 
-const NEEDLE_MAX = 128;
-
+/// Searcher structure prototype. Uses `Item` in the field of each result, so
+/// that user can pass context backwards and forwards to relate the search
+/// result back to a specific item.
+///
+/// The searcher is designed to have a set number of string over which it
+/// searches with a variable needle. It is not designed to have the space of
+/// haystacks changed over its lifetime.
 pub fn Searcher(comptime Item: type) type {
     return struct {
         const Self = @This();
+
+        /// The result type used by the searcher
         pub const Result = struct {
+            /// The user context item
             item: *const Item,
+            /// The string that the needle was matched to (i.e. haystack).
             string: []const u8,
+            /// The indexes into that string where the needle matched
             matches: []usize,
             num_matches: usize,
+            /// The score of this match, or null if it did not match
             score: ?i32,
 
             /// Compares scores, returns true if `lhs` has a lower score that
@@ -122,8 +136,11 @@ pub fn Searcher(comptime Item: type) type {
             }
         };
 
+        /// A list of all of the results, along with metadata about the search
+        /// query
         pub const ResultList = struct {
             results: []Result,
+            /// How long (in us)
             runtime: u64,
 
             /// Return only those results that have a score (i.e. drop all
@@ -153,18 +170,12 @@ pub fn Searcher(comptime Item: type) type {
 
                 const r = finder.scoreMatches(result.string, c.needle);
                 result.num_matches = r.matches.len;
+                // copy from thread local back to the shared store
                 std.mem.copyBackwards(usize, result.matches, r.matches);
+
                 result.score = r.score;
             }
         };
-
-        heap: std.heap.ArenaAllocator,
-        items: []const Item,
-        result_buffer: []Result,
-        closure: *WorkClosure,
-        pool: *ThreadMap,
-        previous_needle: []const u8 = "",
-        num_previous_matches: usize = 0,
 
         const ResultBufferInfo = struct {
             result_buffer: []Result,
@@ -192,11 +203,20 @@ pub fn Searcher(comptime Item: type) type {
 
                 max_content_length = @max(max_content_length, string.len);
             }
+
             return .{
                 .result_buffer = results,
                 .max_content_length = max_content_length,
             };
         }
+
+        heap: std.heap.ArenaAllocator,
+        items: []const Item,
+        result_buffer: []Result,
+        closure: *WorkClosure,
+        pool: *ThreadMap,
+        previous_needle: []const u8 = "",
+        num_previous_matches: usize = 0,
 
         /// Initialize a finder
         pub fn initItems(
@@ -213,13 +233,17 @@ pub fn Searcher(comptime Item: type) type {
             // number of threads
             const n_threads = std.Thread.getCpuCount() catch 1;
 
+            // allocate the thread pool used to map the search function onto
+            // all of the string
             var threads = try ThreadMap.init(
                 allocator,
                 .{ .num_threads = n_threads },
             );
             errdefer threads.deinit();
 
-            // initialize a fuzzy finder for each thread
+            // initialize a fuzzy finder for each thread. we need the work
+            // closure to be shared by all of the threads, so we'll heap
+            // allocate that to avoid taking pointers to things on the stack
             const c_ptr = try heap.allocator().create(WorkClosure);
             c_ptr.* = .{
                 .finders = try heap.allocator().alloc(
@@ -331,25 +355,33 @@ test "simple search" {
     try std.testing.expectEqual(res_list.results[2].item.*, 1);
 }
 
+/// Used to split larger strings (e.g. file contents) into many smaller strings
+/// to be fuzzy searched through.
+///
+/// The chunks are split by newlines, so that each paragraph becomes an
+/// individually searched chunk.
 pub const ChunkMachine = struct {
-    pub const SearchKey = struct {
+    /// The key used to later reconstruct which string, and where it that
+    /// string, a chunk came from
+    pub const ChunkIndex = struct {
         index: usize,
         start: usize,
         end: usize,
         line_no: usize,
     };
 
-    pub const SearcherType = Searcher(SearchKey);
+    pub const SearcherType = Searcher(ChunkIndex);
     pub const Result = SearcherType.Result;
     pub const ResultList = SearcherType.ResultList;
 
-    const ItemList = std.ArrayList(SearchKey);
-
+    const ItemList = std.ArrayList(ChunkIndex);
     const StringList = std.ArrayList([]const u8);
 
-    keys: StringList,
+    /// the original strings used to generate the chunks
     values: StringList,
+    /// a descriptor of each chunk
     item_list: ItemList,
+    /// the chunks themselves
     chunks: StringList,
 
     fn allocator(self: *ChunkMachine) std.mem.Allocator {
@@ -366,7 +398,7 @@ pub const ChunkMachine = struct {
         while (each_line.next()) |line| {
             defer line_number += 1;
             // skip short lines
-            if (std.mem.trim(u8, line, " \t").len < 4) continue;
+            if (std.mem.trim(u8, line, " \t").len < 3) continue;
 
             const end = utils.getSplitIndex(each_line);
             const start = end - line.len;
@@ -382,7 +414,7 @@ pub const ChunkMachine = struct {
     }
 
     /// Get the full string associated with a given chunk
-    pub fn getValueFromChunk(self: *const ChunkMachine, key: SearchKey) []const u8 {
+    pub fn getValueFromChunk(self: *const ChunkMachine, key: ChunkIndex) []const u8 {
         std.debug.assert(key.index < self.values.items.len);
         return self.values.items[key.index];
     }
@@ -404,16 +436,18 @@ pub const ChunkMachine = struct {
 
     /// Add a key and value into the chunk machine. Will split the value into
     /// smaller chunks ro searching.
-    pub fn add(self: *ChunkMachine, key: []const u8, value: []const u8) !void {
-        const index = self.keys.items.len;
-        try self.keys.append(key);
+    ///
+    /// Note: the value is not copied, so the caller must ensure the lifetime
+    /// of the value string is longer that the lifetime of the ChunkMachine
+    pub fn add(self: *ChunkMachine, value: []const u8) !void {
+        const index = self.values.items.len;
         try self.values.append(value);
         try self.addChunksToIndex(value, index);
     }
 
+    /// Initialize the chunk machine
     pub fn init(alloc: std.mem.Allocator) ChunkMachine {
         return .{
-            .keys = StringList.init(alloc),
             .values = StringList.init(alloc),
             .item_list = ItemList.init(alloc),
             .chunks = StringList.init(alloc),
@@ -421,13 +455,13 @@ pub const ChunkMachine = struct {
     }
 
     pub fn deinit(self: *ChunkMachine) void {
-        self.keys.deinit();
         self.values.deinit();
         self.item_list.deinit();
         self.chunks.deinit();
         self.* = undefined;
     }
 
+    /// Get the number of items (chunks) currently stored.
     pub fn numItems(self: *const ChunkMachine) usize {
         return self.item_list.items.len;
     }
