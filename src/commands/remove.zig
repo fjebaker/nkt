@@ -42,12 +42,12 @@ pub fn execute(
     allocator: std.mem.Allocator,
     root: *Root,
     _: anytype,
-    _: commands.Options,
+    opts: commands.Options,
 ) !void {
     try root.load();
     var item = try self.selection.resolveReportError(root);
 
-    var writer = std.io.getStdOut().writer();
+    var writer = opts.unbuffered_writer;
 
     switch (item) {
         .Entry => |*e| {

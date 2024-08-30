@@ -19,6 +19,16 @@ pub const Options = struct {
 
     /// The command or alias typed by the user
     command: []const u8,
+
+    /// An unbuffered writer that can be written to for e.g. interactive
+    /// purposes
+    unbuffered_writer: T: {
+        if (@import("builtin").is_test) {
+            break :T std.ArrayList(u8).Writer;
+        } else {
+            break :T std.fs.File.Writer;
+        }
+    },
 };
 
 pub const Commands = union(enum) {
@@ -67,6 +77,7 @@ pub const Commands = union(enum) {
             .piped = !is_tty,
             .tz = tz,
             .command = command,
+            .unbuffered_writer = out_writer,
         };
 
         switch (self.*) {

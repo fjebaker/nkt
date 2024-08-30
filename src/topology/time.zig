@@ -50,6 +50,16 @@ pub fn initTimeZoneUTC(allocator: std.mem.Allocator) !TimeZone {
 
 /// Initialize the global time zone
 pub fn initTimeZone(allocator: std.mem.Allocator) !TimeZone {
+
+    // in tests, always use UTC
+    if (@import("builtin").is_test) {
+        global_time_zone = .{
+            .tz = TimeZone.initUTC() catch unreachable,
+            .mem = std.heap.ArenaAllocator.init(allocator),
+        };
+        return global_time_zone.?.tz;
+    }
+
     var mem = std.heap.ArenaAllocator.init(allocator);
     errdefer mem.deinit();
 
@@ -86,6 +96,12 @@ pub const Time = struct {
 
     /// Get the time now as `Time`
     pub fn now() Time {
+
+        // fix what counts as now in testing environments
+        if (@import("builtin").is_test) {
+            return .{ .time = 10_000, .timezone = getLocalTimeZone() };
+        }
+
         return .{
             .time = @intCast(std.time.milliTimestamp()),
             .timezone = getLocalTimeZone(),

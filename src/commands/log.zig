@@ -95,7 +95,7 @@ pub fn execute(
     if (self.args.text) |t| {
         try addEntryToJournal(allocator, t, self.tags, root, &j, writer);
     } else {
-        const im_writer = std.io.getStdOut().writer();
+        const im_writer = opts.unbuffered_writer;
         var result = try fromEditor(allocator);
         defer result.deinit();
 

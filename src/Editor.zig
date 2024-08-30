@@ -70,6 +70,10 @@ pub fn becomeWithArgs(self: *Editor, path: []const u8, args: []const []const u8)
     var env_map = try std.process.getEnvMap(self.allocator);
     defer env_map.deinit();
 
+    if (@import("builtin").is_test) {
+        return error.NoExecveInTest;
+    }
+
     return std.process.execve(self.allocator, all_args, &env_map);
 }
 

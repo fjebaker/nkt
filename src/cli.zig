@@ -8,19 +8,23 @@ const Key = termui.TermUI.Key;
 
 /// Wrapper for returning errors with helpful messages printed to `stderr`
 pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerror {
-    var stderr = std.io.getStdErr();
-    var writer = stderr.writer();
+    if (@import("builtin").is_test == false) {
+        var stderr = std.io.getStdErr();
+        var writer = stderr.writer();
 
-    const err_string = @errorName(err);
+        const err_string = @errorName(err);
 
-    const f = farbe.Farbe.init().fgRgb(255, 0, 0).bold();
+        const f = farbe.Farbe.init().fgRgb(255, 0, 0).bold();
 
-    try writeFmtd(writer, "Error {s}: ", .{err_string}, f, stderr.isTty());
+        try writeFmtd(writer, "Error {s}: ", .{err_string}, f, stderr.isTty());
 
-    try writer.print(fmt ++ "\n", args);
+        try writer.print(fmt ++ "\n", args);
+    }
 
-    // let the OS clean up
-    std.process.exit(1);
+    if (@import("builtin").mode != .Debug) {
+        // let the OS clean up
+        std.process.exit(1);
+    }
     return err;
 }
 

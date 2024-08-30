@@ -53,6 +53,21 @@ pub const TestState = struct {
             .tz = tz,
         };
     }
+
+    /// Clear the output buffer
+    pub fn clearOutput(self: *TestState) void {
+        self.stdout.clearRetainingCapacity();
+    }
+
+    /// Write contents to a given file (to simulate having edited content in a
+    /// certain way).
+    pub fn writeToFile(
+        self: *TestState,
+        path: []const u8,
+        content: []const u8,
+    ) !void {
+        try self.fs.overwrite(path, content);
+    }
 };
 
 pub fn testExecute(
