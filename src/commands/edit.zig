@@ -20,7 +20,7 @@ const Self = @This();
 
 pub const Error = error{InvalidEdit};
 
-pub const alias = [_][]const u8{"e"};
+pub const alias = [_][]const u8{ "e", "ef" };
 
 pub const short_help = "Edit a note or item in the editor.";
 pub const long_help =

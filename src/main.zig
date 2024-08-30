@@ -10,7 +10,6 @@ const Root = @import("topology/Root.zig");
 const time = @import("topology/time.zig");
 const FileSystem = @import("FileSystem.zig");
 const commands = @import("commands.zig");
-const Commands = commands.Commands;
 
 const color = @import("colors.zig");
 

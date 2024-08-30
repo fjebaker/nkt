@@ -16,6 +16,9 @@ pub const Options = struct {
 
     /// The local timezone for converting dates
     tz: time.TimeZone,
+
+    /// The command or alias typed by the user
+    command: []const u8,
 };
 
 pub const Commands = union(enum) {
@@ -53,6 +56,7 @@ pub const Commands = union(enum) {
         out_writer: anytype,
         is_tty: bool,
         tz: time.TimeZone,
+        command: []const u8,
     ) !void {
         // create a buffered writer
         var out_buffered = std.io.bufferedWriter(out_writer);
@@ -62,6 +66,7 @@ pub const Commands = union(enum) {
         const opts: Options = .{
             .piped = !is_tty,
             .tz = tz,
+            .command = command,
         };
 
         switch (self.*) {
@@ -82,18 +87,12 @@ pub const Commands = union(enum) {
     /// that command.
     pub fn init(
         allocator: std.mem.Allocator,
+        command: []const u8,
         args: *cli.ArgIterator,
     ) !Commands {
-        const command = try args.next() orelse
-            return Error.NoCommandGiven;
-
-        if (command.flag) {
-            return throwUnknownCommand(command.string);
-        }
-
         inline for (@typeInfo(Commands).Union.fields) |field| {
-            const is_field = std.mem.eql(u8, command.string, field.name);
-            const is_alias = utils.isAlias(field, command.string);
+            const is_field = std.mem.eql(u8, command, field.name);
+            const is_alias = utils.isAlias(field, command);
             if (is_field or is_alias) {
                 const instance = try @field(field.type, "fromArgs")(
                     allocator,
@@ -103,7 +102,7 @@ pub const Commands = union(enum) {
             }
         }
 
-        return throwUnknownCommand(command.string);
+        return throwUnknownCommand(command);
     }
 };
 
@@ -134,6 +133,14 @@ pub fn execute(
 
     const alloc = arena.allocator();
 
-    var cmd = try Commands.init(alloc, itt);
-    try cmd.execute(alloc, root, out_writer, is_tty, tz);
+    // get the command that was typed
+    const command = try itt.next() orelse
+        return Error.NoCommandGiven;
+
+    if (command.flag) {
+        return throwUnknownCommand(command.string);
+    }
+
+    var cmd = try Commands.init(alloc, command.string, itt);
+    try cmd.execute(alloc, root, out_writer, is_tty, tz, command.string);
 }
