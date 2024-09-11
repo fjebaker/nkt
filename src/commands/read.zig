@@ -146,7 +146,7 @@ pub fn execute(
 
     switch (item) {
         .Day => |*day| {
-            const tasks = try root.getAllTasks(allocator);
+            const tasks = try root.getAllTasks(allocator, .{ .use_exclude_list = true });
             defer allocator.free(tasks);
 
             var task_events = try abstractions.TaskEventList.init(allocator, tasks);
@@ -217,7 +217,7 @@ fn readJournal(
 ) !void {
     std.log.default.debug("Reading journal '{s}'", .{j.descriptor.name});
 
-    const tasks = try root.getAllTasks(allocator);
+    const tasks = try root.getAllTasks(allocator, .{ .use_exclude_list = true });
     defer allocator.free(tasks);
 
     var task_events = try abstractions.TaskEventList.init(allocator, tasks);

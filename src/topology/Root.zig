@@ -125,6 +125,9 @@ const Info = struct {
         .{ .name = "markdown", .extensions = &.{"md"} },
     },
 
+    // options that control the read command
+    read_tasklist_ignore: []const []const u8 = &.{},
+
     tasklists: []Descriptor,
     directories: []Descriptor,
     journals: []Descriptor,
@@ -865,15 +868,30 @@ pub fn defaultCollectionName(self: *Root, comptime ct: CollectionType) []const u
     };
 }
 
+pub const GetAllTasksOptions = struct {
+    use_exclude_list: bool = false,
+};
+
 /// Returns a list of all tasks in all tasklists
 pub fn getAllTasks(
     self: *Root,
     allocator: std.mem.Allocator,
+    opts: GetAllTasksOptions,
 ) ![]const Tasklist.Task {
     var list = std.ArrayList(Tasklist.Task).init(allocator);
     defer list.deinit();
 
     for (self.info.tasklists) |descr| {
+        if (opts.use_exclude_list) {
+            var skip: bool = false;
+            for (self.info.read_tasklist_ignore) |ignore| {
+                if (std.mem.eql(u8, ignore, descr.name)) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip) continue;
+        }
         const tl = (try self.getTasklist(descr.name)).?;
         try list.appendSlice(tl.info.tasks);
     }
