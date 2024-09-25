@@ -33,15 +33,7 @@ fn writeHighlightMatched(
 }
 
 /// Default ASCII Fuzzy Finder
-pub const FuzzyFinder = fuzzig.Algorithm(
-    u8,
-    i32,
-    .{
-        .score_gap_start = -4,
-        .score_gap_extension = -2,
-    },
-    fuzzig.AsciiOptions,
-);
+pub const FuzzyFinder = fuzzig.Ascii;
 
 /// Searcher structure prototype. Uses `Item` in the field of each result, so
 /// that user can pass context backwards and forwards to relate the search
@@ -223,7 +215,7 @@ pub fn Searcher(comptime Item: type) type {
             allocator: std.mem.Allocator,
             items: []const Item,
             strings: []const []const u8,
-            opts: fuzzig.AsciiOptions,
+            opts: fuzzig.Ascii.Options,
         ) !Self {
             var heap = std.heap.ArenaAllocator.init(allocator);
             errdefer heap.deinit();
@@ -424,7 +416,7 @@ pub const ChunkMachine = struct {
     pub fn searcher(
         self: *ChunkMachine,
         alloc: std.mem.Allocator,
-        opts: fuzzig.AsciiOptions,
+        opts: fuzzig.Ascii.Options,
     ) !SearcherType {
         return try SearcherType.initItems(
             alloc,

@@ -20,7 +20,7 @@ pub const StringSearch = struct {
     pub fn init(
         allocator: std.mem.Allocator,
         strings: []const []const u8,
-        opts: fuzzig.AsciiOptions,
+        opts: fuzzig.Ascii.Options,
     ) !StringSearch {
         // allocate a key for each item
         const keys = try allocator.alloc(Key, strings.len);

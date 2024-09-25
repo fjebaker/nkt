@@ -1,6 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const tags = @import("../topology/tags.zig");
+const ttags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const selections = @import("../selections.zig");
 const utils = @import("../utils.zig");
@@ -37,7 +37,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         if (!try parser.parseArg(arg)) {
             if (arg.flag) try itt.throwUnknownFlag();
             // tag parsing
-            const tag_name = tags.getTagString(arg.string) catch |err| {
+            const tag_name = ttags.getTagString(arg.string) catch |err| {
                 return cli.throwError(err, "{s}", .{arg.string});
             };
 

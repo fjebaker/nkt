@@ -1,6 +1,6 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const tags = @import("../topology/tags.zig");
+const ttags = @import("../topology/tags.zig");
 const time = @import("../topology/time.zig");
 const utils = @import("../utils.zig");
 const selections = @import("../selections.zig");
@@ -59,7 +59,7 @@ args: arguments.Parsed,
 selection: selections.Selection,
 
 fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
-    const tag_name = tags.getTagString(arg) catch |err| {
+    const tag_name = ttags.getTagString(arg) catch |err| {
         return cli.throwError(err, "{s}", .{arg});
     };
     if (tag_name) |name| {
@@ -211,8 +211,8 @@ fn readJournal(
     root: *Root,
     allocator: std.mem.Allocator,
     j: *Journal,
-    selected_tags: []const tags.Tag,
-    tag_descriptors: []const tags.Tag.Descriptor,
+    selected_tags: []const ttags.Tag,
+    tag_descriptors: []const ttags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !void {
     std.log.default.debug("Reading journal '{s}'", .{j.descriptor.name});
@@ -252,7 +252,7 @@ fn readJournal(
 
 fn filterTags(
     allocator: std.mem.Allocator,
-    selected_tags: []const tags.Tag,
+    selected_tags: []const ttags.Tag,
     entries: []const abstractions.EntryOrTaskEvent,
 ) ![]abstractions.EntryOrTaskEvent {
     var list = std.ArrayList(abstractions.EntryOrTaskEvent).init(allocator);
@@ -263,7 +263,7 @@ fn filterTags(
             .entry => |e| e.tags,
             .task_event => |t| t.task.tags,
         };
-        if (tags.hasUnion(selected_tags, ts)) {
+        if (ttags.hasUnion(selected_tags, ts)) {
             try list.append(entry);
         }
     }
@@ -277,8 +277,8 @@ fn readDay(
     j: *Journal,
     day: Journal.Day,
     task_events: []const abstractions.TaskEvent,
-    selected_tags: []const tags.Tag,
-    tag_descriptors: []const tags.Tag.Descriptor,
+    selected_tags: []const ttags.Tag,
+    tag_descriptors: []const ttags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !usize {
     std.log.default.debug("Reading day '{s}'", .{day.name});
@@ -324,7 +324,7 @@ fn printEntriesOrEvents(
     self: *const Self,
     day: Journal.Day,
     entries: []const abstractions.EntryOrTaskEvent,
-    tag_descriptors: []const tags.Tag.Descriptor,
+    tag_descriptors: []const ttags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !usize {
     const local_date =
@@ -378,7 +378,7 @@ fn printEntriesOrEvents(
 fn printEntry(
     self: *const Self,
     entry: Journal.Entry,
-    tag_descriptors: []const tags.Tag.Descriptor,
+    tag_descriptors: []const ttags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !void {
     const entry_date = entry.created.toDate();
@@ -415,7 +415,7 @@ fn printEntry(
 fn printTaskEvent(
     self: *const Self,
     t: abstractions.TaskEvent,
-    _: []const tags.Tag.Descriptor,
+    _: []const ttags.Tag.Descriptor,
     printer: *BlockPrinter,
 ) !void {
     const entry_date = t.getTime().toDate();

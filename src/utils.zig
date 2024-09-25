@@ -120,7 +120,7 @@ pub const Error = error{
 pub fn contains(comptime T: type, haystack: []const T, needle: T) bool {
     for (haystack) |item| {
         const is_contained = switch (@typeInfo(T)) {
-            .Vector, .Pointer, .Array => std.mem.eql(
+            .vector, .pointer, .array => std.mem.eql(
                 std.meta.Elem(T),
                 item,
                 needle,
@@ -160,14 +160,14 @@ pub fn ensureOnly(
     collection_type: []const u8,
 ) !void {
     const allowed: []const []const u8 = fields ++ .{collection_type};
-    inline for (@typeInfo(T).Struct.fields) |f| {
+    inline for (@typeInfo(T).@"struct".fields) |f| {
         for (allowed) |name| {
             if (std.mem.eql(u8, name, f.name)) {
                 break;
             }
         } else {
             switch (@typeInfo(f.type)) {
-                .Optional => {
+                .optional => {
                     if (@field(args, f.name) != null) {
                         return cli.throwError(
                             error.AmbiguousSelection,
@@ -176,7 +176,7 @@ pub fn ensureOnly(
                         );
                     }
                 },
-                .Bool => {
+                .bool => {
                     if (@field(args, f.name) == true) {
                         return cli.throwError(
                             error.AmbiguousSelection,
@@ -246,7 +246,7 @@ pub fn hash(comptime T: type, key: T) u64 {
 
 /// Get the type of a tag struct in a union
 pub fn TagType(comptime T: type, comptime name: []const u8) type {
-    const fields = @typeInfo(T).Union.fields;
+    const fields = @typeInfo(T).@"union".fields;
     inline for (fields) |f| {
         if (std.mem.eql(u8, f.name, name)) return f.type;
     }
@@ -315,7 +315,7 @@ pub fn parseAndAssertValidTags(
 
 /// Check if error is in the error set
 pub fn inErrorSet(err: anyerror, comptime Set: type) ?Set {
-    inline for (@typeInfo(Set).ErrorSet.?) |e| {
+    inline for (@typeInfo(Set).error_set.?) |e| {
         if (err == @field(anyerror, e.name)) return @field(anyerror, e.name);
     }
     return null;

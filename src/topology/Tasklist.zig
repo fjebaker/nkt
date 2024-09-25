@@ -279,7 +279,7 @@ pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
 /// `index_map[i] == j` is the `t{j}` task, where `i` is the index mapping to
 /// the tasklist.
 pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
-    self.sortTasks(.canonical);
+    self.sortTasks(.{ .how = .canonical });
     std.mem.reverse(Task, self.info.tasks);
 
     var alloc = self.allocator;

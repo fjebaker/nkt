@@ -250,7 +250,7 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
 
     var all_writer = all_commands.writer();
 
-    const info = @typeInfo(Commands).Union;
+    const info = @typeInfo(Commands).@"union";
     inline for (info.fields) |field| {
         const name = field.name;
         const descr = @field(field.type, "short_help");

@@ -96,12 +96,12 @@ pub const Commands = union(enum) {
     /// the active field instantiated through calling the `fromArgs`
     /// constructor. This will have implicitly parsed the arguments specific to
     /// that command.
-    pub fn init(
+    pub fn initCommand(
         allocator: std.mem.Allocator,
         command: []const u8,
         args: *cli.ArgIterator,
     ) !Commands {
-        inline for (@typeInfo(Commands).Union.fields) |field| {
+        inline for (@typeInfo(Commands).@"union".fields) |field| {
             const is_field = std.mem.eql(u8, command, field.name);
             const is_alias = utils.isAlias(field, command);
             if (is_field or is_alias) {
@@ -152,6 +152,6 @@ pub fn execute(
         return throwUnknownCommand(command.string);
     }
 
-    var cmd = try Commands.init(alloc, command.string, itt);
+    var cmd = try Commands.initCommand(alloc, command.string, itt);
     try cmd.execute(alloc, root, out_writer, is_tty, tz, command.string);
 }

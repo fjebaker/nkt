@@ -53,7 +53,7 @@ pub fn execute(
 
 fn toValidCommand(command: []const u8) ?[]const u8 {
     // assert the argument is valid
-    const info = @typeInfo(Commands).Union;
+    const info = @typeInfo(Commands).@"union";
     inline for (info.fields) |field| {
         const is_field = std.mem.eql(u8, command, field.name);
         const is_alias = utils.isAlias(field, command);
@@ -68,7 +68,7 @@ fn printExtendedHelp(
 ) !void {
     var unknown_command = true;
 
-    const info = @typeInfo(Commands).Union;
+    const info = @typeInfo(Commands).@"union";
     inline for (info.fields) |field| {
         const has_long_help = @hasDecl(field.type, "long_help");
         if (!has_long_help) {
@@ -117,7 +117,7 @@ fn printExtendedHelp(
 pub fn printHelp(writer: anytype) !void {
     try writer.writeAll("Quick command reference:\n");
 
-    const info = @typeInfo(Commands).Union;
+    const info = @typeInfo(Commands).@"union";
     inline for (info.fields) |field| {
         const descr = @field(field.type, "short_help");
         try writer.print(" - {s: <11} {s}\n", .{ field.name, descr });
