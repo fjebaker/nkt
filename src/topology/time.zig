@@ -90,7 +90,7 @@ pub fn initTimeZone(allocator: std.mem.Allocator) !TimeZone {
 /// miliseconds since epoch in UTC
 pub const Time = struct {
     /// Time stamp always UTC since epoch
-    time: u64,
+    time: i64,
     /// Timezone for this time stamp
     timezone: ?TimeZone = null,
 
@@ -211,7 +211,7 @@ pub const Time = struct {
 
         switch (token) {
             .number => |number| {
-                const val = std.fmt.parseInt(u64, number, 10) catch {
+                const val = std.fmt.parseInt(i64, number, 10) catch {
                     return error.InvalidNumber;
                 };
                 return timeFromMilisUK(val);
@@ -225,7 +225,7 @@ pub const Time = struct {
 
     /// `Time` from milis, assuming the time stamp is from the UK.
     /// This is very specific to my needs.
-    pub fn timeFromMilisUK(val: u64) Time {
+    pub fn timeFromMilisUK(val: i64) Time {
         const tz = if (val < 1698544800000) // 29 October 2024
             TimeZone.create("BST", 60)
         else if (val < 1711846800000) // 31 March 2024
@@ -501,7 +501,7 @@ pub const Colloquial = struct {
         var arg = try c.next();
 
         if (_eq(arg, "soon")) {
-            var prng = std.Random.DefaultPrng.init(Time.now().time);
+            var prng = std.Random.DefaultPrng.init(@abs(Time.now().time));
             const days_different = prng.random().intRangeAtMost(
                 i32,
                 3,
@@ -702,7 +702,7 @@ test "time parsing" {
 }
 
 /// Get the absolute time difference between two `Time`
-pub fn absTimeDiff(t1: Time, t2: Time) u64 {
+pub fn absTimeDiff(t1: Time, t2: Time) i64 {
     if (t1.time < t2.time) {
         return t2.time - t1.time;
     }

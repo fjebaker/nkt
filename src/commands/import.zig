@@ -327,7 +327,7 @@ fn getTime(map: StringStringMap, key: []const u8) ?time.Time {
         );
         return null;
     };
-    const t = std.fmt.parseInt(u64, string, 10) catch {
+    const t = std.fmt.parseInt(i64, string, 10) catch {
         std.log.default.warn(
             "Dendron: failed to parse '{s}'",
             .{key},
