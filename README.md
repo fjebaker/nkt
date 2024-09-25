@@ -64,6 +64,35 @@ Principally, nkt provides four different ways to record information:
   case they were supposed to address was for keeping track of reference trails
   when reading a paper.
 
+## Quick start
+
+Put the binary in your `$PATH` and then initialize the home directory (`~/.nkt`):
+```bash
+nkt init
+
+# log to a journal
+nkt log "this is my first diary entry"
+
+# edit a note
+nkt edit books.reading-list
+
+# search all notes with a fuzzy finder
+nkt find
+
+# add an item to your todo list
+nkt task "learn more about that thing" --due monday
+
+# list your tasks
+nkt ls todo
+
+# create a tag
+nkt new tag work
+nkt log "i am currently at @work"
+
+# search journal entries matching a tag
+nkt read --all @work
+```
+
 ## Usage
 
 To setup `nkt`, use the `init` command.
@@ -112,7 +141,7 @@ There is shell completion for the following shells:
 
 - Sorry, I only really use `zsh` at the moment and writing completion files is not a hobby of mine.
 
-## Getting started
+## In-depth getting started
 
 Before we look at how to put information _in_ to nkt, let's quickly talk about
 a few ways of getting information _out_ of nkt. For any successful note taking
@@ -291,6 +320,8 @@ certain tag using the `list` command
 ```
 nkt ls @work
 ```
+
+### Searching through notes
 
 ### Text compilers
 
