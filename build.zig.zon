@@ -9,23 +9,23 @@
         },
         .chrono = .{
             .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
-            .hash = "1220c2b056667b4d4e95b21d2647cd5d83677f15ff04f906a0ae76a37849ec8fb60a",
+            .hash = "1220f90f7c49a91669a6477e667d7f80f9d9f2b8955ccd25d2e89105ba39a3adafab",
         },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
-            .hash = "12205b03cd478ad256bf7177b4f9ea63d0326cadf87ce5c00b1d30d4f49612632a15",
+            .hash = "1220afe0eee9d0382f7ff07905205e287a8714bb40fa2642f8b1103509ac3503d93d",
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
-            .hash = "1220fcbf7362a6b032579d7e5c35c1fe9f28af42a7b1885841e2a91082fd59899220",
+            .hash = "1220e16e8eab1949b62c2d1f5f3d05c9030a50292b95a2c543fa0b3e31398aa16b7a",
         },
         .termui = .{
             .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
-            .hash = "1220047487496db0c7b29a6ceb13b27a1f214a6328d347d6fce43d45db03c1bab815",
+            .hash = "1220b6f7c21af9998c2df5b3b0fa5e03f47ff28260d1eb656a3742d0ad82361c59db",
         },
         .fuzzig = .{
             .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
-            .hash = "122019f077d09686b1ec47928ca2b4bf264422f3a27afc5b49dafb0129a4ceca0d01",
+            .hash = "122013f14317a8c517fa82483cf3f452eb38731c5c5d7c7684bbafc29e29384ddc2c",
         },
     },
 }

@@ -28,7 +28,7 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
-        .help = "How to sort the item lists. Possible values are 'alphabetical', 'modified' or 'created'. Defaults to created.",
+        .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified' or 'created'. Defaults to alphabetical.",
     },
     .{
         .arg = "what",

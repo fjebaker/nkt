@@ -279,7 +279,7 @@ pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
 /// `index_map[i] == j` is the `t{j}` task, where `i` is the index mapping to
 /// the tasklist.
 pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
-    self.sortTasks();
+    self.sortTasks(.canonical);
     std.mem.reverse(Task, self.info.tasks);
 
     var alloc = self.allocator;
@@ -347,10 +347,15 @@ pub fn hash(info: HashInfo) u64 {
     return utils.hash(HashInfo, info);
 }
 
+/// Options for controlling how the tasks in the tasklist are sorted
+pub const SortingOptions = struct {
+    how: enum { canonical, alphabetically, modified, created } = .canonical,
+};
+
 /// Sorts the tasks in canonical order, that is, by due date then
 /// alphabetically in reverse order (soonest due last).
-pub fn sortTasks(self: *Tasklist) void {
-    std.sort.insertion(Task, self.info.tasks, {}, sortCanonical);
+pub fn sortTasks(self: *Tasklist, opts: SortingOptions) void {
+    std.sort.insertion(Task, self.info.tasks, opts, taskSorter);
     std.mem.reverse(Task, self.info.tasks);
 }
 
@@ -363,14 +368,24 @@ fn sortDue(_: void, lhs: Task, rhs: Task) bool {
     return lhs_due.?.time < rhs_due.?.time;
 }
 
-fn sortCanonical(_: void, lhs: Task, rhs: Task) bool {
+/// Used to compare two tasks together for the purposes of sorting
+pub fn taskSorter(opts: SortingOptions, lhs: Task, rhs: Task) bool {
     const both_same =
         (lhs.due == null and rhs.due == null) or
         ((lhs.due != null and rhs.due != null) and (lhs.due.?.eql(rhs.due.?)));
 
     if (both_same) {
-        // if they are both due at the same time, we sort lexographically
-        return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
+        switch (opts.how) {
+            .canonical, .alphabetically => {
+                return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
+            },
+            .created => {
+                return lhs.created.lt(rhs.created);
+            },
+            .modified => {
+                return lhs.modified.lt(rhs.modified);
+            },
+        }
     }
 
     const due = sortDue({}, lhs, rhs);

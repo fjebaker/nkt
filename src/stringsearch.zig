@@ -2,7 +2,6 @@ const std = @import("std");
 const fuzzig = @import("fuzzig");
 const searching = @import("searching.zig");
 const cli = @import("cli.zig");
-const Root = @import("topology/Root.zig");
 const color = @import("colors.zig");
 
 const Searcher = searching.Searcher;
