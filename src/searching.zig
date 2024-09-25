@@ -244,12 +244,19 @@ pub fn Searcher(comptime Item: type) type {
                 ),
                 .needle = "",
             };
+
+            var mod_opts = opts;
+
+            // modify the options with new penalizing scores
+            mod_opts.scores.score_gap_extension = -2;
+            mod_opts.scores.score_gap_start = -4;
+
             for (c_ptr.finders) |*finder| {
                 finder.* = try FuzzyFinder.init(
                     heap.allocator(),
                     info.max_content_length,
                     128,
-                    opts,
+                    mod_opts,
                 );
             }
 
