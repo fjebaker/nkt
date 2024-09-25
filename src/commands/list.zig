@@ -28,7 +28,8 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
-        .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified' or 'created'. Defaults to alphabetical.",
+        .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified' or 'created'. ",
+        .default = "alphabetical",
     },
     .{
         .arg = "what",
@@ -85,29 +86,24 @@ const ListSelection = union(enum) {
     Compilers: void,
 };
 
-const SortingMethods = enum {
-    alphabetical,
-    modified,
-    created,
-};
-
 selection: ListSelection,
-sort: SortingMethods,
+sort: Tasklist.SortingOptions,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     const args = try arguments.parseAll(itt);
+    const sort_method = std.meta.stringToEnum(
+        Tasklist.SortingOptions.Method,
+        args.sort,
+    ) orelse {
+        return cli.throwError(
+            error.UnknownSort,
+            "Sorting method '{s}' is unknown",
+            .{args.sort},
+        );
+    };
     return .{
         .selection = try processArguments(args),
-        .sort = std.meta.stringToEnum(
-            SortingMethods,
-            args.sort orelse "created",
-        ) orelse {
-            return cli.throwError(
-                error.UnknownSort,
-                "Sorting method '{s}' is unknown",
-                .{args.sort.?},
-            );
-        },
+        .sort = .{ .how = sort_method },
     };
 }
 
@@ -126,7 +122,7 @@ pub fn execute(
         .Compilers => try listCompilers(allocator, root, writer, opts),
         .Directory => |i| try self.listDirectory(i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
-        .Tasklist => |i| try listTasklist(allocator, i, root, writer, opts),
+        .Tasklist => |i| try listTasklist(allocator, i, root, writer, self.sort, opts),
         .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
         .Tag => |t| try listTagged(allocator, t, root, writer, opts),
     }
@@ -366,6 +362,7 @@ fn listTasklist(
     tl: utils.TagType(ListSelection, "Tasklist"),
     root: *Root,
     writer: anytype,
+    sopts: Tasklist.SortingOptions,
     opts: commands.Options,
 ) !void {
     const maybe_tl = try root.getTasklist(tl.name);
@@ -387,6 +384,7 @@ fn listTasklist(
         index_map,
         root,
         writer,
+        sopts,
         opts,
     );
 }
@@ -398,6 +396,7 @@ fn listTasks(
     index_map: []const ?usize,
     root: *Root,
     writer: anytype,
+    sopts: Tasklist.SortingOptions,
     opts: commands.Options,
 ) !void {
     const tag_descriptors = try root.getTagDescriptorList();
@@ -413,7 +412,13 @@ fn listTasks(
     );
     defer printer.deinit();
 
-    for (tasks, index_map) |task, t_index| {
+    // work out the ordering by how they are to be sorted
+    const ordering = try sortTaskOrder(allocator, tasks, sopts);
+    defer allocator.free(ordering);
+
+    for (ordering) |i| {
+        const task = tasks[i];
+        const t_index = index_map[i];
         if (!tl.done and task.isDone()) {
             continue;
         }
@@ -424,6 +429,33 @@ fn listTasks(
     }
 
     try printer.drain(writer, false);
+}
+
+fn sortTaskOrder(
+    allocator: std.mem.Allocator,
+    tasks: []const Tasklist.Task,
+    sopts: Tasklist.SortingOptions,
+) ![]const usize {
+    const order = try allocator.alloc(usize, tasks.len);
+    errdefer allocator.free(order);
+    for (0.., order) |i, *o| o.* = i;
+
+    const SortContext = struct {
+        ts: []const Tasklist.Task,
+        opts: Tasklist.SortingOptions,
+        pub fn sorter(self: @This(), lhs: usize, rhs: usize) bool {
+            return Tasklist.taskSorter(self.opts, self.ts[lhs], self.ts[rhs]);
+        }
+    };
+
+    const ctx = SortContext{
+        .opts = sopts,
+        .ts = tasks,
+    };
+
+    std.sort.heap(usize, order, ctx, SortContext.sorter);
+    std.mem.reverse(usize, order);
+    return order;
 }
 
 fn listDirectory(
@@ -446,7 +478,6 @@ fn listDirectory(
         try writer.writeAll(" -- Directory Empty -- \n");
     }
 
-    // TODO: sorting
     const pad = b: {
         var max: usize = 0;
         for (dir.info.notes) |n| {
@@ -455,8 +486,8 @@ fn listDirectory(
         break :b max;
     };
 
-    switch (self.sort) {
-        .alphabetical => {
+    switch (self.sort.how) {
+        .canonical, .alpha, .alphabetical => {
             std.sort.insertion(
                 Root.Directory.Note,
                 dir.info.notes,

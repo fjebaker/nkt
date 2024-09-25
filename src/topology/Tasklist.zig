@@ -349,7 +349,14 @@ pub fn hash(info: HashInfo) u64 {
 
 /// Options for controlling how the tasks in the tasklist are sorted
 pub const SortingOptions = struct {
-    how: enum { canonical, alphabetically, modified, created } = .canonical,
+    pub const Method = enum {
+        canonical,
+        alphabetical,
+        alpha,
+        modified,
+        created,
+    };
+    how: Method = .canonical,
 };
 
 /// Sorts the tasks in canonical order, that is, by due date then
@@ -376,14 +383,14 @@ pub fn taskSorter(opts: SortingOptions, lhs: Task, rhs: Task) bool {
 
     if (both_same) {
         switch (opts.how) {
-            .canonical, .alphabetically => {
+            .canonical, .alpha, .alphabetical => {
                 return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
             },
             .created => {
-                return lhs.created.lt(rhs.created);
+                return !lhs.created.lt(rhs.created);
             },
             .modified => {
-                return lhs.modified.lt(rhs.modified);
+                return !lhs.modified.lt(rhs.modified);
             },
         }
     }
