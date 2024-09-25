@@ -15,8 +15,9 @@ Features:
 - Bring your own reader / renderer
 - Bring your own document format (Markdown, LaTeX, typst, RST, ...)
 - _Everything_ stored as plain text and JSON, so easy to migrate if you end up hating it
-- Support for journals, tasklists, notes, and chains
+- Support for journals, tasklists, notes, chains, and more...
 - Tag things to help search your notes
+- Fuzzy find anything and everything
 
 ## Description
 
