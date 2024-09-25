@@ -2,6 +2,30 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const exec = utils.testExecute;
 
+test "readme" {
+    var s = try utils.TestState.init();
+    defer s.deinit();
+
+    // basic commands work
+    try exec(&s, &.{"help"});
+    try exec(&s, &.{"init"});
+    try exec(&s, &.{"config"});
+    try exec(&s, &.{ "new", "tag", "project.sewing" });
+    try exec(&s, &.{ "new", "tag", "meeting.town-hall" });
+    try exec(&s, &.{ "new", "tag", "email" });
+    try exec(&s, &.{ "new", "journal", "work" });
+    try exec(&s, &.{ "log", "--journal", "work", "hello world" });
+    try exec(&s, &.{ "tag", "--journal", "work", "0", "--last", "@meeting.town-hall" });
+    try exec(&s, &.{ "log", "wrote an @email back to dorothy" });
+
+    try std.testing.expectError(
+        error.InvalidTag,
+        exec(&s, &.{ "task", "learn more @vim shortcuts", "--due", "tuesday" }),
+    );
+    try exec(&s, &.{ "new", "tag", "vim" });
+    try exec(&s, &.{ "task", "learn more @vim shortcuts", "--due", "tuesday" });
+}
+
 test "smoke" {
     var s = try utils.TestState.init();
     defer s.deinit();
