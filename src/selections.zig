@@ -349,11 +349,15 @@ pub const Selection = struct {
                         default_name,
                         config,
                     );
+
                     if (unwrapCanary(default_r)) |rr| {
                         return rr;
                     }
-                    // now try all the others
+
+                    // now try all the others of the same collection type
                     for (root.getAllDescriptor(t)) |d| {
+                        // skip the one we've already done
+                        if (std.mem.eql(u8, default_name, d.name)) continue;
                         const r = try retrieveFromCollection(
                             s.selector.?,
                             root,
@@ -377,26 +381,31 @@ pub const Selection = struct {
             .mod = s.modifiers,
         };
 
-        if (unwrapCanary(try s.implResolve(root, config))) |rr| {
-            return rr;
-        }
-
-        if (s.collection_name == null) {
-            // try different collections and see if one resolves
-            for (&[_]Root.CollectionType{
-                .CollectionDirectory,
-                .CollectionJournal,
-                .CollectionTasklist,
-            }) |ct| {
-                var canary = s;
-                canary.collection_type = ct;
-                const r = try canary.implResolve(root, config);
-                if (unwrapCanary(r)) |rr| {
-                    return rr;
+        if (s.collection_type != null) {
+            if (unwrapCanary(try s.implResolve(root, config))) |rr| {
+                logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                return rr;
+            }
+        } else {
+            if (s.collection_name == null) {
+                // try different collections and see if one resolves
+                for (&[_]Root.CollectionType{
+                    .CollectionDirectory,
+                    .CollectionJournal,
+                    .CollectionTasklist,
+                }) |ct| {
+                    var canary = s;
+                    canary.collection_type = ct;
+                    const r = try canary.implResolve(root, config);
+                    if (unwrapCanary(r)) |rr| {
+                        logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                        return rr;
+                    }
                 }
             }
         }
 
+        logger.debug("Item could not be resolved", .{});
         return ResolveResult.throw(Error.UnknownSelection);
     }
 

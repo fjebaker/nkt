@@ -58,6 +58,7 @@ pub fn execute(
     try root.load();
 
     var from_item = try self.from.resolveReportError(root);
+    self.to.collection_type = from_item.getCollectionType();
 
     if (try self.to.resolveOrNull(root)) |to_item| {
         // TODO:
