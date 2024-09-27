@@ -21,6 +21,8 @@ const Item = @import("../abstractions.zig").Item;
 
 const Root = @This();
 
+const logger = std.log.scoped(.Root);
+
 test "other topologies" {
     _ = Tasklist;
     _ = Directory;
@@ -222,7 +224,7 @@ pub fn loadFromString(self: *Root, string: []const u8) !void {
             .ignore_unknown_fields = true,
         },
     );
-    std.log.default.debug(
+    logger.debug(
         "Read {d} journals, {d} directories, {d} tasklists",
         .{
             self.info.journals.len,
@@ -242,7 +244,7 @@ pub fn deinit(self: *Root) void {
 }
 
 fn logNoFilesystem(_: *const Root) void {
-    std.log.default.debug("Skipping file system operations", .{});
+    logger.debug("Skipping file system operations", .{});
 }
 
 fn getFileSystem(self: *Root) ?*FileSystem {
@@ -609,6 +611,7 @@ pub fn getCollection(
 
     // check the chache first
     if (@field(self.cache, t.toFieldName()).contains(descr.name)) {
+        logger.debug("Collection {s} in cache", .{descr.name});
         return try self.lookupCollection(descr, t);
     }
 
@@ -634,6 +637,8 @@ pub fn getCollection(
         descr.name,
         .{ .item = info, .modified = false },
     );
+
+    logger.debug("Collection {s} added to the cache", .{descr.name});
 
     return try self.lookupCollection(descr, t);
 }
@@ -804,7 +809,7 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
 
         // write the changes
         if (item.modified) {
-            std.log.default.debug("{s} marked as modified", .{descr.path});
+            logger.debug("{s} marked as modified", .{descr.path});
             // update the modified time
             descr.modified = now;
             var instance = try self.collectionFromInfoPtr(descr.*, t, &item.item);

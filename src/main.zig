@@ -34,11 +34,11 @@ pub const std_options: std.Options = .{
 
 pub fn loggerFn(
     comptime level: std.log.Level,
-    comptime _: @TypeOf(.EnumLiteral),
+    comptime scope: @TypeOf(.EnumLiteral),
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const prefix = "[" ++ comptime level.asText() ++ "]: ";
+    const prefix = "[" ++ comptime level.asText() ++ "]: (" ++ @tagName(scope) ++ ") ";
     // Print the message to stderr, silently ignoring any errors
     std.debug.lockStdErr();
     defer std.debug.unlockStdErr();

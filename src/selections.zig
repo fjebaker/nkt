@@ -11,6 +11,8 @@ const Tasklist = @import("topology/Tasklist.zig");
 
 const Item = @import("abstractions.zig").Item;
 
+const logger = std.log.scoped(.selection);
+
 pub const Error = error{
     /// Selection does not uniquely select an item
     AmbiguousSelection,
@@ -183,7 +185,7 @@ const ResolveResult = struct {
     }
 
     fn throw(err: anyerror) ResolveResult {
-        std.log.default.debug("ResolveResult error: {!}", .{err});
+        logger.debug("ResolveResult error: {!}", .{err});
         return .{ .item = null, .err = err };
     }
 
@@ -199,7 +201,7 @@ fn retrieveFromCollection(
     name: []const u8,
     config: SelectionConfig,
 ) !ResolveResult {
-    std.log.default.debug(
+    logger.debug(
         "Looking up collection {s}->'{s}'",
         .{ @tagName(ct), name },
     );
@@ -243,7 +245,7 @@ fn unwrapCanary(rr: ResolveResult) ?ResolveResult {
             Error.InvalidSelection,
             Root.Error.NoSuchItem,
             => {
-                std.log.default.debug("Resolve returned {!}", .{err});
+                logger.debug("Resolve returned {!}", .{err});
             },
             else => {
                 return ResolveResult.throw(err);
@@ -309,7 +311,14 @@ pub const Selection = struct {
         const selector = s.selector orelse
             return try s.resolveCollection(root);
 
-        std.log.default.debug("Selector: {s}", .{@tagName(selector)});
+        switch (selector) {
+            .ByName => |name| {
+                logger.debug("Selector name: {s}", .{name});
+            },
+            else => {
+                logger.debug("Selector: {any}", .{selector});
+            },
+        }
 
         const ct = s.collection_type orelse {
             return ResolveResult.throw(Error.UnknownSelection);
@@ -326,7 +335,7 @@ pub const Selection = struct {
                         config,
                     );
                 } else {
-                    std.log.default.debug(
+                    logger.debug(
                         "No collection name given, using default search order",
                         .{},
                     );
