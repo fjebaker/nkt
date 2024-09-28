@@ -224,8 +224,9 @@ fn readJournal(
     defer task_events.deinit();
 
     var line_count: usize = 0;
-    for (0..j.info.days.len) |i| {
-        const day_info = j.info.days[j.info.days.len - 1 - i];
+    const j_info = j.getInfo();
+    for (0..j_info.days.len) |i| {
+        const day_info = j_info.days[j_info.days.len - 1 - i];
         const day = j.getDay(day_info.name).?;
 
         const events = task_events.eventsOnDay(day.getDate());

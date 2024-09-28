@@ -249,7 +249,7 @@ fn listCollections(
     try writer.writeAll("Directories:\n");
     for (root.info.directories) |d| {
         const dir = (try root.getDirectory(d.name)).?;
-        const n = dir.info.notes.len;
+        const n = dir.getInfo().notes.len;
         try writer.print(
             "- {s: <15} ({d} {s})\n",
             .{ d.name, n, if (n == 1) "note" else "notes" },
@@ -258,7 +258,7 @@ fn listCollections(
     try writer.writeAll("\nJournals:\n");
     for (root.info.journals) |j| {
         const journal = (try root.getJournal(j.name)).?;
-        const n = journal.info.days.len;
+        const n = journal.getInfo().days.len;
         try writer.print(
             "- {s: <15} ({d} {s})\n",
             .{ j.name, n, if (n == 1) "day" else "days" },
@@ -267,7 +267,7 @@ fn listCollections(
     try writer.writeAll("\nTasklists:\n");
     for (root.info.tasklists) |t| {
         const tasklist = (try root.getTasklist(t.name)).?;
-        const n = tasklist.info.tasks.len;
+        const n = tasklist.getInfo().tasks.len;
         try writer.print(
             "- {s: <15} ({d} {s})\n",
             .{ t.name, n, if (n == 1) "task" else "tasks" },
@@ -380,7 +380,7 @@ fn listTasklist(
     try listTasks(
         allocator,
         tl,
-        tasklist.info.tasks,
+        tasklist.getInfo().tasks,
         index_map,
         root,
         writer,
@@ -474,13 +474,15 @@ fn listDirectory(
         );
     };
 
-    if (dir.info.notes.len == 0) {
+    const dir_info = dir.getInfo();
+
+    if (dir_info.notes.len == 0) {
         try writer.writeAll(" -- Directory Empty -- \n");
     }
 
     const pad = b: {
         var max: usize = 0;
-        for (dir.info.notes) |n| {
+        for (dir_info.notes) |n| {
             max = @max(max, n.name.len);
         }
         break :b max;
@@ -490,7 +492,7 @@ fn listDirectory(
         .canonical, .alpha, .alphabetical => {
             std.sort.insertion(
                 Root.Directory.Note,
-                dir.info.notes,
+                dir_info.notes,
                 {},
                 Root.Directory.Note.sortAlphabetical,
             );
@@ -498,7 +500,7 @@ fn listDirectory(
         .created => {
             std.sort.insertion(
                 Root.Directory.Note,
-                dir.info.notes,
+                dir_info.notes,
                 {},
                 Root.Directory.Note.sortCreated,
             );
@@ -506,14 +508,14 @@ fn listDirectory(
         .modified => {
             std.sort.insertion(
                 Root.Directory.Note,
-                dir.info.notes,
+                dir_info.notes,
                 {},
                 Root.Directory.Note.sortModified,
             );
         },
     }
 
-    for (dir.info.notes) |note| {
+    for (dir_info.notes) |note| {
         try writer.writeAll(note.name);
         try writer.writeByteNTimes(' ', pad - note.name.len);
         try writer.print(" - {s}", .{try note.modified.formatDateTime()});

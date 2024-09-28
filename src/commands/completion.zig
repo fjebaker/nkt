@@ -228,7 +228,9 @@ fn listNotesInDirectory(
     const dir_name = name orelse root.info.default_directory;
     const dir = (try root.getDirectory(dir_name)) orelse return;
 
-    for (dir.info.notes) |note| {
+    const dir_info = dir.getInfo();
+
+    for (dir_info.notes) |note| {
         try writer.print("{s} ", .{note.name});
     }
 }

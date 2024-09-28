@@ -3,6 +3,7 @@ const tags = @import("tags.zig");
 const Tag = tags.Tag;
 const time = @import("time.zig");
 const Time = time.Time;
+const Root = @import("Root.zig");
 const utils = @import("../utils.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
@@ -102,9 +103,22 @@ pub const Info = struct {
     tasks: []Task = &.{},
 };
 
-info: *Info,
+/// Get a pointer to the info struct
+pub inline fn getInfo(self: *const Tasklist) *Info {
+    return &self.root.cache.tasklists.getPtr(
+        self.id,
+    ).?.item;
+}
+/// Get a pointer to the tag descriptor list
+pub inline fn getTagList(self: *const Tasklist) ?*tags.DescriptorList {
+    return self.root.tag_descriptors;
+}
+
+root: *Root,
 descriptor: Descriptor,
+// an ephemeral allocator
 allocator: std.mem.Allocator,
+id: u64,
 index_map: ?[]?usize = null,
 
 /// Add a new task to the current task list No strings are copied, so it is
@@ -114,12 +128,13 @@ pub fn addNewTask(self: *Tasklist, task: Task) !void {
     if (self.getTaskByHash(task.hash)) |_|
         return Error.DuplicateTask;
 
+    const info = self.getInfo();
     var list = std.ArrayList(Task).fromOwnedSlice(
         self.allocator,
-        self.info.tasks,
+        info.tasks,
     );
     try list.append(task);
-    self.info.tasks = try list.toOwnedSlice();
+    info.tasks = try list.toOwnedSlice();
 
     // update the index map if we have one
     if (self.index_map) |_| {
@@ -129,8 +144,9 @@ pub fn addNewTask(self: *Tasklist, task: Task) !void {
 
 /// Get task by outcome. Returns `null` if no task found. If there are multiple matches, will return an `AmbiguousSelection` error.
 pub fn getTask(self: *Tasklist, outcome: []const u8) !?Task {
+    const info = self.getInfo();
     var selected: ?Task = null;
-    for (self.info.tasks) |task| {
+    for (info.tasks) |task| {
         if (std.mem.eql(u8, outcome, task.outcome)) {
             if (selected != null) return error.AmbiguousSelection;
             selected = task;
@@ -147,7 +163,11 @@ pub fn getTaskByHash(self: *Tasklist, h: u64) ?Task {
 
 /// Get a pointer to a task by hash. Returns `null` if no task found.
 pub fn getTaskByHashPtr(self: *const Tasklist, h: u64) ?*Task {
-    for (self.info.tasks) |*task| {
+    return getTaskByHashPtrImpl(self.getInfo().tasks, h);
+}
+
+fn getTaskByHashPtrImpl(tasks: []Task, h: u64) ?*Task {
+    for (tasks) |*task| {
         if (task.hash == h) return task;
     }
     return null;
@@ -158,10 +178,13 @@ pub fn getTaskByHashPtr(self: *const Tasklist, h: u64) ?*Task {
 /// Mini hashes are defined as the last MINI_HASH_LEN numbers in the hex
 /// expression.
 pub fn getTaskByMiniHash(self: *Tasklist, h: u64) !?Task {
-    const shift = (16 - MINI_HASH_LEN) * 4;
+    return try getTaskByMiniHashImpl(self.getInfo().tasks, h);
+}
 
+fn getTaskByMiniHashImpl(tasks: []const Task, h: u64) !?Task {
+    const shift = (16 - MINI_HASH_LEN) * 4;
     var selected: ?Task = null;
-    for (self.info.tasks) |task| {
+    for (tasks) |task| {
         if (task.hash >> shift == h) {
             if (selected != null) return error.AmbiguousSelection;
             selected = task;
@@ -186,7 +209,7 @@ pub fn rename(
 }
 
 test "get by mini hash" {
-    var tasks = [_]Task{
+    const tasks = [_]Task{
         .{
             .outcome = "test outcome",
             .hash = 0xabc123abc1231111,
@@ -212,44 +235,30 @@ test "get by mini hash" {
             .modified = .{ .time = 0 },
         },
     };
-    var info: Info = .{
-        .tags = &.{},
-        .tasks = &tasks,
-    };
-    var tl: Tasklist = .{
-        .allocator = std.testing.allocator,
-        .descriptor = .{
-            .name = "test_list",
-            .path = "test_list",
-            .created = .{ .time = 0 },
-            .modified = .{ .time = 0 },
-        },
-        .info = &info,
-    };
-
     try std.testing.expectEqualDeep(
         tasks[0],
-        tl.getTaskByHash(0xabc123abc1231111).?,
+        getTaskByHashPtrImpl(tasks, 0xabc123abc1231111).?,
     );
     try std.testing.expectEqualDeep(
         tasks[0],
-        (try tl.getTaskByMiniHash(0xabc12)).?,
+        (try getTaskByMiniHashImpl(tasks, 0xabc12)).?,
     );
     try std.testing.expectEqualDeep(
         tasks[2],
-        (try tl.getTaskByMiniHash(0x7416f)).?,
+        (try getTaskByMiniHashImpl(tasks, 0x7416f)).?,
     );
     try std.testing.expectEqualDeep(
         tasks[3],
-        (try tl.getTaskByMiniHash(0x0016f)).?,
+        (try getTaskByMiniHashImpl(tasks, 0x0016f)).?,
     );
 }
 
 /// Remove a task from the tasklist.
 pub fn removeTask(self: *Tasklist, task: Task) !void {
+    const info = self.getInfo();
     var list = std.ArrayList(Task).fromOwnedSlice(
         self.allocator,
-        self.info.tasks,
+        info.tasks,
     );
 
     const index = b: {
@@ -262,39 +271,41 @@ pub fn removeTask(self: *Tasklist, task: Task) !void {
     };
 
     _ = list.orderedRemove(index);
-    self.info.tasks = try list.toOwnedSlice();
+    info.tasks = try list.toOwnedSlice();
     // remake the index map to reflect updates
     _ = try self.makeIndexMap();
 }
 
 /// Get task by index. Returns `null` if no task found.
 pub fn getTaskByIndex(self: *Tasklist, index: usize) !?Task {
+    const info = self.getInfo();
     const map = try self.makeIndexMap();
     const i = std.mem.indexOfScalar(?usize, map, index) orelse
         return null;
-    return self.info.tasks[i];
+    return info.tasks[i];
 }
 
 /// Make an index map sorted by due date, only relevant for active tasks. The
 /// `index_map[i] == j` is the `t{j}` task, where `i` is the index mapping to
 /// the tasklist.
 pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
+    const info = self.getInfo();
     self.sortTasks(.{ .how = .canonical });
-    std.mem.reverse(Task, self.info.tasks);
+    std.mem.reverse(Task, info.tasks);
 
     var alloc = self.allocator;
     const index_map = b: {
         if (self.index_map) |im| {
-            if (im.len == self.info.tasks.len) {
+            if (im.len == info.tasks.len) {
                 break :b self.index_map.?;
             }
             alloc.free(im);
         }
-        break :b try alloc.alloc(?usize, self.info.tasks.len);
+        break :b try alloc.alloc(?usize, info.tasks.len);
     };
 
     var index: usize = 0;
-    for (self.info.tasks, index_map) |t, *i| {
+    for (info.tasks, index_map) |t, *i| {
         if (t.archived == null and t.done == null) {
             i.* = index;
             index += 1;
@@ -304,7 +315,7 @@ pub fn makeIndexMap(self: *Tasklist) ![]const ?usize {
     }
 
     // TODO: this can definitely be cleaned up to avoid 3 reversals
-    std.mem.reverse(Task, self.info.tasks);
+    std.mem.reverse(Task, info.tasks);
     std.mem.reverse(?usize, index_map);
     self.index_map = index_map;
     return self.index_map.?;
@@ -319,7 +330,7 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 
 /// Caller owns memory
 pub fn serialize(self: *const Tasklist, allocator: std.mem.Allocator) ![]const u8 {
-    return try serializeInfo(self.info.*, allocator);
+    return try serializeInfo(self.getInfo().*, allocator);
 }
 
 /// Add tags to a given `Task`
@@ -362,8 +373,9 @@ pub const SortingOptions = struct {
 /// Sorts the tasks in canonical order, that is, by due date then
 /// alphabetically in reverse order (soonest due last).
 pub fn sortTasks(self: *Tasklist, opts: SortingOptions) void {
-    std.sort.insertion(Task, self.info.tasks, opts, taskSorter);
-    std.mem.reverse(Task, self.info.tasks);
+    const info = self.getInfo();
+    std.sort.insertion(Task, info.tasks, opts, taskSorter);
+    std.mem.reverse(Task, info.tasks);
 }
 
 fn sortDue(_: void, lhs: Task, rhs: Task) bool {

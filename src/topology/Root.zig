@@ -70,6 +70,10 @@ pub const Descriptor = struct {
     path: []const u8,
     created: Time,
     modified: Time,
+
+    pub fn toHash(self: Descriptor) u64 {
+        return utils.hash([]const u8, self.name);
+    }
 };
 
 pub const CollectionType = enum {
@@ -143,14 +147,14 @@ fn CachedItem(comptime T: type) type {
     };
 }
 
-fn NameMap(comptime T: type) type {
-    return std.StringHashMap(CachedItem(T));
+fn IdMap(comptime T: type) type {
+    return std.AutoHashMap(usize, CachedItem(T));
 }
 
 const Cache = struct {
-    const TasklistMap = NameMap(Tasklist.Info);
-    const DirectoryMap = NameMap(Directory.Info);
-    const JournalMap = NameMap(Journal.Info);
+    const TasklistMap = IdMap(Tasklist.Info);
+    const DirectoryMap = IdMap(Directory.Info);
+    const JournalMap = IdMap(Journal.Info);
 
     tasklists: TasklistMap,
     directories: DirectoryMap,
@@ -407,7 +411,7 @@ pub fn getDescriptor(
 
 test "add and get descriptors" {
     const alloc = std.testing.allocator;
-    var root = Root.new(alloc);
+    var root = try Root.new(alloc);
     defer root.deinit();
 
     const new_directory: Descriptor = .{
@@ -532,39 +536,35 @@ fn lookupCollection(
     descr: Descriptor,
     comptime t: CollectionType,
 ) !t.ToType() {
-    const info_ptr = &@field(
-        self.cache,
-        t.toFieldName(),
-    ).getPtr(descr.name).?.item;
-
-    return try self.collectionFromInfoPtr(descr, t, info_ptr);
+    return try self.collectionFromInfoPtr(descr, t);
 }
 
 fn collectionFromInfoPtr(
     self: *Root,
     descr: Descriptor,
     comptime t: CollectionType,
-    info_ptr: *t.ToType().Info,
 ) !t.ToType() {
-    const tag_list = try self.getTagDescriptorListPtr();
+    // ensure the taglist is loaded
+    _ = try self.getTagDescriptorListPtr();
+
     return switch (t) {
         .CollectionJournal => .{
-            .info = info_ptr,
+            .root = self,
             .descriptor = descr,
-            .tag_list = tag_list,
-            .fs = self.fs,
             .allocator = self.arena.allocator(),
+            .id = descr.toHash(),
         },
         .CollectionDirectory => .{
-            .info = info_ptr,
+            .root = self,
             .descriptor = descr,
-            .fs = self.fs,
             .allocator = self.arena.allocator(),
+            .id = descr.toHash(),
         },
         .CollectionTasklist => .{
-            .info = info_ptr,
+            .root = self,
             .descriptor = descr,
             .allocator = self.arena.allocator(),
+            .id = descr.toHash(),
         },
     };
 }
@@ -576,7 +576,7 @@ fn addNewCollectionFromDescription(
 ) !t.ToType() {
     try self.addDescriptor(descr, t);
     try @field(self.cache, t.toFieldName()).put(
-        descr.name,
+        descr.toHash(),
         .{ .item = .{}, .modified = true },
     );
     return try self.lookupCollection(descr, t);
@@ -612,8 +612,9 @@ pub fn getCollection(
         return null;
 
     // check the chache first
-    if (@field(self.cache, t.toFieldName()).contains(descr.name)) {
-        logger.debug("Collection {s} in cache", .{descr.name});
+    const id = descr.toHash();
+    if (@field(self.cache, t.toFieldName()).contains(id)) {
+        logger.debug("Collection {s}[{d}] in cache", .{ descr.name, id });
         return try self.lookupCollection(descr, t);
     }
 
@@ -636,8 +637,8 @@ pub fn getCollection(
 
     // create the stash
     try @field(self.cache, t.toFieldName()).put(
-        descr.name,
-        .{ .item = info, .modified = false },
+        descr.toHash(),
+        .{ .item = info, .modified = true },
     );
 
     logger.debug("Collection {s} added to the cache", .{descr.name});
@@ -652,9 +653,10 @@ pub fn markModified(
     descr: Descriptor,
     comptime t: CollectionType,
 ) void {
-    var entry = @field(self.cache, t.toFieldName()).getPtr(
-        descr.name,
-    ).?;
+    var entry = @field(
+        self.cache,
+        t.toFieldName(),
+    ).getPtr(descr.toHash()).?;
     entry.modified = true;
 }
 
@@ -806,7 +808,10 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
     const now = time.Time.now();
     for (descrs) |*descr| {
         // if we have chached changes, read them
-        const item = @field(self.cache, t.toFieldName()).getPtr(descr.name) orelse
+        const item = @field(
+            self.cache,
+            t.toFieldName(),
+        ).getPtr(descr.toHash()) orelse
             continue;
 
         // write the changes
@@ -814,7 +819,7 @@ fn writeModifiedCollections(self: *Root, fs: *FileSystem, comptime t: Collection
             logger.debug("{s} marked as modified", .{descr.path});
             // update the modified time
             descr.modified = now;
-            var instance = try self.collectionFromInfoPtr(descr.*, t, &item.item);
+            var instance = try self.collectionFromInfoPtr(descr.*, t);
             try self.writeCollection(fs, descr.*, t, &instance);
         }
     }
@@ -900,7 +905,7 @@ pub fn getAllTasks(
             if (skip) continue;
         }
         const tl = (try self.getTasklist(descr.name)).?;
-        try list.appendSlice(tl.info.tasks);
+        try list.appendSlice(tl.getInfo().tasks);
     }
 
     return try list.toOwnedSlice();

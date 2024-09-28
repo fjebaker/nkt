@@ -10,7 +10,7 @@ pub const TestState = struct {
     tmpdir: std.testing.TmpDir,
     fs: FileSystem,
     root_path: []const u8,
-    root: Root,
+    root: *Root,
     stdout: std.ArrayList(u8),
     tz: time.TimeZone,
 
@@ -39,7 +39,7 @@ pub const TestState = struct {
         var fs = try FileSystem.init(root_path);
         errdefer fs.deinit();
 
-        var root: Root = Root.new(allocator);
+        var root = try Root.new(allocator);
         errdefer root.deinit();
         root.fs = fs;
 
@@ -79,7 +79,7 @@ pub fn testExecute(
     try commands.execute(
         state.allocator,
         &arg_iterator,
-        &state.root,
+        state.root,
         state.stdout.writer(),
         false,
         state.tz,

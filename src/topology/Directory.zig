@@ -3,6 +3,7 @@ const tags = @import("tags.zig");
 const Tag = tags.Tag;
 const time = @import("time.zig");
 const Time = time.Time;
+const Root = @import("Root.zig");
 const FileSystem = @import("../FileSystem.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
@@ -48,21 +49,38 @@ pub const Info = struct {
     tags: []Tag = &.{},
 };
 
-info: *Info,
+/// Get a pointer to the info struct
+pub inline fn getInfo(self: *const Directory) *Info {
+    return &self.root.cache.directories.getPtr(
+        self.id,
+    ).?.item;
+}
+/// Get the FileSystem
+pub inline fn getFS(self: *const Directory) ?FileSystem {
+    return self.root.fs;
+}
+/// Get a pointer to the FileSystem
+pub inline fn getTagList(self: *const Directory) ?*tags.DescriptorList {
+    return self.root.tag_descriptors;
+}
+
+root: *Root,
 descriptor: Descriptor,
+// an ephemeral allocator
 allocator: std.mem.Allocator,
-fs: ?FileSystem = null,
+id: u64,
 
 /// Add a new day to the journal. No strings are copied, so it is
 /// assumed the contents of the `day` will outlive the `Directory`.
 /// If a `FileSystem` is given, will create an empty file if none exists.
 pub fn addNewNote(self: *Directory, note: Note) !void {
+    const info = self.getInfo();
     var list = std.ArrayList(Note).fromOwnedSlice(
         self.allocator,
-        self.info.notes,
+        info.notes,
     );
     try list.append(note);
-    self.info.notes = try list.toOwnedSlice();
+    info.notes = try list.toOwnedSlice();
 
     // TODO: touch the file
 }
@@ -128,7 +146,8 @@ pub fn getNote(self: *const Directory, name: []const u8) ?Note {
 /// Get pointer to the note by name. Returns `null` if no such note is in the
 /// directory.
 pub fn getNotePtr(self: *const Directory, name: []const u8) ?*Note {
-    for (self.info.notes) |*n| {
+    const info = self.getInfo();
+    for (info.notes) |*n| {
         if (std.mem.eql(u8, n.name, name)) return n;
     }
     return null;
@@ -140,7 +159,7 @@ pub fn readNote(
     allocator: std.mem.Allocator,
     note: Note,
 ) ![]const u8 {
-    var fs = self.fs orelse return error.NeedsFileSystem;
+    var fs = self.getFS() orelse return error.NeedsFileSystem;
     return try fs.readFileAlloc(allocator, note.path);
 }
 
@@ -160,7 +179,7 @@ pub fn rename(
     old_name: []const u8,
     new_name: []const u8,
 ) !Note {
-    var fs = self.fs orelse return error.NeedsFileSystem;
+    var fs = self.getFS() orelse return error.NeedsFileSystem;
 
     var ptr = self.getNotePtr(old_name) orelse
         return Error.NoSuchNote;
@@ -194,9 +213,10 @@ pub fn touchNote(self: *Directory, note: Note, t: time.Time) !Note {
 
 /// Remove a note from the directory. Will attempt to remove the associated file in the filesystem.
 pub fn removeNote(self: *Directory, note: Note) !void {
+    const info = self.getInfo();
     var list = std.ArrayList(Note).fromOwnedSlice(
         self.allocator,
-        self.info.notes,
+        info.notes,
     );
 
     const index = b: {
@@ -209,10 +229,10 @@ pub fn removeNote(self: *Directory, note: Note) !void {
     };
 
     _ = list.orderedRemove(index);
-    self.info.notes = try list.toOwnedSlice();
+    info.notes = try list.toOwnedSlice();
 
     // try and remove associated file
-    var fs = self.fs orelse {
+    var fs = self.getFS() orelse {
         std.log.default.debug("Cannot remove day file as no file system", .{});
         return;
     };
@@ -221,7 +241,8 @@ pub fn removeNote(self: *Directory, note: Note) !void {
 
 /// Caller owns memory
 pub fn serialize(self: *const Directory, allocator: std.mem.Allocator) ![]const u8 {
-    return try serializeInfo(self.info.*, allocator);
+    const info = self.getInfo();
+    return try serializeInfo(info.*, allocator);
 }
 
 fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {

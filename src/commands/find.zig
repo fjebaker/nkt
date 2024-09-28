@@ -341,8 +341,9 @@ fn directoryNotesUnder(
     root: []const u8,
     dir: Directory,
 ) ![]Directory.Note {
+    const dir_info = dir.getInfo();
     var note_descriptors = std.ArrayList(Directory.Note).init(alloc);
-    for (dir.info.notes) |note| {
+    for (dir_info.notes) |note| {
         if (std.mem.startsWith(u8, note.name, root)) {
             try note_descriptors.append(note);
         }
@@ -356,7 +357,8 @@ fn getAllInfos(alloc: std.mem.Allocator, root: *Root) ![]Directory.Note {
 
     for (root.info.directories) |d| {
         const dir = (try root.getDirectory(d.name)).?;
-        for (dir.info.notes) |note| {
+        const dir_info = dir.getInfo();
+        for (dir_info.notes) |note| {
             try note_descriptors.append(note);
         }
     }

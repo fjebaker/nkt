@@ -78,7 +78,7 @@ pub fn execute(
         // touch all journals
         for (root.info.journals) |journal_info| {
             var journal = (try root.getJournal(journal_info.name)).?;
-            for (journal.info.days) |day| {
+            for (journal.getInfo().days) |day| {
                 _ = try journal.getEntries(day);
             }
             try journal.writeDays();

@@ -28,7 +28,7 @@ pub fn execute(
     try root.load();
     for (root.info.journals) |jrnl| {
         var journal = (try root.getJournal(jrnl.name)).?;
-        for (journal.info.days) |day| {
+        for (journal.getInfo().days) |day| {
             const d = journal.getDay(day.name).?;
             _ = try journal.getEntries(d);
         }

@@ -275,14 +275,15 @@ fn searchFileNames(
     dir: *const Root.Directory,
     allocator: std.mem.Allocator,
 ) !?SearchSelection {
+    const dir_info = dir.getInfo();
     const search_items = try allocator.alloc(
         []const u8,
-        dir.info.notes.len,
+        dir_info.notes.len,
     );
     defer allocator.free(search_items);
 
     // sort a copy of the notes list
-    const notes_list = try allocator.dupe(Directory.Note, dir.info.notes);
+    const notes_list = try allocator.dupe(Directory.Note, dir_info.notes);
     defer allocator.free(notes_list);
     std.sort.heap(Directory.Note, notes_list, {}, Directory.Note.sortModified);
 

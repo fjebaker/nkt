@@ -3,6 +3,7 @@ const time = @import("time.zig");
 const Time = time.Time;
 const tags = @import("tags.zig");
 const Tag = tags.Tag;
+const Root = @import("Root.zig");
 const FileSystem = @import("../FileSystem.zig");
 const Descriptor = @import("Root.zig").Descriptor;
 
@@ -52,12 +53,27 @@ pub const Info = struct {
 
 const StagedEntries = std.StringHashMap(std.ArrayList(Entry));
 
-info: *Info,
+/// Get a pointer to the info struct
+pub inline fn getInfo(self: *const Journal) *Info {
+    return &self.root.cache.journals.getPtr(
+        self.id,
+    ).?.item;
+}
+/// Get the FileSystem
+pub inline fn getFS(self: *const Journal) ?FileSystem {
+    return self.root.fs;
+}
+/// Get a pointer to the tag descriptor list
+pub inline fn getTagList(self: *const Journal) ?*tags.DescriptorList {
+    return self.root.tag_descriptors;
+}
+
+root: *Root,
 descriptor: Descriptor,
+// an ephemeral allocator
 allocator: std.mem.Allocator,
-tag_list: ?*tags.DescriptorList = null,
+id: u64,
 staged_entries: ?StagedEntries = null,
-fs: ?FileSystem = null,
 
 fn getStagedEntries(self: *Journal) *StagedEntries {
     if (self.staged_entries == null) {
@@ -76,12 +92,13 @@ fn timeToName(allocator: std.mem.Allocator, t: Time) ![]const u8 {
 /// Add a new day to the journal. No strings are copied, so it is
 /// assumed the contents of the `day` will outlive the `Journal`.
 pub fn addNewDay(self: *Journal, day: Day) !void {
+    const info = self.getInfo();
     var list = std.ArrayList(Day).fromOwnedSlice(
         self.allocator,
-        self.info.days,
+        info.days,
     );
     try list.append(day);
-    self.info.days = try list.toOwnedSlice();
+    info.days = try list.toOwnedSlice();
 }
 
 /// Get a day by name. Returns `null` if day not found.
@@ -94,7 +111,8 @@ pub fn getDay(self: *Journal, name: []const u8) ?Day {
 
 /// Get a pointer to a day by name. Returns `null` if day not found.
 pub fn getDayPtr(self: *Journal, name: []const u8) ?*Day {
-    for (self.info.days) |*d| {
+    const info = self.getInfo();
+    for (info.days) |*d| {
         if (std.mem.eql(u8, d.name, name)) {
             return d;
         }
@@ -120,7 +138,8 @@ pub fn getDayOffsetIndex(
 
 /// Get a day by path. Returns `null` if day not found.
 pub fn getDayByPath(self: *Journal, name: []const u8) ?Day {
-    for (self.info.days) |d| {
+    const info = self.getInfo();
+    for (info.days) |d| {
         if (std.mem.eql(u8, d.name, name)) {
             return d;
         }
@@ -190,9 +209,11 @@ pub fn removeEntryFromDay(self: *Journal, day: Day, entry: Entry) !void {
 /// Remove an entire day from the journal. Also attempts to delete files if a
 /// filesystem is given.
 pub fn removeDay(self: *Journal, day: Day) !void {
+    const info = self.getInfo();
+
     var list = std.ArrayList(Day).fromOwnedSlice(
         self.allocator,
-        self.info.days,
+        info.days,
     );
 
     const index = b: {
@@ -205,7 +226,7 @@ pub fn removeDay(self: *Journal, day: Day) !void {
     };
 
     _ = list.orderedRemove(index);
-    self.info.days = try list.toOwnedSlice();
+    info.days = try list.toOwnedSlice();
 
     var map = self.getStagedEntries();
     if (map.contains(day.path)) {
@@ -213,7 +234,7 @@ pub fn removeDay(self: *Journal, day: Day) !void {
     }
 
     // try and remove associated file
-    var fs = self.fs orelse {
+    var fs = self.getFS() orelse {
         std.log.default.debug("Cannot remove day file as no file system", .{});
         return;
     };
@@ -228,9 +249,9 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
         return entry_list.items;
     }
     // otherwise we read from file
-    var fs = self.fs orelse return error.NeedsFileSystem;
+    const fs = self.getFS() orelse return error.NeedsFileSystem;
 
-    const entries = try self.readDayFromPath(&fs, day.path);
+    const entries = try self.readDayFromPath(fs, day.path);
 
     // add to the chache
     try map.put(day.path, std.ArrayList(Entry).fromOwnedSlice(
@@ -242,7 +263,7 @@ pub fn getEntries(self: *Journal, day: Day) ![]const Entry {
 
 fn readDayFromPath(
     self: *Journal,
-    fs: *FileSystem,
+    fs: FileSystem,
     path: []const u8,
 ) ![]Entry {
     var alloc = self.allocator;
@@ -285,7 +306,7 @@ fn addDayToStage(
     path: []const u8,
 ) !void {
     const alloc = self.allocator;
-    if (self.fs) |*fs| {
+    if (self.getFS()) |fs| {
         // read entries and init owned list
         const entries = try self.readDayFromPath(fs, path);
         try map.put(path, std.ArrayList(Entry).fromOwnedSlice(
@@ -300,7 +321,8 @@ fn addDayToStage(
 }
 
 fn getDayIndex(self: *Journal, day_name: []const u8) ?usize {
-    for (0.., self.info.days) |i, day| {
+    const info = self.getInfo();
+    for (0.., info.days) |i, day| {
         if (std.mem.eql(u8, day_name, day.name)) {
             return i;
         }
@@ -401,7 +423,7 @@ pub fn addTagsToDay(
 
 /// Write all days that have staged changes to disk
 pub fn writeDays(self: *const Journal) !void {
-    const fs = self.fs orelse return error.NeedsFileSystem;
+    const fs = self.getFS() orelse return error.NeedsFileSystem;
     var map = self.staged_entries orelse {
         std.log.default.debug("No staged entries for Journal '{s}'", .{self.descriptor.name});
         return;
@@ -424,7 +446,7 @@ pub fn defaultSerialize(allocator: std.mem.Allocator) ![]const u8 {
 
 /// Caller owns memory
 pub fn serialize(self: *const Journal, allocator: std.mem.Allocator) ![]const u8 {
-    return try serializeInfo(self.info.*, allocator);
+    return try serializeInfo(self.getInfo().*, allocator);
 }
 
 fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
