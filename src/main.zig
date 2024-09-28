@@ -132,7 +132,7 @@ pub fn nkt_main(
     _ = try arg_iterator.next();
 
     // read in the root of the topology
-    var root = Root.new(allocator);
+    var root = try Root.new(allocator);
     defer root.deinit();
 
     // give a filesystem handle to the root
@@ -142,7 +142,7 @@ pub fn nkt_main(
     commands.execute(
         allocator,
         &arg_iterator,
-        &root,
+        root,
         out_fd.writer(),
         out_fd.isTty(),
         tz,

@@ -492,7 +492,7 @@ fn testSelectionResolve(
 
 test "resolve selections" {
     const alloc = std.testing.allocator;
-    var root = Root.new(alloc);
+    var root = try Root.new(alloc);
     defer root.deinit();
 
     _ = try time.initTimeZoneUTC(alloc);
@@ -503,7 +503,7 @@ test "resolve selections" {
     var j = (try root.getJournal(root.info.default_journal)).?;
     const day = try j.addNewEntryFromText("hello world", &.{});
     try testSelectionResolve(
-        &root,
+        root,
         "0",
         null,
         null,
@@ -511,7 +511,7 @@ test "resolve selections" {
         .{ .Day = .{ .day = day, .journal = j } },
     );
     try testSelectionResolve(
-        &root,
+        root,
         null,
         root.info.default_journal,
         null,
@@ -521,7 +521,7 @@ test "resolve selections" {
     try std.testing.expectError(
         Error.IncompatibleSelection,
         testSelectionResolve(
-            &root,
+            root,
             "0",
             null,
             null,
@@ -533,7 +533,7 @@ test "resolve selections" {
     var d = (try root.getDirectory(root.info.default_directory)).?;
     const note = try d.addNewNoteByName("stuff", .{});
     try testSelectionResolve(
-        &root,
+        root,
         "stuff",
         null,
         null,
@@ -541,7 +541,7 @@ test "resolve selections" {
         .{ .Note = .{ .note = note, .directory = d } },
     );
     try testSelectionResolve(
-        &root,
+        root,
         null,
         null,
         root.info.default_directory,

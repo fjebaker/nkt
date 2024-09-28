@@ -183,7 +183,7 @@ stack_list: ?stacks.StackList = null,
 fs: ?FileSystem = null,
 
 /// Initialize a new `Root` with all default values
-pub fn new(alloc: std.mem.Allocator) Root {
+pub fn new(alloc: std.mem.Allocator) !*Root {
     const info: Info = .{
         .tasklists = &.{},
         .directories = &.{},
@@ -192,12 +192,14 @@ pub fn new(alloc: std.mem.Allocator) Root {
 
     const cache = Cache.init(alloc);
 
-    return .{
+    const ptr = try alloc.create(Root);
+    ptr.* = .{
         .info = info,
         .cache = cache,
         .allocator = alloc,
         .arena = std.heap.ArenaAllocator.init(alloc),
     };
+    return ptr;
 }
 
 /// Load the `Root` information from the topology file in the home directory.
@@ -240,7 +242,7 @@ pub fn deinit(self: *Root) void {
     if (self.chain_list) |*cl| cl.deinit();
     if (self.stack_list) |*sl| sl.deinit();
     self.arena.deinit();
-    self.* = undefined;
+    self.allocator.destroy(self);
 }
 
 fn logNoFilesystem(_: *const Root) void {
