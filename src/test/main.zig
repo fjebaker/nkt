@@ -121,4 +121,39 @@ test "smoke" {
         "Hello World!",
         s.stdout.items,
     );
+
+    // list behaviours
+    s.clearOutput();
+    try exec(&s, &.{"ls"});
+    try std.testing.expectEqualStrings(
+        \\Directories:
+        \\- notes           (1 note)
+        \\- diary           (0 notes)
+        \\
+        \\Journals:
+        \\- diary           (1 day)
+        \\
+        \\Tasklists:
+        \\- todo            (2 tasks)
+        \\
+        \\
+    ,
+        s.stdout.items,
+    );
+
+    // list directory contents
+    s.clearOutput();
+    try exec(&s, &.{ "ls", "notes" });
+    try std.testing.expectEqualStrings(
+        \\hello - 1970-01-01 00:00:10
+        \\
+    ,
+        s.stdout.items,
+    );
+
+    // list directory contents
+    try std.testing.expectError(
+        error.AmbiguousSelection,
+        exec(&s, &.{ "ls", "diary" }),
+    );
 }

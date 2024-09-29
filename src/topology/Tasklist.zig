@@ -237,19 +237,19 @@ test "get by mini hash" {
     };
     try std.testing.expectEqualDeep(
         tasks[0],
-        getTaskByHashPtrImpl(tasks, 0xabc123abc1231111).?,
+        getTaskByHashPtrImpl(@constCast(&tasks), 0xabc123abc1231111).?.*,
     );
     try std.testing.expectEqualDeep(
         tasks[0],
-        (try getTaskByMiniHashImpl(tasks, 0xabc12)).?,
+        (try getTaskByMiniHashImpl(&tasks, 0xabc12)).?,
     );
     try std.testing.expectEqualDeep(
         tasks[2],
-        (try getTaskByMiniHashImpl(tasks, 0x7416f)).?,
+        (try getTaskByMiniHashImpl(&tasks, 0x7416f)).?,
     );
     try std.testing.expectEqualDeep(
         tasks[3],
-        (try getTaskByMiniHashImpl(tasks, 0x0016f)).?,
+        (try getTaskByMiniHashImpl(&tasks, 0x0016f)).?,
     );
 }
 
