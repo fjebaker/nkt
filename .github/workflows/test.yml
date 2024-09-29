@@ -1,0 +1,26 @@
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - ci
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: master
+
+      - name: Build and test
+        run: zig build test
+

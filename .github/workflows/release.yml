@@ -1,0 +1,53 @@
+name: Release
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    strategy:
+      matrix:
+        target: [x86_64-linux-musl, aarch64-linux-musl, x86_64-macos-none, aarch64-macos-none]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: master
+      - name: Hail mary
+        run: zig build test
+      - name: Build
+        run: |
+          zig build --release=safe -Dtarget=${{matrix.target}}
+          mv zig-out/bin/nkt ./
+          tar -czf nkt-${{matrix.target}}.tar.gz nkt
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nkt-${{matrix.target}}
+          path: nkt-${{matrix.target}}.tar.gz
+          if-no-files-found: error
+  release:
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: Unpack and locate
+        run: |
+          find . -name "*.tar.gz" -type f -exec mv {} ./ \;
+          ls -la *
+      - name: Name release
+        id: name
+        run: echo "name=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./nkt-*.tar.gz
+          name: ${{ steps.name.outputs.name }}
