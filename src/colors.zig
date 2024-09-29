@@ -40,6 +40,10 @@ pub const YELLOW = colorToFarbe(C_YELLOW);
 pub const DIM = Farbe.init().dim();
 pub const UNDERLINED = Farbe.init().underlined();
 
+pub const JOURNAL = Farbe.init().fgRgb(69, 133, 252);
+pub const DIRECTORY = Farbe.init().fgRgb(228, 123, 29);
+pub const TASKLIST = Farbe.init().fgRgb(204, 64, 74);
+
 pub fn randomColor() Color {
     var prng = std.Random.DefaultPrng.init(
         @intCast(std.time.milliTimestamp()),

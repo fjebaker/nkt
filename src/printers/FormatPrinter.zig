@@ -11,7 +11,7 @@ pub const Farbe = colors.Farbe;
 
 pub const RichText = struct {
     text: []const u8,
-    fmt: ?Farbe,
+    fmt: ?Farbe = null,
     pub fn write(t: RichText, writer: anytype, pretty: bool) !void {
         if (pretty and t.fmt != null) {
             const fmt = t.fmt.?;

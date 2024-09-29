@@ -9,7 +9,10 @@ const colors = @import("../colors.zig");
 const commands = @import("../commands.zig");
 const Journal = @import("../topology/Journal.zig");
 const Tasklist = @import("../topology/Tasklist.zig");
+const Directory = @import("../topology/Directory.zig");
 const Root = @import("../topology/Root.zig");
+
+const Item = @import("../abstractions.zig").Item;
 
 const FormatPrinter = @import("../printers.zig").FormatPrinter;
 const TaskPrinter = @import("../printers.zig").TaskPrinter;
@@ -524,6 +527,21 @@ fn listDirectory(
     _ = opts;
 }
 
+const TaggedItems = struct {
+    items: std.ArrayList(Item),
+
+    pub fn init(allocator: std.mem.Allocator) TaggedItems {
+        return .{
+            .items = std.ArrayList(Item).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *TaggedItems) void {
+        self.items.deinit();
+        self.* = undefined;
+    }
+};
+
 fn listTagged(
     allocator: std.mem.Allocator,
     t: []const u8,
@@ -544,6 +562,116 @@ fn listTagged(
         );
     }
 
-    _ = writer;
-    _ = opts;
+    var tagged_items = TaggedItems.init(allocator);
+    defer tagged_items.deinit();
+
+    for (root.getAllDescriptor(.CollectionDirectory)) |d| {
+        const dir = (try root.getDirectory(d.name)).?;
+        for (dir.getInfo().notes) |note| {
+            if (tags.hasUnion(note.tags, st)) {
+                try tagged_items.items.append(
+                    .{ .Note = .{ .directory = dir, .note = note } },
+                );
+            }
+        }
+    }
+
+    for (root.getAllDescriptor(.CollectionTasklist)) |d| {
+        const tlist = (try root.getTasklist(d.name)).?;
+        for (tlist.getInfo().tasks) |task| {
+            if (tags.hasUnion(task.tags, st)) {
+                try tagged_items.items.append(
+                    .{ .Task = .{ .tasklist = tlist, .task = task } },
+                );
+            }
+        }
+    }
+
+    for (root.getAllDescriptor(.CollectionJournal)) |d| {
+        var journal = (try root.getJournal(d.name)).?;
+        for (journal.getInfo().days) |day| {
+            const entries = try journal.getEntries(day);
+            for (entries) |e| {
+                if (tags.hasUnion(e.tags, st)) {
+                    try tagged_items.items.append(
+                        .{ .Entry = .{ .journal = journal, .day = day, .entry = e } },
+                    );
+                }
+            }
+        }
+    }
+
+    // sort by last modified
+    std.sort.heap(Item, tagged_items.items.items, {}, Item.modifiedDescending);
+
+    try printItems(
+        allocator,
+        writer,
+        tagged_items.items.items,
+        (try root.getTagDescriptorList()).tags,
+        opts,
+    );
+}
+
+pub fn printItems(
+    allocator: std.mem.Allocator,
+    writer: anytype,
+    items: []const Item,
+    tag_descriptors: []const tags.Tag.Descriptor,
+    opts: commands.Options,
+) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var printer = FormatPrinter.init(allocator, .{
+        .pretty = !opts.piped,
+        .tag_descriptors = tag_descriptors,
+    });
+    defer printer.deinit();
+
+    for (items) |nd| {
+        const name = try nd.getName(alloc);
+        switch (nd) {
+            .Entry => {
+                try printer.addFmtText(
+                    "journal:{s}",
+                    .{nd.getCollectionName()},
+                    .{ .fmt = colors.JOURNAL },
+                );
+                try printer.addFmtText(
+                    " {s}",
+                    .{name},
+                    .{},
+                );
+            },
+            .Note => {
+                try printer.addFmtText(
+                    "directory:{s}",
+                    .{nd.getCollectionName()},
+                    .{ .fmt = colors.DIRECTORY },
+                );
+                try printer.addFmtText(
+                    "/{s}",
+                    .{name},
+                    .{},
+                );
+            },
+            .Task => {
+                try printer.addFmtText(
+                    "tasklist:{s}",
+                    .{nd.getCollectionName()},
+                    .{ .fmt = colors.TASKLIST },
+                );
+                try printer.addFmtText(
+                    " {s}",
+                    .{name},
+                    .{},
+                );
+            },
+            else => {},
+        }
+        try printer.addText("\n", .{});
+    }
+    try printer.drain(writer);
 }

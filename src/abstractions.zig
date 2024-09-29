@@ -106,18 +106,23 @@ pub const Item = union(enum) {
         comptime attr: []const u8,
         comptime RetType: type,
     ) RetType {
-        switch (self.*) {
+        return switch (self.*) {
             .Note => |i| @field(i.note, attr),
             .Task => |i| @field(i.task, attr),
             .Entry => |i| @field(i.entry, attr),
             .Day => |i| @field(i.day, attr),
             .Collection => unreachable,
-        }
+        };
     }
 
     /// Get the creation date
     pub fn getCreated(self: *const Item) time.Time {
         return self.getAttributeOfItem("created", time.Time);
+    }
+
+    /// Get the modified date
+    pub fn getModified(self: *const Item) time.Time {
+        return self.getAttributeOfItem("modified", time.Time);
     }
 
     /// Get the name of the collection of this item
@@ -161,6 +166,7 @@ pub const Item = union(enum) {
     /// Caller owns the memory.
     pub fn getName(self: *const Item, allocator: std.mem.Allocator) ![]const u8 {
         switch (self.*) {
+            // TODO: this is bad
             .Note => |i| return try allocator.dupe(u8, i.note.name),
             .Day => |i| return try allocator.dupe(u8, i.day.name),
             .Entry => |i| return try allocator.dupe(
@@ -177,7 +183,12 @@ pub const Item = union(enum) {
 
     /// For sorting by creation date
     pub fn createdDescending(_: void, lhs: Item, rhs: Item) bool {
-        return lhs.getCreated() < rhs.getCreated();
+        return lhs.getCreated().lt(rhs.getCreated());
+    }
+
+    /// For sorting by modified date
+    pub fn modifiedDescending(_: void, lhs: Item, rhs: Item) bool {
+        return lhs.getModified().lt(rhs.getModified());
     }
 
     /// Get a string representing the content of this item
