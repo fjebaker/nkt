@@ -1,5 +1,7 @@
 # nkt
 
+
+
 _A(nother) note taking solution for terminal enthusiasts._
 
 nkt is a command line tool for helping you track and build your notes, todo
@@ -17,12 +19,48 @@ Features:
 - _Everything_ stored as plain text and JSON, so easy to migrate if you end up hating it
 - Support for journals, tasklists, notes, chains, and more...
 - Tag things to help search your notes
-- Fuzzy find anything and everything
+- Fuzzy find **anything and everything**. nkt solves the problem of linking notes together to make navigation easy by letting you fuzzy find everything interactively similar to [fzf](https://github.com/junegunn/fzf).
+
+## Quick start
+
+Put the binary in your `$PATH` and then initialize the home directory (`~/.nkt`):
+```bash
+nkt init
+
+# log to a journal
+nkt log "this is my first diary entry"
+
+# edit a note
+nkt edit books.reading-list
+
+# search all notes with a fuzzy finder
+nkt find
+
+# add an item to your todo list
+nkt task "learn more about that thing" --due monday
+
+# list your tasks
+nkt ls todo
+
+# list your notes
+nkt ls notes
+
+# create a tag
+nkt new tag work
+nkt log "i am currently at @work"
+
+# search journal entries matching a tag
+nkt read --all @work
+
+# list your tags
+nkt ls tags
+```
+
 
 ## Description
 
 The design of nkt is centered around making it easy to get information into
-your notes, and making it quick and simple to find that information again.
+your notes, and making it easy to get information _back out again_.
 Principally, nkt provides four different ways to record information:
 
 - Journal
@@ -64,41 +102,11 @@ Principally, nkt provides four different ways to record information:
   case they were supposed to address was for keeping track of reference trails
   when reading a paper.
 
-## Quick start
-
-Put the binary in your `$PATH` and then initialize the home directory (`~/.nkt`):
-```bash
-nkt init
-
-# log to a journal
-nkt log "this is my first diary entry"
-
-# edit a note
-nkt edit books.reading-list
-
-# search all notes with a fuzzy finder
-nkt find
-
-# add an item to your todo list
-nkt task "learn more about that thing" --due monday
-
-# list your tasks
-nkt ls todo
-
-# create a tag
-nkt new tag work
-nkt log "i am currently at @work"
-
-# search journal entries matching a tag
-nkt read --all @work
-```
-
 ## Usage
 
 To setup `nkt`, use the `init` command.
 ```
 $ nkt help init
-
 Extended help for 'init':
 
 (Re)Initialize the home directory structure.
@@ -118,6 +126,9 @@ Arguments:
 
     [--reinit]                Only create missing files and write missing
                                 configuration options.
+    [--reinit-all]            Opens and rewrite the ENTIRE nkt topology system. Useful
+                                for reformatting JSON or applying modifications. Not for
+                                general use.
     [--force]                 Force initializtion. Danger: this will overwrite *all*
                                 topology files.
 ```
@@ -198,72 +209,6 @@ This is probably enough to get going. Have a look at [Tags](#tags) to learn
 more about organising your notes effectively, and [Text
 compilers](#Text-compilers) to learn how to produce rendered versions of your
 notes.
-
-## Configuration
-
-Most things are pretty self evident regarding what they do. Check the
-`~/.nkt/topology.json` to see the configuration, and edit this file as you
-please.
-
-## Reference
-
-General help:
-```
-$ nkt help
-
-Quick command reference:
- - chains      View and interact with habitual chains.
- - compile     Compile a note into various formats.
- - config      View and modify the configuration of nkt
- - edit        Edit a note or item in the editor.
- - find        Find in notes.
- - help        Print this help message or help for other commands.
- - import      Import a note.
- - init        (Re)Initialize the home directory structure.
- - list        List collections and other information in various ways.
- - log         Quickly log something to a journal from the command line
- - migrate     Migrate differing versions of nkt's topology
- - new         Create a new tag or collection.
- - peek        Peek at a stack
- - pop         Pop from a stack
- - push        Push onto a stack
- - read        Read notes, task details, and journals.
- - remove      Remove items, tags, or entire collections themselves.
- - rename      Move or rename a note, directory, journal, or tasklist.
- - select      Select an item or collection.
- - tag         Tag an item or collection.
- - task        Add a task to a specified task list.
- - set         Modify attributes of entries, notes, chains, or tasks.
- - sync        Sync root directory to remote git repository
- - completion  Shell completion helper
-```
-
-Extended help for a specific command may also be obtained:
-
-```
-$ nkt help list
-
-Extended help for 'list':
-
-List collections and other information in various ways.
-
-Aliases: ls
-
-Arguments:
-
-    [--sort how]              How to sort the item lists. Possible values are
-                                'alphabetical', 'modified' or 'created'. Defaults to created.
-    [what]                    Can be 'tags', 'compilers', or when directory is
-                                selected, can be used to subselect hiearchies
-    [--directory name]        Name of the directory to list.
-    [--journal name]          Name of the journal to list.
-    [--tasklist name]         Name of the tasklist to list.
-    [--hash]                  Display the full hashes instead of abbreviations.
-    [--done]                  If a tasklist is selected, enables listing tasks marked
-                                as 'done'
-    [--archived]              If a tasklist is selected, enables listing tasks marked
-                                as 'archived'
-```
 
 ### Tags
 
@@ -381,6 +326,20 @@ nkt compile --directory recipes dip.hummus --compiler epson
 
 ### Semantic time
 
+## Configuration
+
+Most things are pretty self evident regarding what they do. Check the
+`~/.nkt/topology.json` to see the configuration, and edit this file as you
+please.
+
+## Reference
+
+Please use
+```
+nkt help [subcommand]
+```
+for up-to-date reference and documentation for each command.
+
 ## Installation
 
 Grab one of the binaries from the [release]() for your architecture:
@@ -406,6 +365,12 @@ git clone https://github.com/fjebaker/nkt \
 ## Known issues
 
 - Datetimes are ruining my life.
+
+## Disclaimer
+
+I am writing nkt to fit my note taking and productivity needs. If it works for you, that's awesome, and we should be friends. If it doesn't, we should still be friends. But since the primary audience of nkt is _me_, please don't get too annoyed at me for rejecting feature requests, and feel free to fork the code and tailor the application towards your needs.
+
+If nkt deletes all your notes for whatever reason, I am sorry, hopefully you did the `git` integration so have backups of them all, but also, this software has no warranties and I claim no responsibility for the information you put into your notes or access via nkt.
 
 ---
 
