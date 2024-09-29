@@ -1,7 +1,7 @@
 .{
     .name = "nkt",
     .paths = .{""},
-    .version = "0.2.3",
+    .version = "0.2.4",
     .dependencies = .{
         .time = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
