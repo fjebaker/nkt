@@ -323,6 +323,7 @@ pub const Selection = struct {
             if (tasklist != null) count += 1;
 
             if (count > 1) {
+                logger.debug("Matched {d} collections", .{count});
                 return ResolveResult.throw(Error.AmbiguousSelection);
             }
 
@@ -422,7 +423,9 @@ pub const Selection = struct {
 
         if (s.collection_type != null) {
             if (unwrapCanary(try s.implResolve(root, config))) |rr| {
-                logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                if (rr.item != null) {
+                    logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                }
                 return rr;
             }
         } else if (s.selector != null) {
@@ -436,14 +439,18 @@ pub const Selection = struct {
                 canary.collection_type = ct;
                 const r = try canary.implResolve(root, config);
                 if (unwrapCanary(r)) |rr| {
-                    logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                    if (rr.item != null) {
+                        logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                    }
                     return rr;
                 }
             }
         } else {
             const r = try s.implResolve(root, config);
             if (unwrapCanary(r)) |rr| {
-                logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                if (rr.item != null) {
+                    logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                }
                 return rr;
             }
         }
