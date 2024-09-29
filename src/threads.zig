@@ -8,7 +8,6 @@ pub const ThreadMap = struct {
 
     pool: std.Thread.Pool,
     allocator: std.mem.Allocator,
-    sync: std.Thread.Mutex = .{},
     shared_index: usize = 0,
     opts: Options,
     wg: std.Thread.WaitGroup = .{},
@@ -63,8 +62,11 @@ pub const ThreadMap = struct {
             id: usize,
 
             fn getNextIndex(w: @This()) usize {
-                w.parent.sync.lock();
-                defer w.parent.sync.unlock();
+                const mut = &w.parent.pool.mutex;
+
+                mut.lock();
+                defer mut.unlock();
+
                 const i = w.parent.shared_index;
                 w.parent.shared_index += w.chunk_size;
                 return i;
@@ -95,7 +97,14 @@ pub const ThreadMap = struct {
                 .chunk_size = opts.chunk_size,
                 .id = i,
             };
-            self.shared_index += opts.chunk_size;
+
+            {
+                // this could be a race condition so need to lock to increment
+                self.pool.mutex.lock();
+                defer self.pool.mutex.unlock();
+                self.shared_index += opts.chunk_size;
+            }
+
             try self.pool.spawn(Wrapper.doWork, .{w});
         }
     }
