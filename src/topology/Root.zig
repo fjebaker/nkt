@@ -50,8 +50,8 @@ pub const Error = error{
 
 pub const SCHEMA_VERSION = std.SemanticVersion{
     .major = 0,
-    .minor = 4,
-    .patch = 1,
+    .minor = 5,
+    .patch = 0,
 };
 
 pub fn schemaVersion() []const u8 {
@@ -110,8 +110,6 @@ const Info = struct {
     _schema_version: []const u8 = schemaVersion(),
 
     // configuration variables
-    editor: []const []const u8 = &.{"vim"},
-    pager: []const []const u8 = &.{"less"},
     pdf_viewer: []const []const u8 = &.{"okular"},
 
     compiled_directory: []const u8 = "_compiled",

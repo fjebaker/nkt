@@ -10,7 +10,7 @@ allocator: std.mem.Allocator,
 pub fn init(allocator: std.mem.Allocator) !Editor {
     var envmap = try std.process.getEnvMap(allocator);
     defer envmap.deinit();
-    const editor = try allocator.dupe(u8, envmap.get("EDITOR") orelse "vim");
+    const editor = try allocator.dupe(u8, envmap.get("EDITOR") orelse "nano");
 
     return .{
         .editor = editor,
