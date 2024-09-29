@@ -37,6 +37,7 @@ pub const arguments = cli.Arguments(&.{
     .{
         .arg = "what",
         .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a collection.",
+        .completion = "{compadd $(nkt completion list --all-collections)}",
     },
     .{
         .arg = "--directory name",

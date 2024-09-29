@@ -24,8 +24,16 @@ pub const arguments = cli.Commands(
                 .name = "list",
                 .args = cli.Arguments(&.{
                     .{
-                        .arg = "--collection name",
-                        .help = "List all collection names of type `name`.",
+                        .arg = "--collection type",
+                        .help = "List the names of all collection names of a given type.",
+                    },
+                    .{
+                        .arg = "--all-collections",
+                        .help = "List the names of all collection of all types.",
+                    },
+                    .{
+                        .arg = "--tags",
+                        .help = "List the names of all tags (with the `@` prefix).",
                     },
                 }),
             },
@@ -101,46 +109,69 @@ fn executeInternal(
     try root.load();
     _ = opts;
 
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
     switch (self.args.?.commands) {
         .list => |args| {
-            const collection = args.collection.?;
-            if (std.mem.eql(u8, collection, "journal")) {
+            // use a hash map to avoid duplicate names
+            var names = std.StringArrayHashMap(void).init(allocator);
+            defer names.deinit();
+
+            const collection = args.collection orelse "";
+            const all = args.@"all-collections";
+
+            if (all or std.mem.eql(u8, collection, "journal")) {
                 for (root.info.journals) |c| {
-                    try writer.writeAll(c.name);
-                    try writer.writeAll(" ");
+                    try names.put(c.name, {});
                 }
-            } else if (std.mem.eql(u8, collection, "directory")) {
+            }
+            if (all or std.mem.eql(u8, collection, "directory")) {
                 for (root.info.directories) |c| {
-                    try writer.writeAll(c.name);
-                    try writer.writeAll(" ");
+                    try names.put(c.name, {});
                 }
-            } else if (std.mem.eql(u8, collection, "tasklist")) {
+            }
+            if (all or std.mem.eql(u8, collection, "tasklist")) {
                 for (root.info.tasklists) |c| {
-                    try writer.writeAll(c.name);
-                    try writer.writeAll(" ");
+                    try names.put(c.name, {});
                 }
-            } else if (std.mem.eql(u8, collection, "stacks")) {
+            }
+            if (std.mem.eql(u8, collection, "stacks")) {
                 const sl = try root.getStackList();
                 for (sl.stacks) |s| {
-                    try writer.writeAll(s.name);
-                    try writer.writeAll(" ");
+                    try names.put(s.name, {});
                 }
-            } else if (std.mem.eql(u8, collection, "chains")) {
+            }
+            if (std.mem.eql(u8, collection, "chains")) {
                 const chainlist = try root.getChainList();
                 for (chainlist.chains) |c| {
-
-                    // try writer.print("\"{s}\" ", .{c.name});
+                    try names.put(c.name, {});
                     if (c.alias) |alias| {
-                        try writer.writeAll(alias);
-                        try writer.writeAll(" ");
+                        try names.put(alias, {});
                     }
                 }
-            } else {
+            }
+
+            if (args.tags) {
+                const tl = try root.getTagDescriptorList();
+                for (tl.tags) |t| {
+                    const t_name = try std.fmt.allocPrint(alloc, "@{s}", .{t.name});
+                    try names.put(t_name, {});
+                }
+            }
+
+            if (names.count() == 0) {
                 return cli.throwError(
                     error.UnknownSelection,
                     "Invalid completion collection '{s}'",
                     .{collection},
                 );
+            }
+
+            for (names.keys()) |key| {
+                try writer.writeAll(key);
+                try writer.writeAll(" ");
             }
         },
         .item => |args| {
