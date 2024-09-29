@@ -1,7 +1,5 @@
 # nkt
 
-
-
 _A(nother) note taking solution for terminal enthusiasts._
 
 nkt is a command line tool for helping you track and build your notes, todo
@@ -21,7 +19,7 @@ Features:
 - Tag things to help search your notes
 - Fuzzy find **anything and everything**. nkt solves the problem of linking notes together to make navigation easy by letting you fuzzy find everything interactively similar to [fzf](https://github.com/junegunn/fzf).
 
-## Quick start
+## Quick start <a id="toc-tag-mdtoc" name="quick-start"></a>
 
 Put the binary in your `$PATH` and then initialize the home directory (`~/.nkt`):
 ```bash
@@ -56,8 +54,25 @@ nkt read --all @work
 nkt ls tags
 ```
 
+<!--BEGIN TOC-->
+## Table of Contents
+1. [Quick start](#quick-start)
+2. [Description](#description)
+3. [Usage](#usage)
+    1. [Shell completion](#shell-completion)
+4. [Concepts and details](#concepts-and-details)
+    1. [Tags](#tags)
+    2. [Text compilers](#text-compilers)
+5. [Configuration](#configuration)
+6. [Reference](#reference)
+7. [Installation](#installation)
+    1. [From source](#from-source)
+8. [Known issues](#known-issues)
+9. [Disclaimer](#disclaimer)
 
-## Description
+<!--END TOC-->
+
+## Description <a id="toc-tag-mdtoc" name="description"></a>
 
 The design of nkt is centered around making it easy to get information into
 your notes, and making it easy to get information _back out again_.
@@ -102,7 +117,7 @@ Principally, nkt provides four different ways to record information:
   case they were supposed to address was for keeping track of reference trails
   when reading a paper.
 
-## Usage
+## Usage <a id="toc-tag-mdtoc" name="usage"></a>
 
 To setup `nkt`, use the `init` command.
 ```
@@ -135,7 +150,7 @@ Arguments:
 
 And that's it! You're all setup.
 
-### Shell completion
+### Shell completion <a id="toc-tag-mdtoc" name="shell-completion"></a>
 
 nkt brings shell completion so you can use Tab to complete command line
 arguments, note names, even select specific entries from journals.
@@ -152,7 +167,7 @@ There is shell completion for the following shells:
 
 - Sorry, I only really use `zsh` at the moment and writing completion files is not a hobby of mine.
 
-## In-depth getting started
+## Concepts and details <a id="toc-tag-mdtoc" name="concepts-and-details"></a>
 
 Before we look at how to put information _in_ to nkt, let's quickly talk about
 a few ways of getting information _out_ of nkt. For any successful note taking
@@ -210,7 +225,7 @@ more about organising your notes effectively, and [Text
 compilers](#Text-compilers) to learn how to produce rendered versions of your
 notes.
 
-### Tags
+### Tags <a id="toc-tag-mdtoc" name="tags"></a>
 
 Tags are used to group notes together to make finding what you know about a
 certain thing a little more structured. Tags are always prefixed with an `@`
@@ -266,9 +281,7 @@ certain tag using the `list` command
 nkt ls @work
 ```
 
-### Searching through notes
-
-### Text compilers
+### Text compilers <a id="toc-tag-mdtoc" name="text-compilers"></a>
 
 Text compilers are used to render a note. You can use pretty much any program
 under the sun to do this, but for example you might want to use `typst` or
@@ -324,15 +337,13 @@ Finally we give a list of extensions that this text compiler is valid for. We ca
 nkt compile --directory recipes dip.hummus --compiler epson
 ```
 
-### Semantic time
-
-## Configuration
+## Configuration <a id="toc-tag-mdtoc" name="configuration"></a>
 
 Most things are pretty self evident regarding what they do. Check the
 `~/.nkt/topology.json` to see the configuration, and edit this file as you
 please.
 
-## Reference
+## Reference <a id="toc-tag-mdtoc" name="reference"></a>
 
 Please use
 ```
@@ -340,7 +351,7 @@ nkt help [subcommand]
 ```
 for up-to-date reference and documentation for each command.
 
-## Installation
+## Installation <a id="toc-tag-mdtoc" name="installation"></a>
 
 Grab one of the binaries from the [release]() for your architecture:
 
@@ -350,7 +361,7 @@ Grab one of the binaries from the [release]() for your architecture:
 - MacOS Intel
 - I don't know how to Windows
 
-### From source
+### From source <a id="toc-tag-mdtoc" name="from-source"></a>
 
 Clone this GitHub repository, and have [Zig]() installed. nkt tracks the master
 branch of zig so the latest release should work, but just the definitive
@@ -362,11 +373,11 @@ git clone https://github.com/fjebaker/nkt \
     && zig build -Doptimize=ReleaseSafe
 ```
 
-## Known issues
+## Known issues <a id="toc-tag-mdtoc" name="known-issues"></a>
 
 - Datetimes are ruining my life.
 
-## Disclaimer
+## Disclaimer <a id="toc-tag-mdtoc" name="disclaimer"></a>
 
 I am writing nkt to fit my note taking and productivity needs. If it works for you, that's awesome, and we should be friends. If it doesn't, we should still be friends. But since the primary audience of nkt is _me_, please don't get too annoyed at me for rejecting feature requests, and feel free to fork the code and tailor the application towards your needs.
 
