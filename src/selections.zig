@@ -280,29 +280,68 @@ pub const Selection = struct {
     fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
         const name = s.collection_name orelse
             return ResolveResult.throw(Error.AmbiguousSelection);
-        if (s.collection_type) |ct| switch (ct) {
-            .CollectionJournal => {
-                const j = (try root.getJournal(name)) orelse
-                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+
+        logger.debug(
+            "Resolving collection: '{s}'",
+            .{name},
+        );
+
+        if (s.collection_type) |ct| {
+            switch (ct) {
+                .CollectionJournal => {
+                    const j = (try root.getJournal(name)) orelse
+                        return ResolveResult.throw(Root.Error.NoSuchCollection);
+                    return ResolveResult.ok(
+                        .{ .Collection = .{ .journal = j } },
+                    );
+                },
+                .CollectionDirectory => {
+                    const d = (try root.getDirectory(name)) orelse
+                        return ResolveResult.throw(Root.Error.NoSuchCollection);
+                    return ResolveResult.ok(
+                        .{ .Collection = .{ .directory = d } },
+                    );
+                },
+                .CollectionTasklist => {
+                    const t = (try root.getTasklist(name)) orelse
+                        return ResolveResult.throw(Root.Error.NoSuchCollection);
+                    return ResolveResult.ok(
+                        .{ .Collection = .{ .tasklist = t } },
+                    );
+                },
+            }
+        } else {
+            // try all the different collection types
+            const journal = try root.getJournal(name);
+            const dir = try root.getDirectory(name);
+            const tasklist = try root.getTasklist(name);
+
+            // TODO: decide how to resolve ambigous collections
+            var count: usize = 0;
+            if (journal != null) count += 1;
+            if (dir != null) count += 1;
+            if (tasklist != null) count += 1;
+
+            if (count > 1) {
+                return ResolveResult.throw(Error.AmbiguousSelection);
+            }
+
+            if (journal) |j| {
                 return ResolveResult.ok(
                     .{ .Collection = .{ .journal = j } },
                 );
-            },
-            .CollectionDirectory => {
-                const d = (try root.getDirectory(name)) orelse
-                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+            }
+            if (dir) |d| {
                 return ResolveResult.ok(
                     .{ .Collection = .{ .directory = d } },
                 );
-            },
-            .CollectionTasklist => {
-                const t = (try root.getTasklist(name)) orelse
-                    return ResolveResult.throw(Root.Error.NoSuchCollection);
+            }
+            if (tasklist) |t| {
                 return ResolveResult.ok(
                     .{ .Collection = .{ .tasklist = t } },
                 );
-            },
-        };
+            }
+        }
         return ResolveResult.throw(Error.UnknownSelection);
     }
 
@@ -386,22 +425,26 @@ pub const Selection = struct {
                 logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
                 return rr;
             }
-        } else {
-            if (s.collection_name == null) {
-                // try different collections and see if one resolves
-                for (&[_]Root.CollectionType{
-                    .CollectionDirectory,
-                    .CollectionJournal,
-                    .CollectionTasklist,
-                }) |ct| {
-                    var canary = s;
-                    canary.collection_type = ct;
-                    const r = try canary.implResolve(root, config);
-                    if (unwrapCanary(r)) |rr| {
-                        logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
-                        return rr;
-                    }
+        } else if (s.selector != null) {
+            // try different collections and see if one resolves
+            for (&[_]Root.CollectionType{
+                .CollectionDirectory,
+                .CollectionJournal,
+                .CollectionTasklist,
+            }) |ct| {
+                var canary = s;
+                canary.collection_type = ct;
+                const r = try canary.implResolve(root, config);
+                if (unwrapCanary(r)) |rr| {
+                    logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                    return rr;
                 }
+            }
+        } else {
+            const r = try s.implResolve(root, config);
+            if (unwrapCanary(r)) |rr| {
+                logger.debug("Item resolved: {s}", .{rr.item.?.getPath()});
+                return rr;
             }
         }
 

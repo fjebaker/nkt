@@ -36,8 +36,7 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "what",
-        .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a tasklist.",
-        .completion = "{compadd $(nkt completion list --collection tasklist)}",
+        .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a collection.",
     },
     .{
         .arg = "--directory name",
@@ -82,6 +81,7 @@ const ListSelection = union(enum) {
         hash: bool,
         archived: bool,
     },
+    NamedSelection: []const u8,
     Collections: void,
     Tags: void,
     Stacks: void,
@@ -89,6 +89,7 @@ const ListSelection = union(enum) {
     Compilers: void,
 };
 
+args: arguments.Parsed,
 selection: ListSelection,
 sort: Tasklist.SortingOptions,
 
@@ -105,6 +106,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         );
     };
     return .{
+        .args = args,
         .selection = try processArguments(args),
         .sort = .{ .how = sort_method },
     };
@@ -128,7 +130,109 @@ pub fn execute(
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, self.sort, opts),
         .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
         .Tag => |t| try listTagged(allocator, t, root, writer, opts),
+        .NamedSelection => |name| {
+            const collection_selector = selections.Selection{
+                .collection_name = name,
+                .collection_provided = true,
+            };
+
+            const col = (try collection_selector.resolveReportError(root)).Collection;
+            switch (col) {
+                .directory => {
+                    const x = try processDirectoryArgs(
+                        name,
+                        self.args,
+                        &.{"what"},
+                    );
+                    try self.listDirectory(
+                        x.Directory,
+                        root,
+                        writer,
+                        opts,
+                    );
+                },
+                .journal => {
+                    const x = try processJournalArgs(
+                        name,
+                        self.args,
+                        &.{"what"},
+                    );
+                    try listJournal(
+                        x.Journal,
+                        root,
+                        writer,
+                        opts,
+                    );
+                },
+                .tasklist => {
+                    const x = try processTasklistArgs(
+                        name,
+                        self.args,
+                        &.{"what"},
+                    );
+                    try listTasklist(
+                        allocator,
+                        x.Tasklist,
+                        root,
+                        writer,
+                        self.sort,
+                        opts,
+                    );
+                },
+            }
+        },
     }
+}
+
+fn processTasklistArgs(
+    name: []const u8,
+    args: arguments.Parsed,
+    comptime extra_fields: []const []const u8,
+) !ListSelection {
+    // make sure none of the incompatible fields are selected
+    try utils.ensureOnly(
+        arguments.Parsed,
+        args,
+        (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash" } ++ extra_fields),
+        "tasklist",
+    );
+    return .{ .Tasklist = .{
+        .name = name,
+        .done = args.done,
+        .hash = args.hash,
+        .archived = args.archived,
+    } };
+}
+fn processDirectoryArgs(
+    name: []const u8,
+    args: arguments.Parsed,
+    comptime extra_fields: []const []const u8,
+) !ListSelection {
+    // make sure none of the incompatible fields are selected
+    try utils.ensureOnly(
+        arguments.Parsed,
+        args,
+        (MUTUAL_FIELDS ++ [_][]const u8{"what"} ++ extra_fields),
+        "directory",
+    );
+    return .{ .Directory = .{
+        .name = name,
+        .note = args.what,
+    } };
+}
+fn processJournalArgs(
+    name: []const u8,
+    args: arguments.Parsed,
+    comptime extra_fields: []const []const u8,
+) !ListSelection {
+    // make sure none of the incompatible fields are selected
+    try utils.ensureOnly(
+        arguments.Parsed,
+        args,
+        MUTUAL_FIELDS ++ extra_fields,
+        "journal",
+    );
+    return .{ .Journal = .{ .name = name } };
 }
 
 fn processArguments(args: arguments.Parsed) !ListSelection {
@@ -145,42 +249,13 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
     }
 
     if (args.journal) |journal| {
-        // make sure none of the incompatible fields are selected
-        try utils.ensureOnly(
-            arguments.Parsed,
-            args,
-            MUTUAL_FIELDS,
-            "journal",
-        );
-        return .{ .Journal = .{ .name = journal } };
+        return try processJournalArgs(journal, args, &.{});
     }
     if (args.tasklist) |tasklist| {
-        // make sure none of the incompatible fields are selected
-        try utils.ensureOnly(
-            arguments.Parsed,
-            args,
-            (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash" }),
-            "tasklist",
-        );
-        return .{ .Tasklist = .{
-            .name = tasklist,
-            .done = args.done,
-            .hash = args.hash,
-            .archived = args.archived,
-        } };
+        return try processTasklistArgs(tasklist, args, &.{});
     }
     if (args.directory) |directory| {
-        // make sure none of the incompatible fields are selected
-        try utils.ensureOnly(
-            arguments.Parsed,
-            args,
-            (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
-            "directory",
-        );
-        return .{ .Directory = .{
-            .name = directory,
-            .note = args.what,
-        } };
+        return try processDirectoryArgs(directory, args, &.{});
     }
 
     if (args.what) |what| {
@@ -219,19 +294,7 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
         }
 
         // make sure none of the incompatible fields are selected
-        try utils.ensureOnly(
-            arguments.Parsed,
-            args,
-            (MUTUAL_FIELDS ++ [_][]const u8{ "what", "done", "archived", "hash" }),
-            what,
-        );
-
-        return .{ .Tasklist = .{
-            .name = what,
-            .done = args.done,
-            .hash = args.hash,
-            .archived = args.archived,
-        } };
+        return .{ .NamedSelection = what };
     }
 
     try utils.ensureOnly(
