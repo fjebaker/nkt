@@ -1,5 +1,9 @@
 # nkt
 
+<p align="center">
+  <img width="80%" alt="Example screenshot of nkt in the terminal." src="assets/example.jpg">
+</p>
+
 _A(nother) note taking solution for terminal enthusiasts._
 
 nkt is a command line tool for helping you track and build your notes, todo
