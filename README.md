@@ -25,7 +25,9 @@ Features:
 
 ## Quick start <a id="toc-tag-mdtoc" name="quick-start"></a>
 
-Put the binary in your `$PATH` and then initialize the home directory (`~/.nkt`):
+Download the binary for your architecture from [the latest
+release](https://github.com/fjebaker/nkt/releases/latest). Put the binary in
+your `$PATH` and then initialize the home directory (`~/.nkt`):
 ```bash
 nkt init
 
