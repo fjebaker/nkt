@@ -52,8 +52,8 @@ test "smoke" {
     try exec(&s, &.{ "ls", "--tasklist", "todo" });
     try std.testing.expectEqualStrings(
         \\
-        \\   1   10592d 12h 59m   | /b2ac5 |   do something
-        \\   0   10592d 12h 59m   | /79fc7 |   do something - soon
+        \\   1   10592d 12h 59m   |   do something
+        \\   0   10592d 12h 59m   |   do something - soon
         \\
         \\
     ,
@@ -162,8 +162,8 @@ test "smoke" {
     try exec(&s, &.{ "ls", "todo" });
     try std.testing.expectEqualStrings(
         \\
-        \\   1   10592d 12h 59m   | /b2ac5 |   do something
-        \\   0   10592d 12h 59m   | /79fc7 |   do something - soon
+        \\   1   10592d 12h 59m   |   do something
+        \\   0   10592d 12h 59m   |   do something - soon
         \\
         \\
     ,

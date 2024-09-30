@@ -64,7 +64,11 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "--hash",
-        .help = "Display the full hashes instead of abbreviations.",
+        .help = "Display the hash identifiers of the tasks.",
+    },
+    .{
+        .arg = "--long-hash",
+        .help = "Display the long (not shortened) hash identifiers of the tasks.",
     },
     .{
         .arg = "--done",
@@ -95,6 +99,7 @@ const ListSelection = union(enum) {
         name: []const u8,
         done: bool,
         hash: bool,
+        long_hash: bool,
         archived: bool,
     },
     NamedSelection: struct {
@@ -234,13 +239,14 @@ fn processTasklistArgs(
     try utils.ensureOnly(
         arguments.Parsed,
         args,
-        (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash", "date" } ++ extra_fields),
+        (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "long-hash", "hash", "date" } ++ extra_fields),
         "tasklist",
     );
     return .{ .Tasklist = .{
         .name = name,
         .done = args.done,
         .hash = args.hash,
+        .long_hash = args.@"long-hash",
         .date = args.date,
         .archived = args.archived,
     } };
@@ -578,7 +584,8 @@ fn listTasks(
         .{
             .pretty = !opts.piped,
             .tag_descriptors = tag_descriptors.tags,
-            .full_hash = tl.hash,
+            .hash = tl.hash or tl.long_hash,
+            .full_hash = tl.long_hash,
             .tz = opts.tz,
         },
     );

@@ -26,6 +26,7 @@ const FormattedTask = struct {
 const PrintOptions = struct {
     tz: time.TimeZone,
     pretty: bool = false,
+    hash: bool = false,
     full_hash: bool = false,
     tag_descriptors: ?[]const tags.Tag.Descriptor = null,
 };
@@ -152,7 +153,14 @@ pub fn drain(
         if (needsSeperator(self.now, previous, item)) {
             try fp.addText("\n", .{});
         }
-        try printTask(&fp, item, col_widths, details, self.opts.full_hash);
+        try printTask(
+            &fp,
+            item,
+            col_widths,
+            details,
+            self.opts.hash,
+            self.opts.full_hash,
+        );
         try fp.addText("\n", .{});
         previous = item;
     }
@@ -190,6 +198,7 @@ fn printTask(
     entry: FormattedTask,
     padding: Padding,
     details: bool,
+    hash: bool,
     full_hash: bool,
 ) !void {
     if (entry.index) |index| {
@@ -225,20 +234,22 @@ fn printTask(
         .{ .fmt = due_color },
     );
 
-    try fp.addText(" | ", .{});
+    if (hash) {
+        try fp.addText(" | ", .{});
 
-    if (full_hash) {
-        try fp.addFmtText(
-            "/{x:0>16}",
-            .{entry.task.hash},
-            .{ .fmt = colors.DIM },
-        );
-    } else {
-        try fp.addFmtText(
-            "/{x:0>5}",
-            .{@as(u20, @intCast(utils.getMiniHash(entry.task.hash, 5)))},
-            .{ .fmt = colors.DIM },
-        );
+        if (full_hash) {
+            try fp.addFmtText(
+                "/{x:0>16}",
+                .{entry.task.hash},
+                .{ .fmt = colors.DIM },
+            );
+        } else {
+            try fp.addFmtText(
+                "/{x:0>5}",
+                .{@as(u20, @intCast(utils.getMiniHash(entry.task.hash, 5)))},
+                .{ .fmt = colors.DIM },
+            );
+        }
     }
 
     try fp.addText(" | ", .{});
