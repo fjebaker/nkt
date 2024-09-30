@@ -21,17 +21,24 @@ const Self = @This();
 
 pub const Error = error{InvalidEdit};
 
-pub const alias = [_][]const u8{ "e", "ef" };
+pub const alias = [_][]const u8{ "e", "e" };
 
-pub const short_help = "Edit a note or item in the editor.";
+pub const short_help = "Edit or create a note in the editor.";
 pub const long_help =
     \\Edit a note, task or log entry in the configured editor. Supports the standard
     \\selection syntax of `select`.
     \\
-    \\If no argument is given, an interactive fuzzy search is presented that searches
-    \\throug note names. In this mode, 'Enter' will select the highlighted note,
-    \\whereas 'Ctrl-n' will select or else create the note and give the option
-    \\to select an extension.
+    \\If no selection argument is given, an interactive fuzzy search is presented
+    \\that searches through note names. In this mode, 'Enter' will select the
+    \\highlighted note, whereas 'Ctrl-n' will select or else create the note and give
+    \\the option to select an extension.
+    \\
+    \\Examples:
+    \\
+    \\    nkt edit --new my.new.note                  # a new note with default extension
+    \\    nkt edit --new something.else --ext typ     # a new typst note
+    \\    nkt edit my.new.note                        # edit an existing note
+    \\    nkt e something.else                        # edit another existing note
     \\
 ;
 
