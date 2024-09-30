@@ -45,7 +45,7 @@ pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--type collection_type",
         .help = "Only show items of the specified collection type. Can be 'directory', 'journal', 'tasklist'.",
-        .completion = "{compadd directory journal tasklist}",
+        .completion = "{compadd d dir directory j journal t tl tasklist}",
     },
     .{
         .arg = "--directory name",
@@ -329,13 +329,14 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
 
 fn toColType(string: ?[]const u8) !?Root.CollectionType {
     const s = string orelse return null;
-    if (std.mem.eql(u8, s, "directory")) {
+    const eq = std.mem.eql;
+    if (eq(u8, s, "d") or eq(u8, s, "dir") or eq(u8, s, "directory")) {
         return .CollectionDirectory;
     }
-    if (std.mem.eql(u8, s, "journal")) {
+    if (eq(u8, s, "j") or eq(u8, s, "journal")) {
         return .CollectionJournal;
     }
-    if (std.mem.eql(u8, s, "tasklist")) {
+    if (eq(u8, s, "t") or eq(u8, s, "tl") or eq(u8, s, "tasklist")) {
         return .CollectionTasklist;
     }
     return cli.throwError(
