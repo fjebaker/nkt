@@ -212,6 +212,11 @@ pub const Item = union(enum) {
         };
     }
 
+    /// Get the list of tags applied to this item
+    pub fn getTags(self: *const Item) []const tags.Tag {
+        return self.getAttributeOfItem("tags", []const tags.Tag);
+    }
+
     /// Get a string representing the content of this item
     pub fn getContent(
         self: *Item,

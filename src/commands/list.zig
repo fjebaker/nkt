@@ -19,6 +19,8 @@ const TaskPrinter = @import("../printers.zig").TaskPrinter;
 
 const Self = @This();
 
+const logger = std.log.scoped(.cmd_list);
+
 pub const alias = [_][]const u8{"ls"};
 
 pub const short_help = "List collections and other information in various ways.";
@@ -698,22 +700,12 @@ pub fn printItems(
                     .{nd.getCollectionName()},
                     .{ .fmt = colors.JOURNAL },
                 );
-                try printer.addFmtText(
-                    " {s}",
-                    .{name},
-                    .{},
-                );
             },
             .Note => {
                 try printer.addFmtText(
                     "directory:{s}",
                     .{nd.getCollectionName()},
                     .{ .fmt = colors.DIRECTORY },
-                );
-                try printer.addFmtText(
-                    " {s}",
-                    .{name},
-                    .{},
                 );
             },
             .Task => {
@@ -722,14 +714,45 @@ pub fn printItems(
                     .{nd.getCollectionName()},
                     .{ .fmt = colors.TASKLIST },
                 );
+            },
+            else => {
+                logger.warn("Cannot print {s}", .{@tagName(nd)});
+            },
+        }
+
+        try printer.addFmtText(
+            " {s}",
+            .{name},
+            .{},
+        );
+
+        switch (nd) {
+            .Entry => |entry| {
                 try printer.addFmtText(
                     " {s}",
-                    .{name},
+                    .{entry.entry.text},
                     .{},
                 );
             },
             else => {},
         }
+
+        const item_tags = nd.getTags();
+
+        if (item_tags.len > 0) {
+            try printer.addText(" [tags:", .{ .fmt = colors.DIM });
+
+            for (item_tags) |tag| {
+                const fmt = FormatPrinter.getTagFormat(
+                    tag_descriptors,
+                    tag.name,
+                );
+                try printer.addFmtText(" @{s}", .{tag.name}, .{ .fmt = fmt });
+            }
+
+            try printer.addText("]", .{ .fmt = colors.DIM });
+        }
+
         try printer.addText("\n", .{});
     }
     try printer.drain(writer);
