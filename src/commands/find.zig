@@ -112,6 +112,15 @@ pub fn execute(
         try chunk_machine.add(content);
     }
 
+    // make sure there is something to even search
+    if (chunk_machine.chunks.items.len == 0) {
+        return cli.throwError(
+            error.NothingToSearch,
+            "Cannot search if all (selected) notes are empty.",
+            .{},
+        );
+    }
+
     // run the search loop to get the users chocie
     const choice = try self.doSearchLoop(allocator, note_descriptors, &chunk_machine);
 
