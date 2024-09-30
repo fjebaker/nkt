@@ -166,11 +166,12 @@ fn handleGenericArguments(
     while (try dup_itt.next()) |arg| {
         if (arg.flag) {
             if (arg.is('v', "version")) {
-                const version = @import("options").version;
-                try writer.print("nkt version {d}.{d}.{d} (schema: {s})\n", .{
-                    version.major,
-                    version.minor,
-                    version.patch,
+                const opts = @import("options");
+                try writer.print("nkt version {d}.{d}.{d}-{s} (schema: {s})\n", .{
+                    opts.version.major,
+                    opts.version.minor,
+                    opts.version.patch,
+                    opts.git_hash orelse "[none]",
                     Root.schemaVersion(),
                 });
                 return false;

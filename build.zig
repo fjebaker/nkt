@@ -20,6 +20,16 @@ pub fn addTracy(b: *std.Build, step: *std.Build.Step.Compile) !void {
     step.linkLibCpp();
 }
 
+fn getGitHash(allocator: std.mem.Allocator) ?[]const u8 {
+    var proc = std.process.Child.init(&.{ "git", "rev-parse", "HEAD" }, allocator);
+    proc.stdout_behavior = .Pipe;
+    _ = proc.spawn() catch return null;
+    const hash = proc.stdout.?.readToEndAlloc(allocator, 1024) catch return null;
+    errdefer allocator.free(hash);
+    _ = proc.wait() catch return null;
+    return std.mem.trim(u8, hash, "\n \t");
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -30,6 +40,10 @@ pub fn build(b: *std.Build) !void {
     var opts = b.addOptions();
     opts.addOption(bool, "tracy_enabled", tracy);
     opts.addOption(std.SemanticVersion, "version", VERSION);
+
+    const hash = getGitHash(b.allocator);
+    defer if (hash) |h| b.allocator.free(h);
+    opts.addOption(?[]const u8, "git_hash", hash);
 
     const time = b.dependency("time", .{
         .target = target,

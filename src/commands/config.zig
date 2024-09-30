@@ -6,7 +6,7 @@ const time = @import("../topology/time.zig");
 
 const Self = @This();
 
-const version = @import("options").version;
+const options = @import("options");
 
 pub const short_help = "View and modify the configuration of nkt";
 pub const long_help = short_help;
@@ -27,14 +27,16 @@ pub fn execute(
     defer allocator.free(now);
     try out_writer.print(
         \\nkt version            : {d}.{d}.{d}
+        \\nkt revision           : {s}
         \\nkt schema version     : {s}
         \\root directory         : {s}
         \\local time             : {s}
         \\
     , .{
-        version.major,
-        version.minor,
-        version.patch,
+        options.version.major,
+        options.version.minor,
+        options.version.patch,
+        options.git_hash orelse "[none]",
         Root.schemaVersion(),
         root.fs.?.root_path,
         now,
