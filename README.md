@@ -34,8 +34,11 @@ nkt init
 # log to a journal
 nkt log "this is my first diary entry"
 
-# edit a note
-nkt edit books.reading-list
+# create a new note
+nkt edit books.reading-list --new
+
+# edit an existing note
+nkt edit films.watch-list
 
 # search all notes with a fuzzy finder
 nkt find
@@ -46,7 +49,7 @@ nkt task "learn more about that thing" --due monday
 # list your tasks
 nkt ls todo
 
-# list your notes
+# list your notes in the `notes` directory
 nkt ls notes
 
 # create a tag
