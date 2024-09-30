@@ -638,21 +638,6 @@ fn sortItems(items: []Item, how: Tasklist.SortingOptions.Method) void {
     }
 }
 
-const TaggedItems = struct {
-    items: std.ArrayList(Item),
-
-    pub fn init(allocator: std.mem.Allocator) TaggedItems {
-        return .{
-            .items = std.ArrayList(Item).init(allocator),
-        };
-    }
-
-    pub fn deinit(self: *TaggedItems) void {
-        self.items.deinit();
-        self.* = undefined;
-    }
-};
-
 fn listTagged(
     allocator: std.mem.Allocator,
     t: utils.TagType(ListSelection, "Tag"),
@@ -673,58 +658,38 @@ fn listTagged(
         );
     }
 
-    var tagged_items = TaggedItems.init(allocator);
-    defer tagged_items.deinit();
+    const items = try utils.getAllItems(allocator, root, .{
+        .directory = utils.isElseNull(
+            Root.CollectionType.CollectionDirectory,
+            t.ctype,
+        ),
+        .journal = utils.isElseNull(
+            Root.CollectionType.CollectionJournal,
+            t.ctype,
+        ),
+        .tasklist = utils.isElseNull(
+            Root.CollectionType.CollectionTasklist,
+            t.ctype,
+        ),
+    });
+    defer allocator.free(items);
 
-    if (t.ctype == null or t.ctype.? == .CollectionDirectory) {
-        for (root.getAllDescriptor(.CollectionDirectory)) |d| {
-            const dir = (try root.getDirectory(d.name)).?;
-            for (dir.getInfo().notes) |note| {
-                if (tags.hasUnion(note.tags, st)) {
-                    try tagged_items.items.append(
-                        .{ .Note = .{ .directory = dir, .note = note } },
-                    );
-                }
-            }
-        }
-    }
+    var list = try std.ArrayList(Item).initCapacity(allocator, items.len);
+    defer list.deinit();
 
-    if (t.ctype == null or t.ctype.? == .CollectionTasklist) {
-        for (root.getAllDescriptor(.CollectionTasklist)) |d| {
-            const tlist = (try root.getTasklist(d.name)).?;
-            for (tlist.getInfo().tasks) |task| {
-                if (tags.hasUnion(task.tags, st)) {
-                    try tagged_items.items.append(
-                        .{ .Task = .{ .tasklist = tlist, .task = task } },
-                    );
-                }
-            }
-        }
-    }
-
-    if (t.ctype == null or t.ctype.? == .CollectionJournal) {
-        for (root.getAllDescriptor(.CollectionJournal)) |d| {
-            var journal = (try root.getJournal(d.name)).?;
-            for (journal.getInfo().days) |day| {
-                const entries = try journal.getEntries(day);
-                for (entries) |e| {
-                    if (tags.hasUnion(e.tags, st)) {
-                        try tagged_items.items.append(
-                            .{ .Entry = .{ .journal = journal, .day = day, .entry = e } },
-                        );
-                    }
-                }
-            }
+    for (items) |item| {
+        if (tags.hasUnion(item.getTags(), st)) {
+            list.appendAssumeCapacity(item);
         }
     }
 
     // sort by last modified
-    std.sort.heap(Item, tagged_items.items.items, {}, Item.modifiedDescending);
+    std.sort.heap(Item, list.items, {}, Item.modifiedDescending);
 
     try printItems(
         allocator,
         writer,
-        tagged_items.items.items,
+        list.items,
         (try root.getTagDescriptorList()).tags,
         opts,
     );

@@ -4,6 +4,15 @@ const time = @import("topology/time.zig");
 const Tasklist = @import("topology/Tasklist.zig");
 const Root = @import("topology/Root.zig");
 const tags = @import("topology/tags.zig");
+const Item = @import("abstractions.zig").Item;
+
+/// Check if an optional is equal to a value orelse return null
+pub fn isElseNull(a: anytype, v: ?@TypeOf(a)) ?bool {
+    if (v) |value| {
+        return value == a;
+    }
+    return null;
+}
 
 /// Prompt the user yes or no and return their choice. Default no.
 pub fn promptNo(
@@ -26,6 +35,77 @@ pub fn promptYes(
     try writer.print(fmt ++ "\n[yes]/no: ", args);
     const choice = try issuePrompt(allocator, writer);
     return choice orelse true;
+}
+
+pub const GetAllItemsOpts = struct {
+    directory: ?bool = null,
+    journal: ?bool = null,
+    tasklist: ?bool = null,
+
+    fn allNull(self: GetAllItemsOpts) bool {
+        return self.directory == null and
+            self.journal == null and
+            self.tasklist == null;
+    }
+
+    fn with(self: GetAllItemsOpts, comptime field: []const u8) bool {
+        const f = @field(self, field);
+        if (f) |v| return v;
+        return false;
+    }
+};
+
+/// Get all Items in the Root
+pub fn getAllItems(
+    allocator: std.mem.Allocator,
+    root: *Root,
+    opts: GetAllItemsOpts,
+) ![]Item {
+    var list = std.ArrayList(Item).init(allocator);
+    defer list.deinit();
+
+    // pre-allocate some memory
+    try list.ensureUnusedCapacity(1000);
+
+    const all = opts.allNull();
+
+    if (all or opts.with("directory")) {
+        for (root.getAllDescriptor(.CollectionDirectory)) |d| {
+            const dir = (try root.getDirectory(d.name)).?;
+            for (dir.getInfo().notes) |note| {
+                try list.append(
+                    .{ .Note = .{ .directory = dir, .note = note } },
+                );
+            }
+        }
+    }
+
+    if (all or opts.with("tasklist")) {
+        for (root.getAllDescriptor(.CollectionTasklist)) |d| {
+            const tlist = (try root.getTasklist(d.name)).?;
+            for (tlist.getInfo().tasks) |task| {
+                try list.append(
+                    .{ .Task = .{ .tasklist = tlist, .task = task } },
+                );
+            }
+        }
+    }
+
+    if (all or opts.with("journal")) {
+        for (root.getAllDescriptor(.CollectionJournal)) |d| {
+            var journal = (try root.getJournal(d.name)).?;
+            for (journal.getInfo().days) |day| {
+                const entries = try journal.getEntries(day);
+                for (entries) |e| {
+                    try list.append(
+                        .{ .Entry = .{ .journal = journal, .day = day, .entry = e } },
+                    );
+                }
+            }
+        }
+    }
+
+    return list.toOwnedSlice();
 }
 
 fn issuePrompt(

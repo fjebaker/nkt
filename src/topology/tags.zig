@@ -16,10 +16,18 @@ pub const Tag = struct {
         created: Time,
         color: colors.Color,
 
-        /// Does the descritor describe the tag, as in, do they share the same
+        /// Does the descriptor describe the tag, as in, do they share the same
         /// name?
         pub fn isDescriptorOf(self: Descriptor, tag: Tag) bool {
             return std.mem.eql(u8, self.name, tag.name);
+        }
+
+        /// Does the descriptor describe any of the tags in the tag list?
+        pub fn isDescriptorOfAny(self: Descriptor, tags: []const Tag) bool {
+            for (tags) |tag| {
+                if (self.isDescriptorOf(tag)) return true;
+            }
+            return false;
         }
 
         /// Create a new tag with a random color
