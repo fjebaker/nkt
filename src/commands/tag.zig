@@ -18,14 +18,21 @@ pub const arguments = cli.Arguments(selections.selectHelp(
     "The item to edit (see `help select`). If left blank will open an interactive search through the names of the notes.",
     .{ .required = true },
 ) ++
-    &[_]cli.ArgumentDescriptor{.{
-    .arg = "@tag1 [@tag2 ...]",
-    .help = "The tag (or tags) to assign to the item",
-    .parse = false,
-}});
+    &[_]cli.ArgumentDescriptor{
+    .{
+        .arg = "@tag1 [@tag2 ...]",
+        .help = "The tag (or tags) to assign to the item",
+        .parse = false,
+    },
+    .{
+        .arg = "-d/--delete",
+        .help = "Delete the tags instead of assigning them. Does not validate that the item has those tags",
+    },
+});
 
 selection: selections.Selection,
 tags: []const []const u8,
+delete: bool,
 
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     var parser = arguments.init(itt);
@@ -35,7 +42,9 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     while (try itt.next()) |arg| {
         if (!try parser.parseArg(arg)) {
-            if (arg.flag) try itt.throwUnknownFlag();
+            if (arg.flag) {
+                try itt.throwUnknownFlag();
+            }
             // tag parsing
             const tag_name = ttags.getTagString(arg.string) catch |err| {
                 return cli.throwError(err, "{s}", .{arg.string});
@@ -66,6 +75,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     return .{
         .tags = try tag_list.toOwnedSlice(),
         .selection = selection,
+        .delete = args.delete,
     };
 }
 
@@ -86,7 +96,12 @@ pub fn execute(
         self.tags,
     );
     defer allocator.free(new_tags);
-    try item.addTags(new_tags);
+
+    if (self.delete) {
+        try item.removeTags(new_tags);
+    } else {
+        try item.addTags(new_tags);
+    }
 
     switch (item) {
         .Day => |d| {
@@ -110,6 +125,10 @@ pub fn execute(
 
     const name = try item.getName(allocator);
     defer allocator.free(name);
-    try writer.print("Applied tags to '{s}'\n", .{name});
+    if (self.delete) {
+        try writer.print("Removed tags from '{s}'\n", .{name});
+    } else {
+        try writer.print("Applied tags to '{s}'\n", .{name});
+    }
     _ = opts;
 }

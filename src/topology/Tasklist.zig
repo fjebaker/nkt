@@ -339,6 +339,12 @@ pub fn addTagsToTask(self: *const Tasklist, task: Task, new_tags: []const tags.T
     ptr.tags = try tags.setUnion(self.allocator, task.tags, new_tags);
 }
 
+/// Remove tags from a given `Task`
+pub fn removeTagsFromTask(self: *const Tasklist, task: Task, new_tags: []const tags.Tag) !void {
+    const ptr = self.getTaskByHashPtr(task.hash).?;
+    ptr.tags = try tags.remove(self.allocator, task.tags, new_tags);
+}
+
 fn serializeInfo(info: Info, allocator: std.mem.Allocator) ![]const u8 {
     return try std.json.stringifyAlloc(
         allocator,

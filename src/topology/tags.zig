@@ -446,33 +446,98 @@ test "tag difference" {
     );
 }
 
+const TagContext = struct {
+    pub fn hash(_: TagContext, t: Tag) u32 {
+        return std.array_hash_map.StringContext.hash(.{}, t.name);
+    }
+    pub fn eql(_: TagContext, t1: Tag, t2: Tag, b_index: usize) bool {
+        return std.array_hash_map.StringContext.eql(.{}, t1.name, t2.name, b_index);
+    }
+};
+
+const TagSet = std.ArrayHashMap(Tag, void, TagContext, true);
+
+/// Remove tags in list_B from list_A
+pub fn remove(
+    allocator: std.mem.Allocator,
+    tags: []const Tag,
+    to_remove: []const Tag,
+) ![]Tag {
+    var ts = TagSet.init(allocator);
+    defer ts.deinit();
+    for (tags) |t1| {
+        try ts.put(t1, {});
+    }
+    for (to_remove) |t1| {
+        _ = ts.orderedRemove(t1);
+    }
+    return try allocator.dupe(Tag, ts.keys());
+}
+
+test "tag remove" {
+    const alloc = std.testing.allocator;
+
+    const diff = try remove(
+        alloc,
+        &.{
+            .{
+                .name = "A",
+                .added = .{ .time = 0 },
+            },
+            .{
+                .name = "B",
+                .added = .{ .time = 0 },
+            },
+            .{
+                .name = "C",
+                .added = .{ .time = 0 },
+            },
+            .{
+                .name = "D",
+                .added = .{ .time = 0 },
+            },
+        },
+        &.{
+            .{
+                .name = "A",
+                .added = .{ .time = 0 },
+            },
+            .{
+                .name = "C",
+                .added = .{ .time = 0 },
+            },
+            .{
+                .name = "D",
+                .added = .{ .time = 0 },
+            },
+        },
+    );
+    defer alloc.free(diff);
+
+    try std.testing.expectEqualDeep(
+        &[_]Tag{.{
+            .name = "B",
+            .added = .{ .time = 0 },
+        }},
+        diff,
+    );
+}
+
 /// Returns the union of two tag sets. Will remove duplicate tags.
 pub fn setUnion(
     allocator: std.mem.Allocator,
     list_A: []const Tag,
     list_B: []const Tag,
 ) ![]Tag {
-    var list = std.ArrayList(Tag).init(allocator);
-
-    // TODO: this algorithm can be made much more efficient
-
+    var ts = TagSet.init(allocator);
+    defer ts.deinit();
     for (list_A) |t1| {
-        for (list.items) |t| {
-            if (t.eql(t1)) break;
-        } else {
-            try list.append(t1);
-        }
+        try ts.put(t1, {});
     }
-
     for (list_B) |t1| {
-        for (list.items) |t| {
-            if (t.eql(t1)) break;
-        } else {
-            try list.append(t1);
-        }
+        try ts.put(t1, {});
     }
-
-    return try list.toOwnedSlice();
+    return try allocator.dupe(Tag, ts.keys());
 }
 
 test "tag union" {

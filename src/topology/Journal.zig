@@ -411,6 +411,17 @@ pub fn addTagsToEntry(
     ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
 }
 
+/// Remove tags from an `Entry`
+pub fn removeTagsFromEntry(
+    self: *Journal,
+    day: Day,
+    entry: Entry,
+    ts: []const tags.Tag,
+) !void {
+    const ptr = try self.getEntryPtr(day, entry);
+    ptr.tags = try tags.remove(self.allocator, ptr.tags, ts);
+}
+
 /// Add new tags to a `Day`
 pub fn addTagsToDay(
     self: *Journal,
@@ -419,6 +430,16 @@ pub fn addTagsToDay(
 ) !void {
     const ptr = self.getDayPtr(day.name).?;
     ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
+}
+
+/// Remove tags from a `Day`
+pub fn removeTagsFromDay(
+    self: *Journal,
+    day: Day,
+    ts: []const tags.Tag,
+) !void {
+    const ptr = self.getDayPtr(day.name).?;
+    ptr.tags = try tags.remove(self.allocator, ptr.tags, ts);
 }
 
 /// Write all days that have staged changes to disk

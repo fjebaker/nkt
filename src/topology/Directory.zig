@@ -204,6 +204,12 @@ pub fn addTagsToNote(self: *const Directory, note: Note, ts: []const tags.Tag) !
     ptr.tags = try tags.setUnion(self.allocator, ptr.tags, ts);
 }
 
+/// Remove tags from a `Note`
+pub fn removeTagsFromNote(self: *const Directory, note: Note, ts: []const tags.Tag) !void {
+    const ptr = self.getNotePtr(note.name).?;
+    ptr.tags = try tags.remove(self.allocator, ptr.tags, ts);
+}
+
 /// Update the modified time of a note
 pub fn touchNote(self: *Directory, note: Note, t: time.Time) !Note {
     var new = note;

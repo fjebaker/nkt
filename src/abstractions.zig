@@ -253,6 +253,25 @@ pub const Item = union(enum) {
             else => unreachable,
         }
     }
+
+    /// Remove tags to an `Item`
+    pub fn removeTags(self: *Item, new_tags: []const tags.Tag) !void {
+        switch (self.*) {
+            .Note => |note| {
+                try note.directory.removeTagsFromNote(note.note, new_tags);
+            },
+            .Entry => |*entry| {
+                try entry.journal.removeTagsFromEntry(entry.day, entry.entry, new_tags);
+            },
+            .Day => |*day| {
+                try day.journal.removeTagsFromDay(day.day, new_tags);
+            },
+            .Task => |task| {
+                try task.tasklist.removeTagsFromTask(task.task, new_tags);
+            },
+            else => unreachable,
+        }
+    }
 };
 
 pub const TaskEvent = struct {
