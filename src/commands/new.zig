@@ -12,17 +12,25 @@ const stacks = @import("../topology/stacks.zig");
 const Self = @This();
 
 pub const short_help = "Create a new tag or collection.";
-pub const long_help = short_help;
+pub const long_help =
+    \\Create a new tag or collection.
+    \\
+    \\Note: This cannot be used to create a new note, journal entry, or task.
+    \\To create a new note in a notes directory, use `edit --new`. A new journal
+    \\entry is automatically created with `log`. Tasks can be manipulated with
+    \\`task`.
+;
 
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "type",
-        .help = "What sort of type to create. Can be 'journal', 'tasklist', 'directory', 'chain' or 'tag'.",
+        .help = "What sort of collection type to create. Can be 'journal', 'tasklist', 'directory', 'chain', 'stack' or 'tag'.",
         .required = true,
+        .completion = "{compadd journal tasklist directory stack chain tag}",
     },
     .{
         .arg = "name",
-        .help = "Name to assign to new object.",
+        .help = "Name to assign to new collection.",
         .required = true,
     },
 });
