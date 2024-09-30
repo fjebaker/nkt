@@ -33,13 +33,19 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
 pub const arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
-        .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified' or 'created'. ",
-        .default = "alphabetical",
+        .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified', 'canonical' or 'created'. ",
+        .default = "canonical",
+        .completion = "{compadd alpha alphabetical modified created canonical}",
     },
     .{
         .arg = "what",
         .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a collection.",
         .completion = "{compadd tags compilers $(nkt completion list --all-collections)}",
+    },
+    .{
+        .arg = "--type collection_type",
+        .help = "Only show items of the specified collection type. Can be 'directory', 'journal', 'tasklist'.",
+        .completion = "{compadd directory journal tasklist}",
     },
     .{
         .arg = "--directory name",
@@ -84,11 +90,17 @@ const ListSelection = union(enum) {
         hash: bool,
         archived: bool,
     },
-    NamedSelection: []const u8,
+    NamedSelection: struct {
+        name: []const u8,
+        ctype: ?Root.CollectionType = null,
+    },
     Collections: void,
     Tags: void,
     Stacks: void,
-    Tag: []const u8,
+    Tag: struct {
+        name: []const u8,
+        ctype: ?Root.CollectionType = null,
+    },
     Compilers: void,
 };
 
@@ -133,19 +145,20 @@ pub fn execute(
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, self.sort, opts),
         .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
         .Tag => |t| try listTagged(allocator, t, root, writer, opts),
-        .NamedSelection => |name| {
+        .NamedSelection => |ns| {
             const collection_selector = selections.Selection{
-                .collection_name = name,
+                .collection_name = ns.name,
                 .collection_provided = true,
             };
 
             const col = (try collection_selector.resolveReportError(root)).Collection;
+            const extra_args = &.{ "what", "type" };
             switch (col) {
                 .directory => {
                     const x = try processDirectoryArgs(
-                        name,
+                        ns.name,
                         self.args,
-                        &.{"what"},
+                        extra_args,
                     );
                     try self.listDirectory(
                         allocator,
@@ -157,9 +170,9 @@ pub fn execute(
                 },
                 .journal => {
                     const x = try processJournalArgs(
-                        name,
+                        ns.name,
                         self.args,
-                        &.{"what"},
+                        extra_args,
                     );
                     try listJournal(
                         x.Journal,
@@ -170,9 +183,9 @@ pub fn execute(
                 },
                 .tasklist => {
                     const x = try processTasklistArgs(
-                        name,
+                        ns.name,
                         self.args,
-                        &.{"what"},
+                        extra_args,
                     );
                     try listTasklist(
                         allocator,
@@ -291,14 +304,17 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
             try utils.ensureOnly(
                 arguments.Parsed,
                 args,
-                (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
+                (MUTUAL_FIELDS ++ [_][]const u8{ "what", "type" }),
                 what,
             );
-            return .{ .Tag = what };
+            return .{ .Tag = .{ .name = what, .ctype = try toColType(args.type) } };
         }
 
         // make sure none of the incompatible fields are selected
-        return .{ .NamedSelection = what };
+        return .{ .NamedSelection = .{
+            .name = what,
+            .ctype = try toColType(args.type),
+        } };
     }
 
     try utils.ensureOnly(
@@ -309,6 +325,24 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
     );
 
     return .{ .Collections = {} };
+}
+
+fn toColType(string: ?[]const u8) !?Root.CollectionType {
+    const s = string orelse return null;
+    if (std.mem.eql(u8, s, "directory")) {
+        return .CollectionDirectory;
+    }
+    if (std.mem.eql(u8, s, "journal")) {
+        return .CollectionJournal;
+    }
+    if (std.mem.eql(u8, s, "tasklist")) {
+        return .CollectionTasklist;
+    }
+    return cli.throwError(
+        error.NoSuchCollection,
+        "Collectiont type '{s}' is not a valid type.",
+        .{s},
+    );
 }
 
 fn listCollections(
@@ -605,13 +639,13 @@ const TaggedItems = struct {
 
 fn listTagged(
     allocator: std.mem.Allocator,
-    t: []const u8,
+    t: utils.TagType(ListSelection, "Tag"),
     root: *Root,
     writer: anytype,
     opts: commands.Options,
 ) !void {
     const now = time.Time.now();
-    const st = try tags.parseInlineTags(allocator, t, now);
+    const st = try tags.parseInlineTags(allocator, t.name, now);
     defer allocator.free(st);
 
     var tl = try root.getTagDescriptorList();
@@ -626,37 +660,43 @@ fn listTagged(
     var tagged_items = TaggedItems.init(allocator);
     defer tagged_items.deinit();
 
-    for (root.getAllDescriptor(.CollectionDirectory)) |d| {
-        const dir = (try root.getDirectory(d.name)).?;
-        for (dir.getInfo().notes) |note| {
-            if (tags.hasUnion(note.tags, st)) {
-                try tagged_items.items.append(
-                    .{ .Note = .{ .directory = dir, .note = note } },
-                );
-            }
-        }
-    }
-
-    for (root.getAllDescriptor(.CollectionTasklist)) |d| {
-        const tlist = (try root.getTasklist(d.name)).?;
-        for (tlist.getInfo().tasks) |task| {
-            if (tags.hasUnion(task.tags, st)) {
-                try tagged_items.items.append(
-                    .{ .Task = .{ .tasklist = tlist, .task = task } },
-                );
-            }
-        }
-    }
-
-    for (root.getAllDescriptor(.CollectionJournal)) |d| {
-        var journal = (try root.getJournal(d.name)).?;
-        for (journal.getInfo().days) |day| {
-            const entries = try journal.getEntries(day);
-            for (entries) |e| {
-                if (tags.hasUnion(e.tags, st)) {
+    if (t.ctype == null or t.ctype.? == .CollectionDirectory) {
+        for (root.getAllDescriptor(.CollectionDirectory)) |d| {
+            const dir = (try root.getDirectory(d.name)).?;
+            for (dir.getInfo().notes) |note| {
+                if (tags.hasUnion(note.tags, st)) {
                     try tagged_items.items.append(
-                        .{ .Entry = .{ .journal = journal, .day = day, .entry = e } },
+                        .{ .Note = .{ .directory = dir, .note = note } },
                     );
+                }
+            }
+        }
+    }
+
+    if (t.ctype == null or t.ctype.? == .CollectionTasklist) {
+        for (root.getAllDescriptor(.CollectionTasklist)) |d| {
+            const tlist = (try root.getTasklist(d.name)).?;
+            for (tlist.getInfo().tasks) |task| {
+                if (tags.hasUnion(task.tags, st)) {
+                    try tagged_items.items.append(
+                        .{ .Task = .{ .tasklist = tlist, .task = task } },
+                    );
+                }
+            }
+        }
+    }
+
+    if (t.ctype == null or t.ctype.? == .CollectionJournal) {
+        for (root.getAllDescriptor(.CollectionJournal)) |d| {
+            var journal = (try root.getJournal(d.name)).?;
+            for (journal.getInfo().days) |day| {
+                const entries = try journal.getEntries(day);
+                for (entries) |e| {
+                    if (tags.hasUnion(e.tags, st)) {
+                        try tagged_items.items.append(
+                            .{ .Entry = .{ .journal = journal, .day = day, .entry = e } },
+                        );
+                    }
                 }
             }
         }
