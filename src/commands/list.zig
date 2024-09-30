@@ -145,58 +145,73 @@ pub fn execute(
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, self.sort, opts),
         .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
         .Tag => |t| try listTagged(allocator, t, root, writer, opts),
-        .NamedSelection => |ns| {
-            const collection_selector = selections.Selection{
-                .collection_name = ns.name,
-                .collection_provided = true,
-            };
+        .NamedSelection => |ns| try self.listNamedSelection(
+            allocator,
+            ns,
+            root,
+            writer,
+            opts,
+        ),
+    }
+}
 
-            const col = (try collection_selector.resolveReportError(root)).Collection;
-            const extra_args = &.{ "what", "type" };
-            switch (col) {
-                .directory => {
-                    const x = try processDirectoryArgs(
-                        ns.name,
-                        self.args,
-                        extra_args,
-                    );
-                    try self.listDirectory(
-                        allocator,
-                        x.Directory,
-                        root,
-                        writer,
-                        opts,
-                    );
-                },
-                .journal => {
-                    const x = try processJournalArgs(
-                        ns.name,
-                        self.args,
-                        extra_args,
-                    );
-                    try listJournal(
-                        x.Journal,
-                        root,
-                        writer,
-                        opts,
-                    );
-                },
-                .tasklist => {
-                    const x = try processTasklistArgs(
-                        ns.name,
-                        self.args,
-                        extra_args,
-                    );
-                    try listTasklist(
-                        allocator,
-                        x.Tasklist,
-                        root,
-                        writer,
-                        self.sort,
-                        opts,
-                    );
-                },
-            }
+fn listNamedSelection(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    ns: utils.TagType(ListSelection, "NamedSelection"),
+    root: *Root,
+    writer: anytype,
+    opts: commands.Options,
+) !void {
+    const collection_selector = selections.Selection{
+        .collection_name = ns.name,
+        .collection_provided = true,
+    };
+
+    const col = (try collection_selector.resolveReportError(root)).Collection;
+    const extra_args = &.{ "what", "type" };
+    switch (col) {
+        .directory => {
+            const x = try processDirectoryArgs(
+                ns.name,
+                self.args,
+                extra_args,
+            );
+            try self.listDirectory(
+                allocator,
+                x.Directory,
+                root,
+                writer,
+                opts,
+            );
+        },
+        .journal => {
+            const x = try processJournalArgs(
+                ns.name,
+                self.args,
+                extra_args,
+            );
+            try listJournal(
+                x.Journal,
+                root,
+                writer,
+                opts,
+            );
+        },
+        .tasklist => {
+            const x = try processTasklistArgs(
+                ns.name,
+                self.args,
+                extra_args,
+            );
+            try listTasklist(
+                allocator,
+                x.Tasklist,
+                root,
+                writer,
+                self.sort,
+                opts,
+            );
         },
     }
 }
