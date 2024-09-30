@@ -126,7 +126,7 @@ pub fn execute(
         .Collections => try listCollections(root, writer, opts),
         .Tags => try listTags(allocator, root, writer, opts),
         .Compilers => try listCompilers(allocator, root, writer, opts),
-        .Directory => |i| try self.listDirectory(i, root, writer, opts),
+        .Directory => |i| try self.listDirectory(allocator, i, root, writer, opts),
         .Journal => |i| try listJournal(i, root, writer, opts),
         .Tasklist => |i| try listTasklist(allocator, i, root, writer, self.sort, opts),
         .Stacks => |i| try listStacks(allocator, i, root, writer, opts),
@@ -146,6 +146,7 @@ pub fn execute(
                         &.{"what"},
                     );
                     try self.listDirectory(
+                        allocator,
                         x.Directory,
                         root,
                         writer,
@@ -526,7 +527,8 @@ fn sortTaskOrder(
 }
 
 fn listDirectory(
-    self: *Self,
+    self: *const Self,
+    allocator: std.mem.Allocator,
     d: utils.TagType(ListSelection, "Directory"),
     root: *Root,
     writer: anytype,
@@ -545,50 +547,43 @@ fn listDirectory(
 
     if (dir_info.notes.len == 0) {
         try writer.writeAll(" -- Directory Empty -- \n");
+        return;
     }
 
-    const pad = b: {
-        var max: usize = 0;
-        for (dir_info.notes) |n| {
-            max = @max(max, n.name.len);
-        }
-        break :b max;
-    };
-
-    switch (self.sort.how) {
-        .canonical, .alpha, .alphabetical => {
-            std.sort.insertion(
-                Root.Directory.Note,
-                dir_info.notes,
-                {},
-                Root.Directory.Note.sortAlphabetical,
-            );
-        },
-        .created => {
-            std.sort.insertion(
-                Root.Directory.Note,
-                dir_info.notes,
-                {},
-                Root.Directory.Note.sortCreated,
-            );
-        },
-        .modified => {
-            std.sort.insertion(
-                Root.Directory.Note,
-                dir_info.notes,
-                {},
-                Root.Directory.Note.sortModified,
-            );
-        },
-    }
+    var items = try std.ArrayList(Item).initCapacity(
+        allocator,
+        dir_info.notes.len,
+    );
+    defer items.deinit();
 
     for (dir_info.notes) |note| {
-        try writer.writeAll(note.name);
-        try writer.writeByteNTimes(' ', pad - note.name.len);
-        try writer.print(" - {s}", .{try note.modified.formatDateTime()});
-        try writer.writeAll("\n");
+        try items.append(
+            .{ .Note = .{ .directory = dir, .note = note } },
+        );
     }
-    _ = opts;
+
+    sortItems(items.items, self.sort.how);
+
+    try printItems(
+        allocator,
+        writer,
+        items.items,
+        (try root.getTagDescriptorList()).tags,
+        opts,
+    );
+}
+
+fn sortItems(items: []Item, how: Tasklist.SortingOptions.Method) void {
+    switch (how) {
+        inline else => |h| {
+            const sort_fn = switch (h) {
+                .alpha, .alphabetical, .canonical => Item.alphaDescending,
+                .modified => Item.modifiedDescending,
+                .created => Item.createdDescending,
+            };
+            std.sort.heap(Item, items, {}, sort_fn);
+        },
+    }
 }
 
 const TaggedItems = struct {
@@ -716,7 +711,7 @@ pub fn printItems(
                     .{ .fmt = colors.DIRECTORY },
                 );
                 try printer.addFmtText(
-                    "/{s}",
+                    " {s}",
                     .{name},
                     .{},
                 );

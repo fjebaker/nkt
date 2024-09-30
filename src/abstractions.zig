@@ -181,6 +181,17 @@ pub const Item = union(enum) {
         }
     }
 
+    /// TODO: replace getName with something more like this
+    fn getNameImpl(self: *const Item) []const u8 {
+        return switch (self.*) {
+            .Note => |i| i.note.name,
+            .Day => |i| i.day.name,
+            .Task => |i| i.task.outcome,
+            .Collection => |i| i.getDescriptor().name,
+            .Entry => unreachable,
+        };
+    }
+
     /// For sorting by creation date
     pub fn createdDescending(_: void, lhs: Item, rhs: Item) bool {
         return lhs.getCreated().lt(rhs.getCreated());
@@ -189,6 +200,16 @@ pub const Item = union(enum) {
     /// For sorting by modified date
     pub fn modifiedDescending(_: void, lhs: Item, rhs: Item) bool {
         return lhs.getModified().lt(rhs.getModified());
+    }
+
+    /// For sorting alphabetically
+    pub fn alphaDescending(_: void, lhs: Item, rhs: Item) bool {
+        const lhs_name = lhs.getNameImpl();
+        const rhs_name = rhs.getNameImpl();
+        return switch (std.ascii.orderIgnoreCase(lhs_name, rhs_name)) {
+            .eq, .lt => true,
+            .gt => false,
+        };
     }
 
     /// Get a string representing the content of this item
