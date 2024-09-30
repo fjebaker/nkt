@@ -138,6 +138,8 @@ pub fn nkt_main(
     // give a filesystem handle to the root
     root.fs = fs;
 
+    if (!try handleGenericArguments(root, out_fd.writer(), arg_iterator)) return;
+
     // execute the command
     commands.execute(
         allocator,
@@ -149,4 +151,38 @@ pub fn nkt_main(
     ) catch |err| {
         try handle_execution_error(out_fd.writer(), err);
     };
+}
+
+fn handleGenericArguments(
+    _: *Root,
+    writer: anytype,
+    itt: cli.ArgIterator,
+) !bool {
+    var dup_itt = itt.copy();
+    // discard the name
+    _ = try dup_itt.next();
+
+    // loop over all of the arguments once to check for generic arguments
+    while (try dup_itt.next()) |arg| {
+        if (arg.flag) {
+            if (arg.is('v', "version")) {
+                const version = @import("options").version;
+                try writer.print("nkt version {d}.{d}.{d} (schema: {s})\n", .{
+                    version.major,
+                    version.minor,
+                    version.patch,
+                    Root.schemaVersion(),
+                });
+                return false;
+            }
+            if (arg.is('h', "help")) {
+                try @import("commands/help.zig").printHelp(writer);
+                return false;
+            }
+        } else {
+            // stop after the first positional argument
+            break;
+        }
+    }
+    return true;
 }
