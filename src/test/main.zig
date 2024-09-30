@@ -145,7 +145,7 @@ test "smoke" {
     s.clearOutput();
     try exec(&s, &.{ "ls", "notes" });
     try std.testing.expectEqualStrings(
-        \\hello - 1970-01-01 00:00:10
+        \\directory:notes hello
         \\
     ,
         s.stdout.items,
@@ -155,5 +155,18 @@ test "smoke" {
     try std.testing.expectError(
         error.AmbiguousSelection,
         exec(&s, &.{ "ls", "diary" }),
+    );
+
+    // list tasks
+    s.clearOutput();
+    try exec(&s, &.{ "ls", "todo" });
+    try std.testing.expectEqualStrings(
+        \\
+        \\   1   10592d 12h 59m   | /b2ac5 |   do something
+        \\   0   10592d 12h 59m   | /79fc7 |   do something - soon
+        \\
+        \\
+    ,
+        s.stdout.items,
     );
 }
