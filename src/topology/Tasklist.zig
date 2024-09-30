@@ -395,10 +395,10 @@ pub fn taskSorter(opts: SortingOptions, lhs: Task, rhs: Task) bool {
 
     if (both_same) {
         switch (opts.how) {
-            .canonical, .alpha, .alphabetical => {
+            .alpha, .alphabetical => {
                 return !std.ascii.lessThanIgnoreCase(lhs.outcome, rhs.outcome);
             },
-            .created => {
+            .canonical, .created => {
                 return !lhs.created.lt(rhs.created);
             },
             .modified => {
