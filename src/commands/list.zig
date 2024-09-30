@@ -74,23 +74,31 @@ pub const arguments = cli.Arguments(&.{
         .arg = "--archived",
         .help = "If a tasklist is selected, enables listing tasks marked as 'archived'",
     },
+    .{
+        .arg = "--date",
+        .help = "Show more or additional date infomation (e.g. when something was created).",
+    },
 });
 
 const ListSelection = union(enum) {
     Directory: struct {
+        date: bool = false,
         note: ?[]const u8,
         name: []const u8,
     },
     Journal: struct {
+        date: bool = false,
         name: []const u8,
     },
     Tasklist: struct {
+        date: bool = false,
         name: []const u8,
         done: bool,
         hash: bool,
         archived: bool,
     },
     NamedSelection: struct {
+        date: bool = false,
         name: []const u8,
         ctype: ?Root.CollectionType = null,
     },
@@ -98,6 +106,7 @@ const ListSelection = union(enum) {
     Tags: void,
     Stacks: void,
     Tag: struct {
+        date: bool = false,
         name: []const u8,
         ctype: ?Root.CollectionType = null,
     },
@@ -169,7 +178,7 @@ fn listNamedSelection(
     };
 
     const col = (try collection_selector.resolveReportError(root)).Collection;
-    const extra_args = &.{ "what", "type" };
+    const extra_args = &.{ "what", "type", "date" };
     switch (col) {
         .directory => {
             const x = try processDirectoryArgs(
@@ -225,13 +234,14 @@ fn processTasklistArgs(
     try utils.ensureOnly(
         arguments.Parsed,
         args,
-        (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash" } ++ extra_fields),
+        (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "hash", "date" } ++ extra_fields),
         "tasklist",
     );
     return .{ .Tasklist = .{
         .name = name,
         .done = args.done,
         .hash = args.hash,
+        .date = args.date,
         .archived = args.archived,
     } };
 }
@@ -244,12 +254,13 @@ fn processDirectoryArgs(
     try utils.ensureOnly(
         arguments.Parsed,
         args,
-        (MUTUAL_FIELDS ++ [_][]const u8{"what"} ++ extra_fields),
+        (MUTUAL_FIELDS ++ [_][]const u8{ "what", "date" } ++ extra_fields),
         "directory",
     );
     return .{ .Directory = .{
         .name = name,
         .note = args.what,
+        .date = args.date,
     } };
 }
 fn processJournalArgs(
@@ -261,10 +272,13 @@ fn processJournalArgs(
     try utils.ensureOnly(
         arguments.Parsed,
         args,
-        MUTUAL_FIELDS ++ extra_fields,
+        MUTUAL_FIELDS ++ [_][]const u8{"date"} ++ extra_fields,
         "journal",
     );
-    return .{ .Journal = .{ .name = name } };
+    return .{ .Journal = .{
+        .name = name,
+        .date = args.date,
+    } };
 }
 
 fn processArguments(args: arguments.Parsed) !ListSelection {
@@ -319,10 +333,14 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
             try utils.ensureOnly(
                 arguments.Parsed,
                 args,
-                (MUTUAL_FIELDS ++ [_][]const u8{ "what", "type" }),
+                (MUTUAL_FIELDS ++ [_][]const u8{ "what", "type", "date" }),
                 what,
             );
-            return .{ .Tag = .{ .name = what, .ctype = try toColType(args.type) } };
+            return .{ .Tag = .{
+                .name = what,
+                .ctype = try toColType(args.type),
+                .date = args.date,
+            } };
         }
 
         // make sure none of the incompatible fields are selected
@@ -656,6 +674,7 @@ fn listDirectory(
         items.items,
         (try root.getTagDescriptorList()).tags,
         opts,
+        .{ .created = d.date },
     );
 }
 
@@ -726,8 +745,13 @@ fn listTagged(
         list.items,
         (try root.getTagDescriptorList()).tags,
         opts,
+        .{ .created = t.date },
     );
 }
+
+const PrintOptions = struct {
+    created: bool = false,
+};
 
 pub fn printItems(
     allocator: std.mem.Allocator,
@@ -735,6 +759,7 @@ pub fn printItems(
     items: []const Item,
     tag_descriptors: []const tags.Tag.Descriptor,
     opts: commands.Options,
+    popts: PrintOptions,
 ) !void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -748,6 +773,13 @@ pub fn printItems(
 
     for (items) |nd| {
         const name = try nd.getName(alloc);
+        if (popts.created) {
+            try printer.addFmtText(
+                "{s} ",
+                .{try nd.getCreated().formatDateTime()},
+                .{ .fmt = colors.DIM },
+            );
+        }
         switch (nd) {
             .Entry => {
                 try printer.addFmtText(
