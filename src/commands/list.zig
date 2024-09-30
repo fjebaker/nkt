@@ -421,6 +421,12 @@ fn listCompilers(
     try printer.drain(writer);
 }
 
+const Counter = struct {
+    notes: usize = 0,
+    entries: usize = 0,
+    tasks: usize = 0,
+};
+
 fn listTags(
     allocator: std.mem.Allocator,
     root: *Root,
@@ -430,6 +436,27 @@ fn listTags(
     var tdl = try root.getTagDescriptorList();
     tdl.sort(.Alphabetical);
 
+    const items = try utils.getAllItems(allocator, root, .{});
+    defer allocator.free(items);
+
+    var counter = std.StringHashMap(Counter).init(allocator);
+    defer counter.deinit();
+
+    // get the number of each tagged
+    for (items) |item| {
+        const ts = item.getTags();
+        for (ts) |tag| {
+            const it = try counter.getOrPut(tag.name);
+            if (!it.found_existing) it.value_ptr.* = .{};
+            switch (item) {
+                .Note => it.value_ptr.notes += 1,
+                .Entry => it.value_ptr.entries += 1,
+                .Task => it.value_ptr.tasks += 1,
+                else => unreachable,
+            }
+        }
+    }
+
     var printer = FormatPrinter.init(allocator, .{
         .pretty = !opts.piped,
         .tag_descriptors = tdl.tags,
@@ -438,7 +465,14 @@ fn listTags(
 
     try printer.addText("Tags:\n", .{});
     for (tdl.tags) |info| {
-        try printer.addFmtText(" - @{s}\n", .{info.name}, .{});
+        const count: Counter = counter.get(info.name) orelse .{};
+        try printer.addFmtText(" - @{s} ", .{info.name}, .{});
+        try printer.addFmtText(
+            "(items: {d})",
+            .{count.entries + count.notes + count.tasks},
+            .{ .fmt = colors.DIM },
+        );
+        try printer.addText("\n", .{});
     }
     try printer.addText("\n", .{});
 
