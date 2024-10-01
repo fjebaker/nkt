@@ -11,18 +11,20 @@ const Root = @import("../topology/Root.zig");
 
 const Self = @This();
 
-const SelectArgs = cli.Arguments(selections.selectHelp(
+const SelectArgs = selections.selectHelp(
     "item",
     "Completion for an item selection.",
     .{ .required = false },
-));
+);
+
+const SelectArguments = cli.Arguments(SelectArgs);
 
 pub const arguments = cli.Commands(
     .{
         .commands = &.{
             .{
                 .name = "list",
-                .args = cli.Arguments(&.{
+                .args = &.{
                     .{
                         .arg = "--collection type",
                         .help = "List the names of all collection names of a given type.",
@@ -35,11 +37,13 @@ pub const arguments = cli.Commands(
                         .arg = "--tags",
                         .help = "List the names of all tags (with the `@` prefix).",
                     },
-                }),
+                },
+                .help = "List completion helper.",
             },
             .{
                 .name = "item",
                 .args = SelectArgs,
+                .help = "Selection completion helper.",
             },
         },
     },
@@ -176,7 +180,7 @@ fn executeInternal(
         },
         .item => |args| {
             const selection = try selections.fromArgsForgiving(
-                SelectArgs.Parsed,
+                SelectArguments.Parsed,
                 args.item,
                 args,
             );
