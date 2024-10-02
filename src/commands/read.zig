@@ -49,6 +49,10 @@ pub const arguments = cli.Arguments(selections.selectHelp(
         .help = "Display all items (overwrites `--limit`)",
     },
     .{
+        .arg = "-t/--tasks name",
+        .help = "Interweave changes to the (default tasklist) tasks in the printout of a journal. This argument can be `none` / `off` to disable intereacing, `all` to show all tasklists, or a comma seperated list of tasklists to include. Default is to show for `all` except those ignored in the configuration file.",
+    },
+    .{
         .arg = "-p/--page",
         .help = "Read the item through the configured pager",
     },
@@ -57,6 +61,7 @@ pub const arguments = cli.Arguments(selections.selectHelp(
 tags: []const []const u8,
 args: arguments.Parsed,
 selection: selections.Selection,
+include_tasks: ?[]const []const u8,
 
 fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
     const tag_name = ttags.getTagString(arg) catch |err| {
@@ -99,10 +104,26 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         args.item,
         args,
     );
+
+    const include_tasks = b: {
+        if (args.tasks) |tasks| {
+            var task_itt = std.mem.splitAny(u8, tasks, ",");
+            var task_list = std.ArrayList([]const u8).init(allocator);
+            defer task_list.deinit();
+            while (task_itt.next()) |opt| {
+                try task_list.append(opt);
+            }
+            break :b try task_list.toOwnedSlice();
+        } else {
+            break :b null;
+        }
+    };
+
     return .{
         .tags = try tag_list.toOwnedSlice(),
         .selection = selection,
         .args = args,
+        .include_tasks = include_tasks,
     };
 }
 
@@ -126,6 +147,30 @@ pub fn execute(
 
     var item = try self.selection.resolveReportError(root);
 
+    // validate the task argument
+    switch (item) {
+        .Day => {},
+        .Collection => |c| {
+            switch (c) {
+                .journal => {},
+                else => {
+                    if (self.include_tasks != null) return cli.throwError(
+                        cli.CLIErrors.BadArgument,
+                        "Cannot specify -t/--tasks when selecting '{s}'",
+                        .{@tagName(c)},
+                    );
+                },
+            }
+        },
+        else => {
+            if (self.include_tasks != null) return cli.throwError(
+                cli.CLIErrors.BadArgument,
+                "Cannot specify -t/--tasks when selecting '{s}'",
+                .{@tagName(item)},
+            );
+        },
+    }
+
     const selected_tags = try utils.parseAndAssertValidTags(
         allocator,
         root,
@@ -146,7 +191,7 @@ pub fn execute(
 
     switch (item) {
         .Day => |*day| {
-            const tasks = try root.getAllTasks(allocator, .{ .use_exclude_list = true });
+            const tasks = try self.getRelevantTasks(allocator, root);
             defer allocator.free(tasks);
 
             var task_events = try abstractions.TaskEventList.init(allocator, tasks);
@@ -201,6 +246,54 @@ pub fn execute(
     try bprinter.drain(writer);
 }
 
+fn getRelevantTasks(
+    self: Self,
+    allocator: std.mem.Allocator,
+    root: *Root,
+) ![]const Tasklist.Task {
+    if (self.include_tasks) |it| {
+        if (it.len == 1 and !std.mem.eql(u8, "all", it[0])) {
+            var task_list = std.ArrayList(Tasklist.Task).init(allocator);
+            defer task_list.deinit();
+
+            if (it.len == 1) {
+                const no_tasks = std.mem.eql(u8, "none", it[0]) or
+                    std.mem.eql(u8, "off", it[0]);
+                if (no_tasks) {
+                    return try task_list.toOwnedSlice();
+                }
+            }
+
+            // validate the tasklist argument
+            for (it) |name| {
+                if (std.mem.eql(u8, "all", name) or std.mem.eql(u8, "no", name)) {
+                    return cli.throwError(
+                        cli.CLIErrors.BadArgument,
+                        "Cannot specify 'all' or 'no' when also specifying tasklists",
+                        .{},
+                    );
+                }
+
+                const tl = (try root.getTasklist(name)) orelse
+                    return cli.throwError(
+                    Root.Error.NoSuchCollection,
+                    "Tasklist '{s}' does not exist",
+                    .{name},
+                );
+
+                try task_list.appendSlice(tl.getInfo().tasks);
+            }
+
+            return try task_list.toOwnedSlice();
+        }
+    }
+
+    return try root.getAllTasks(
+        allocator,
+        .{ .use_exclude_list = true },
+    );
+}
+
 fn extractLineLimit(args: arguments.Parsed) !?usize {
     if (args.all) return null;
     return args.limit;
@@ -217,7 +310,7 @@ fn readJournal(
 ) !void {
     std.log.default.debug("Reading journal '{s}'", .{j.descriptor.name});
 
-    const tasks = try root.getAllTasks(allocator, .{ .use_exclude_list = true });
+    const tasks = try self.getRelevantTasks(allocator, root);
     defer allocator.free(tasks);
 
     var task_events = try abstractions.TaskEventList.init(allocator, tasks);
