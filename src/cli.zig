@@ -51,6 +51,7 @@ const Clippy = clippy.ClippyInterface(
 pub const CLIErrors = clippy.Error;
 pub const ArgumentDescriptor = clippy.ArgumentDescriptor;
 pub const ArgIterator = Clippy.ArgIterator;
+pub const Arg = Clippy.Arg;
 pub const Arguments = Clippy.Arguments;
 pub const Commands = Clippy.Commands;
 

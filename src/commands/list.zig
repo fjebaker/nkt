@@ -39,6 +39,7 @@ pub const arguments = cli.Arguments(&.{
     },
     .{
         .arg = "what",
+        .display_name = "what [additional...]",
         .help = "Can be 'tags', 'compilers', a specific @tag, or the name of a collection.",
         .completion = "{compadd tags compilers $(nkt completion list --all-collections)}",
     },
@@ -112,7 +113,7 @@ const ListSelection = union(enum) {
     Stacks: void,
     Tag: struct {
         date: bool = false,
-        name: []const u8,
+        names: []const []const u8,
         ctype: ?Root.CollectionType = null,
     },
     Compilers: void,
@@ -122,8 +123,10 @@ args: arguments.Parsed,
 selection: ListSelection,
 sort: Tasklist.SortingOptions,
 
-pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    const args_with_positional = try arguments.parseAllKeepPositional(alloc, itt);
+    const args = args_with_positional.parsed;
+
     const sort_method = std.meta.stringToEnum(
         Tasklist.SortingOptions.Method,
         args.sort,
@@ -134,9 +137,14 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             .{args.sort},
         );
     };
+
     return .{
         .args = args,
-        .selection = try processArguments(args),
+        .selection = try processArguments(
+            alloc,
+            args,
+            args_with_positional.positional,
+        ),
         .sort = .{ .how = sort_method },
     };
 }
@@ -287,7 +295,11 @@ fn processJournalArgs(
     } };
 }
 
-fn processArguments(args: arguments.Parsed) !ListSelection {
+fn processArguments(
+    allocator: std.mem.Allocator,
+    args: arguments.Parsed,
+    additional: []const cli.Arg,
+) !ListSelection {
     var count: usize = 0;
     if (args.journal != null) count += 1;
     if (args.directory != null) count += 1;
@@ -342,8 +354,27 @@ fn processArguments(args: arguments.Parsed) !ListSelection {
                 (MUTUAL_FIELDS ++ [_][]const u8{ "what", "type", "date" }),
                 what,
             );
+
+            var tag_names = try allocator.alloc([]const u8, additional.len + 1);
+            errdefer allocator.free(tag_names);
+
+            tag_names[0] = what;
+
+            // ensure the additional arguments are what we would expect
+            for (additional, 1..) |add, i| {
+                if (add.string[0] != '@') {
+                    return cli.throwError(
+                        cli.CLIErrors.BadArgument,
+                        "'{s}' is invalid; when listing tags, all positional arguments must be tags.",
+                        .{add.string},
+                    );
+                } else {
+                    tag_names[i] = add.string;
+                }
+            }
+
             return .{ .Tag = .{
-                .name = what,
+                .names = tag_names,
                 .ctype = try toColType(args.type),
                 .date = args.date,
             } };
@@ -706,16 +737,25 @@ fn listTagged(
     opts: commands.Options,
 ) !void {
     const now = time.Time.now();
-    const st = try tags.parseInlineTags(allocator, t.name, now);
-    defer allocator.free(st);
 
     var tl = try root.getTagDescriptorList();
-    if (tl.findInvalidTags(st)) |_t| {
-        return cli.throwError(
-            error.InvalidTag,
-            "'{s}' is not a valid tag",
-            .{_t.name},
-        );
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const tag_groups = try allocator.alloc([]const tags.Tag, t.names.len);
+    defer allocator.free(tag_groups);
+
+    for (tag_groups, t.names) |*tg, name| {
+        tg.* = try tags.parseInlineTags(alloc, name, now);
+        if (tl.findInvalidTags(tg.*)) |_t| {
+            return cli.throwError(
+                error.InvalidTag,
+                "'{s}' is not a valid tag",
+                .{_t.name},
+            );
+        }
     }
 
     const items = try utils.getAllItems(allocator, root, .{
@@ -737,9 +777,13 @@ fn listTagged(
     var list = try std.ArrayList(Item).initCapacity(allocator, items.len);
     defer list.deinit();
 
+    // filter those that apply
     for (items) |item| {
-        if (tags.hasUnion(item.getTags(), st)) {
-            list.appendAssumeCapacity(item);
+        for (tag_groups) |tg| {
+            if (tags.isSubsetOf(item.getTags(), tg)) {
+                list.appendAssumeCapacity(item);
+                break;
+            }
         }
     }
 

@@ -169,6 +169,21 @@ pub fn hasUnion(mine: []const Tag, theirs: []const Tag) bool {
     return false;
 }
 
+/// Returns true if all of the tags in `theirs` are present in `mine`.
+pub fn isSubsetOf(mine: []const Tag, theirs: []const Tag) bool {
+    for (theirs) |t| {
+        var has_tag: bool = false;
+        for (mine) |m| {
+            if (m.eql(t)) {
+                has_tag = true;
+                break;
+            }
+        }
+        if (!has_tag) return false;
+    }
+    return true;
+}
+
 /// Parse tags that are inline with the text such as "hello @world".  Returns a
 /// list of tags. Caller owns the memory.  The tags do not copy strings from
 /// the input text, so the input text must outlive the tags.
