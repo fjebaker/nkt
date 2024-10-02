@@ -148,11 +148,11 @@ pub fn getDayByPath(self: *Journal, name: []const u8) ?Day {
 }
 
 /// Get the day with `name` or else create a new day with that name.
-pub fn getDayOrNew(self: *Journal, name: []const u8) !Day {
-    return self.getDay(name) orelse {
+fn getDayPtrOrNew(self: *Journal, name: []const u8) !*Day {
+    return self.getDayPtr(name) orelse {
         const new = try self.newDayFromName(name);
         try self.addNewDay(new);
-        return new;
+        return self.getDayPtr(new.name).?;
     };
 }
 
@@ -332,7 +332,7 @@ fn getDayIndex(self: *Journal, day_name: []const u8) ?usize {
 
 /// Add an `Entry` to the day with name `day_name`. Does not write to file
 /// until `writeChanges` is called.
-pub fn addNewEntryToPath(
+fn addNewEntryToPath(
     self: *Journal,
     path: []const u8,
     entry: Entry,
@@ -347,7 +347,7 @@ pub fn addNewEntryToPath(
 
 /// Add an `Entry` to a given `Day`. Does not write to file until
 /// `writeChanges` is called.
-pub fn addNewEntryToDay(
+fn addNewEntryToDay(
     self: *Journal,
     day: Day,
     entry: Entry,
@@ -361,10 +361,13 @@ pub fn addEntry(self: *Journal, entry: Entry) !Day {
     const alloc = self.allocator;
     // get the day this entry belongs to
     const day_name = try timeToName(alloc, entry.created);
-    const day = try self.getDayOrNew(day_name);
+    const day = try self.getDayPtrOrNew(day_name);
 
-    try self.addNewEntryToDay(day, entry);
-    return day;
+    try self.addNewEntryToDay(day.*, entry);
+
+    day.modified = entry.created;
+
+    return day.*;
 }
 
 /// Get a pointer to a known entry.

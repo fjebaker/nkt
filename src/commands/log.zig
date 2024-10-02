@@ -227,6 +227,6 @@ fn addEntryToJournal(
 
     try writer.print(
         "Written entry {s} in journal '{s}'\n",
-        .{ try day.created.formatDateTime(), j.descriptor.name },
+        .{ try day.modified.formatDateTime(), j.descriptor.name },
     );
 }
