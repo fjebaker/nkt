@@ -280,7 +280,7 @@ pub fn Searcher(comptime Item: type) type {
 
             // if the new needle is the old needle with some new characters, no
             // need to research everything, just search in the previous results
-            if (std.mem.startsWith(u8, needle, self.previous_needle)) {
+            if (needle.len > 1 and std.mem.startsWith(u8, needle, self.previous_needle)) {
                 const start = self.result_buffer.len - self.num_previous_matches;
                 return self.result_buffer[start..];
             }
