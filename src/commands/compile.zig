@@ -123,7 +123,17 @@ fn compileNote(
     const ext = note.getExtension();
 
     const compiler = try self.getCompiler(allocator, root, ext);
-    return try compiler.compileNote(allocator, note, root, .{});
+    return compiler.compileNote(allocator, note, root, .{}) catch |err|
+        switch (err) {
+        error.FileNotFound => {
+            return cli.throwError(
+                err,
+                "No such command: '{s}'",
+                .{compiler.command[0]},
+            );
+        },
+        else => return err,
+    };
 }
 
 fn getCompiler(

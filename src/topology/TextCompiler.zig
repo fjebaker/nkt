@@ -342,7 +342,9 @@ fn runCommand(
 
     const term = try proc.wait();
     switch (term) {
-        .Exited => {},
+        .Exited => |code| {
+            if (code != 0) return Error.CompileError;
+        },
         .Signal => return Error.CompileInterrupted,
         else => return Error.CompileError,
     }
