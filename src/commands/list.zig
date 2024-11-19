@@ -878,7 +878,7 @@ pub fn printItems(
         const item_tags = nd.getTags();
 
         if (item_tags.len > 0) {
-            try printer.addText(" [tags:", .{ .fmt = colors.DIM });
+            try printer.addText(" [", .{ .fmt = colors.DIM });
 
             for (item_tags) |tag| {
                 const fmt = FormatPrinter.getTagFormat(
@@ -888,7 +888,7 @@ pub fn printItems(
                 try printer.addFmtText(" @{s}", .{tag.name}, .{ .fmt = fmt });
             }
 
-            try printer.addText("]", .{ .fmt = colors.DIM });
+            try printer.addText(" ]", .{ .fmt = colors.DIM });
         }
 
         try printer.addText("\n", .{});
