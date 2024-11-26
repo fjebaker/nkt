@@ -871,11 +871,18 @@ fn implArgsPrefixed(
                 // trim the collection name
                 selection.collection_name = ss[0..ind];
                 selection.collection_name_inline = true;
-                break :b try Selector.initFromString(ss[ind + 1 ..]);
+                selection.collection_provided = true;
+                if (ind + 1 < ss.len) {
+                    break :b try Selector.initFromString(ss[ind + 1 ..]);
+                } else {
+                    break :b null;
+                }
             }
             break :b try Selector.initFromString(ss);
         };
-        try addSelector(&selection, selector);
+        if (selector) |sel| {
+            try addSelector(&selection, sel);
+        }
     }
 
     if (try addFlags(
