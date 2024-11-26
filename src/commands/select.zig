@@ -11,13 +11,37 @@ const Self = @This();
 
 pub const short_help = "Select an item or collection.";
 pub const long_help =
-    \\Select an item or collection
+    \\Select an item or collection. There are a number of different ways that
+    \\the selector can resolve items. The collection name can either be provided
+    \\with the appropriate flag (e.g. `--directory` or `--journal`), or can be
+    \\hinted using the
+    \\
+    \\    collection_name:selector
+    \\
+    \\syntax. This syntax is supposed to make querying and fetching items a little
+    \\less cumbersome, but can be imprecise. The flag versions can be reliably used
+    \\in scripts or in note references to select items.
+    \\
+    \\## Examples
+    \\
+    \\Selecting the first task by index:
+    \\
+    \\    nkt select t0
+    \\
+    \\Selecting the 5th task in the tasklist "reading"
+    \\
+    \\    nkt select t5 --tasklist reading
+    \\    nkt select reading:t5
+    \\
+    \\Selecting the note `linux.bash`:
+    \\
+    \\    nkt select linux.bash
 ;
 
 pub const arguments = cli.Arguments(
     selections.selectHelp(
         "item",
-        "The selection item",
+        "The main selection query.",
         .{ .required = false },
     ),
 );

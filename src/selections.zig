@@ -272,9 +272,29 @@ pub const Selection = struct {
     /// True if the collection was specified on the command line
     collection_provided: bool = false,
 
+    /// True if the collection name was set by `collection_name:specifier`
+    collection_name_inline: bool = false,
+
     /// Initialize a selection query
     pub fn init() Selection {
         return .{};
+    }
+
+    fn maybeSetCollectionName(s: *Selection, name: ?[]const u8) !void {
+        if (s.collection_name_inline) {
+            if (name == null) {
+                // don't update the name
+                return;
+            }
+            return cli.throwError(
+                Error.AmbiguousSelection,
+                "Collection name is specified by both a flag and the inline syntax. Can only use one",
+                .{},
+            );
+        }
+
+        s.collection_name = name;
+        s.collection_provided = name != null;
     }
 
     fn resolveCollection(s: Selection, root: *Root) !ResolveResult {
@@ -651,9 +671,8 @@ fn addFlags(
                             selection.selector = .{
                                 .ByDate = time.shiftBack(time.Time.now(), i),
                             };
-                            selection.collection_name = directory;
+                            try selection.maybeSetCollectionName(directory);
                             selection.collection_type = .CollectionDirectory;
-                            selection.collection_provided = directory != null;
                             return null;
                         },
                         else => {},
@@ -667,8 +686,7 @@ fn addFlags(
                     .has = ct,
                     .was_given = .CollectionTasklist,
                 };
-                selection.collection_name = journal;
-                selection.collection_provided = journal != null;
+                try selection.maybeSetCollectionName(journal);
             },
             .CollectionTasklist => {
                 if (journal != null) return .{
@@ -679,8 +697,7 @@ fn addFlags(
                     .has = ct,
                     .was_given = .CollectionDirectory,
                 };
-                selection.collection_name = tasklist;
-                selection.collection_provided = tasklist != null;
+                try selection.maybeSetCollectionName(tasklist);
             },
             .CollectionDirectory => {
                 if (journal != null) return .{
@@ -691,8 +708,7 @@ fn addFlags(
                     .has = ct,
                     .was_given = .CollectionTasklist,
                 };
-                selection.collection_name = directory;
-                selection.collection_provided = directory != null;
+                try selection.maybeSetCollectionName(directory);
             },
         }
     } else {
@@ -849,7 +865,16 @@ fn implArgsPrefixed(
     var selection = Selection.init();
 
     if (selector_string) |ss| {
-        const selector = try Selector.initFromString(ss);
+        const selector = b: {
+            // allow `collection_name:specifer` selections
+            if (std.mem.indexOfScalar(u8, ss, ':')) |ind| {
+                // trim the collection name
+                selection.collection_name = ss[0..ind];
+                selection.collection_name_inline = true;
+                break :b try Selector.initFromString(ss[ind + 1 ..]);
+            }
+            break :b try Selector.initFromString(ss);
+        };
         try addSelector(&selection, selector);
     }
 
@@ -901,6 +926,44 @@ fn implArgsPrefixed(
     }
 
     return selection;
+}
+
+const TestArgs = struct {
+    test_journal: ?[]const u8 = null,
+    test_directory: ?[]const u8 = null,
+    test_tasklist: ?[]const u8 = null,
+    test_time: ?[]const u8 = null,
+    test_last: bool = false,
+};
+
+fn testFromArgs(selector: ?[]const u8, args: TestArgs, comptime expected: Selection) !void {
+    const res = try implArgsPrefixed("test_", TestArgs, selector, args, false);
+    try std.testing.expectEqualDeep(expected, res);
+}
+
+test "fromArgs" {
+    try testFromArgs("t1", .{}, .{
+        .collection_type = .CollectionTasklist,
+        .selector = .{ .ByQualifiedIndex = .{ .qualifier = 't', .index = 1 } },
+    });
+
+    try testFromArgs("newsboat:t1", .{}, .{
+        .collection_name = "newsboat",
+        .collection_type = .CollectionTasklist,
+        .collection_name_inline = true,
+        .selector = .{ .ByQualifiedIndex = .{ .qualifier = 't', .index = 1 } },
+    });
+
+    try testFromArgs("thing:note.name", .{}, .{
+        .collection_name = "thing",
+        .collection_name_inline = true,
+        .selector = .{ .ByName = "note.name" },
+    });
+
+    try std.testing.expectError(
+        Error.AmbiguousSelection,
+        testFromArgs("newsboat:t1", .{ .test_tasklist = "newsboat" }, .{}),
+    );
 }
 
 pub const SelectHelpOptions = struct {
