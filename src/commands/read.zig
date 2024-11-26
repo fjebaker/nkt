@@ -99,6 +99,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
             args.item = null;
         }
     }
+
     const selection = try selections.fromArgs(
         arguments.Parsed,
         args.item,

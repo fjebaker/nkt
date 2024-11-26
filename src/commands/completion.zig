@@ -65,16 +65,6 @@ pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         const cmd = (try itt.next()).?;
         _ = try args.parseArg(cmd);
 
-        if (args.t.commands) |c| {
-            switch (c) {
-                .item => {
-                    // eat the first one, as that will be the command argument
-                    _ = try itt.next();
-                },
-                else => {},
-            }
-        }
-
         while (try itt.next()) |arg| {
             if (!args.parseArgForgiving(arg)) {
                 try list.append(arg.string);
@@ -184,6 +174,7 @@ fn executeInternal(
                 args.item,
                 args,
             );
+
             if (selection.collection_type) |ctype| {
                 switch (ctype) {
                     .CollectionDirectory => try listNotesInDirectory(
@@ -201,6 +192,20 @@ fn executeInternal(
 
                         // if (selection.selector) |_| {};
                     },
+                    else => {},
+                }
+            } else if (selection.collection_name != null) {
+                const col = (try selection.resolveOrNull(root)) orelse return;
+                switch (col.Collection) {
+                    .directory => {
+                        try listNotesInDirectory(
+                            writer,
+                            root,
+                            selection.collection_name,
+                            allocator,
+                        );
+                    },
+                    // TODO: all the other collection types
                     else => {},
                 }
             } else {
