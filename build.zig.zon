@@ -25,7 +25,7 @@
         },
         .fuzzig = .{
             .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
-            .hash = "1220ec64a1512e2050157a6450fba790df2312b3d23f64402195df01b0d850ff26c3",
+            .hash = "1220666c7afe30f6a51ae477f7755e9b6a5341723bfcb5de349817b5d0912b96f9ad",
         },
     },
 }
