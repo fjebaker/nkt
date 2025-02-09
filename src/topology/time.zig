@@ -341,7 +341,7 @@ pub fn isDate(string: []const u8) bool {
 /// Is the string a HH:MM:SS format?
 pub fn isTime(string: []const u8) bool {
     if (formattedDigitFilter(':', string)) |count| {
-        if (count == 2) return true;
+        if (count >= 1) return true;
     }
     return false;
 }
@@ -416,10 +416,10 @@ pub fn shiftBack(t: Time, index: usize) Date {
 
 /// Convert a string to an HH MM SS timestamp
 pub fn toTimestamp(string: []const u8) !Timestamp {
-    if (string.len < 8) return Error.DateTooShort;
+    if (string.len < 5) return Error.DateTooShort;
     const hour = try std.fmt.parseInt(u8, string[0..2], 10);
     const minute = try std.fmt.parseInt(u8, string[3..5], 10);
-    const seconds = try std.fmt.parseInt(u8, string[6..8], 10);
+    const seconds = if (string.len > 5) try std.fmt.parseInt(u8, string[6..8], 10) else 0;
     return .{ .hour = hour, .minute = minute, .second = seconds };
 }
 
@@ -683,6 +683,12 @@ test "time parsing" {
         nowish,
         "monday 18:00:00",
         nowish.shiftDays(5).shiftHours(5),
+    );
+    // seconds should be optional
+    try testTimeParsing(
+        nowish,
+        "monday 19:03",
+        nowish.shiftDays(5).shiftHours(6).shiftMinutes(3),
     );
     try testTimeParsing(
         nowish,
