@@ -184,6 +184,7 @@ fn executeInternal(
                         root,
                         selection.collection_name,
                         allocator,
+                        null,
                     ),
                     .CollectionJournal => {
                         // are we generating completion for the times?
@@ -205,6 +206,7 @@ fn executeInternal(
                             root,
                             selection.collection_name,
                             allocator,
+                            selection.collection_name,
                         );
                     },
                     // TODO: all the other collection types
@@ -216,7 +218,7 @@ fn executeInternal(
                     return;
                 }
                 // TODO: if it's date-like, list from diary
-                try listNotesInDirectory(writer, root, null, allocator);
+                try listNotesInDirectory(writer, root, null, allocator, null);
             }
         },
     }
@@ -265,6 +267,7 @@ fn listNotesInDirectory(
     root: *Root,
     name: ?[]const u8,
     allocator: std.mem.Allocator,
+    prefix: ?[]const u8,
 ) !void {
     _ = allocator;
     const dir_name = name orelse root.info.default_directory;
@@ -273,7 +276,11 @@ fn listNotesInDirectory(
     const dir_info = dir.getInfo();
 
     for (dir_info.notes) |note| {
-        try writer.print("{s} ", .{note.name});
+        if (prefix) |p| {
+            try writer.print("{s}:{s} ", .{ p, note.name });
+        } else {
+            try writer.print("{s} ", .{note.name});
+        }
     }
 }
 
