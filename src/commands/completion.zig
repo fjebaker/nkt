@@ -86,6 +86,8 @@ pub fn execute(
 ) !void {
     if (self.args != null) {
         self.executeInternal(allocator, root, writer, opts) catch |err| {
+            // for debug builds, actually give the error
+            if (@import("builtin").mode == .Debug) return err;
             std.log.default.debug("completion error: {any}", .{err});
         };
     } else {
