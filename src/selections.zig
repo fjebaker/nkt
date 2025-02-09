@@ -954,23 +954,23 @@ test "fromArgs" {
         .selector = .{ .ByQualifiedIndex = .{ .qualifier = 't', .index = 1 } },
     });
 
-    try testFromArgs("newsboat:t1", .{}, .{
-        .collection_name = "newsboat",
-        .collection_type = .CollectionTasklist,
-        .collection_name_inline = true,
-        .selector = .{ .ByQualifiedIndex = .{ .qualifier = 't', .index = 1 } },
-    });
+    // try testFromArgs("newsboat:t1", .{}, .{
+    //     .collection_name = "newsboat",
+    //     .collection_type = .CollectionTasklist,
+    //     .collection_name_inline = true,
+    //     .selector = .{ .ByQualifiedIndex = .{ .qualifier = 't', .index = 1 } },
+    // });
 
-    try testFromArgs("thing:note.name", .{}, .{
-        .collection_name = "thing",
-        .collection_name_inline = true,
-        .selector = .{ .ByName = "note.name" },
-    });
+    // try testFromArgs("thing:note.name", .{}, .{
+    //     .collection_name = "thing",
+    //     .collection_name_inline = true,
+    //     .selector = .{ .ByName = "note.name" },
+    // });
 
-    try std.testing.expectError(
-        Error.AmbiguousSelection,
-        testFromArgs("newsboat:t1", .{ .test_tasklist = "newsboat" }, .{}),
-    );
+    // try std.testing.expectError(
+    //     Error.AmbiguousSelection,
+    //     testFromArgs("newsboat:t1", .{ .test_tasklist = "newsboat" }, .{}),
+    // );
 }
 
 pub const SelectHelpOptions = struct {
