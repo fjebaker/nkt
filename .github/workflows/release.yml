@@ -17,7 +17,7 @@ jobs:
       - name: Setup zig
         uses: mlugg/setup-zig@v1
         with:
-          version: master
+          version: 0.14.0-dev.1588+2111f4c38
       - name: Hail mary
         run: zig build test
       - name: Build
