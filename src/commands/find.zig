@@ -23,7 +23,7 @@ pub const alias = [_][]const u8{ "f", "fp", "fe", "fr", "fo" };
 pub const short_help = "Find in notes.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "what",
         .help = "What to search in",
@@ -52,10 +52,14 @@ rows: usize,
 preview_size: usize,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
     const rows = args.rows;
     if (rows < 3) {
-        return cli.throwError(cli.CLIErrors.BadArgument, "Rows must be at least 4", .{});
+        try cli.throwError(
+            cli.CLIErrors.BadArgument,
+            "Rows must be at least 4",
+            .{},
+        );
     }
     return .{
         .what = args.what,

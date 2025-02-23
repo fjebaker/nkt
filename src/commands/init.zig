@@ -23,7 +23,7 @@ pub const long_help =
     \\
 ;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "--reinit",
         .help = "Only create missing files and write missing configuration options.",
@@ -38,12 +38,16 @@ pub const arguments = cli.Arguments(&.{
     },
 });
 
-args: arguments.Parsed,
+args: Arguments.Parsed,
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    var parser = Arguments.init(itt, .{});
+
+    const args = try parser.parseAll();
     if (args.reinit and args.force) {
-        try itt.throwBadArgument(
+        try parser.throwError(
+            cli.CLIErrors.BadArgument,
             "Cannot specify `--reinit` and `--force`",
+            .{},
         );
         unreachable;
     }

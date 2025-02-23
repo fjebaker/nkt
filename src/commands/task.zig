@@ -14,7 +14,7 @@ const Self = @This();
 pub const short_help = "Add a task to a specified task list.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "outcome",
         .help = "Outcome of the task",
@@ -43,10 +43,10 @@ pub const arguments = cli.Arguments(&.{
     },
 });
 
-args: arguments.Parsed,
+args: Arguments.Parsed,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
     return .{ .args = args };
 }
 

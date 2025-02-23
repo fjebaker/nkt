@@ -15,7 +15,7 @@ pub const alias = [_][]const u8{"mv"};
 pub const short_help = "Move or rename a note, directory, journal, or tasklist.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(selections.selectHelp(
+pub const Arguments = cli.Arguments(selections.selectHelp(
     "from",
     "The item to move from (see `help select`).",
     .{ .required = true, .flag_prefix = "from-" },
@@ -30,17 +30,17 @@ from: selections.Selection,
 to: selections.Selection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const from = try selections.fromArgsPrefixed(
         "from-",
-        arguments.Parsed,
+        Arguments.Parsed,
         args.from,
         args,
     );
     const to = try selections.fromArgsPrefixed(
         "to-",
-        arguments.Parsed,
+        Arguments.Parsed,
         args.to,
         args,
     );

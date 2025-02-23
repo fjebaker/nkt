@@ -7,7 +7,7 @@ const clippy = @import("clippy");
 const Key = termui.TermUI.Key;
 
 /// Wrapper for returning errors with helpful messages printed to `stderr`
-pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerror {
+pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerror!void {
     if (@import("builtin").is_test == false) {
         var stderr = std.io.getStdErr();
         var writer = stderr.writer();
@@ -19,6 +19,7 @@ pub fn throwError(err: anyerror, comptime fmt: []const u8, args: anytype) anyerr
         try writeFmtd(writer, "Error {s}: ", .{err_string}, f, stderr.isTty());
 
         try writer.print(fmt ++ "\n", args);
+        return err;
     }
 
     if (@import("builtin").mode != .Debug) {
@@ -44,16 +45,12 @@ pub fn writeFmtd(
     }
 }
 
-const Clippy = clippy.ClippyInterface(
-    .{ .report_error_fn = throwError },
-);
-
-pub const CLIErrors = clippy.Error;
+pub const CLIErrors = clippy.ParseError || error{BadArgument};
 pub const ArgumentDescriptor = clippy.ArgumentDescriptor;
-pub const ArgIterator = Clippy.ArgIterator;
-pub const Arg = Clippy.Arg;
-pub const Arguments = Clippy.Arguments;
-pub const Commands = Clippy.Commands;
+pub const ArgIterator = clippy.ArgumentIterator;
+pub const Arg = clippy.Arg;
+pub const Arguments = clippy.Arguments;
+pub const Commands = clippy.Commands;
 
 pub const comptimeWrap = clippy.comptimeWrap;
 

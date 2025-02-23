@@ -13,14 +13,15 @@ const Self = @This();
 pub const short_help = "Tag an item or collection.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(selections.selectHelp(
+pub const Arguments = cli.Arguments(selections.selectHelp(
     "item",
     "The item to edit (see `help select`). If left blank will open an interactive search through the names of the notes.",
     .{ .required = true },
 ) ++
     &[_]cli.ArgumentDescriptor{
     .{
-        .arg = "@tag1 [@tag2 ...]",
+        .arg = "tags",
+        .display_name = "@tag1 [@tag2 ...]",
         .help = "The tag (or tags) to assign to the item",
         .parse = false,
     },
@@ -34,41 +35,48 @@ selection: selections.Selection,
 tags: []const []const u8,
 delete: bool,
 
-pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var parser = arguments.init(itt);
+const StringList = std.ArrayList([]const u8);
 
-    var tag_list = std.ArrayList([]const u8).init(allocator);
+pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var parser = Arguments.init(itt, .{});
+
+    var tag_list = StringList.init(allocator);
     defer tag_list.deinit();
 
-    while (try itt.next()) |arg| {
-        if (!try parser.parseArg(arg)) {
-            if (arg.flag) {
-                try itt.throwUnknownFlag();
-            }
+    const Ctx = struct {
+        tags: *StringList,
+        fn handleArg(self: *@This(), p: *const Arguments, arg: cli.Arg) anyerror!void {
+            if (arg.flag) try p.throwError(cli.CLIErrors.InvalidFlag, "{s}", .{arg.string});
             // tag parsing
             const tag_name = ttags.getTagString(arg.string) catch |err| {
                 return cli.throwError(err, "{s}", .{arg.string});
             };
 
             if (tag_name) |name| {
-                try tag_list.append(name);
+                try self.tags.append(name);
             } else {
-                try itt.throwBadArgument("tag format: tags must begin with `@`");
+                try p.throwError(
+                    cli.CLIErrors.BadArgument,
+                    "tag format: tags must begin with `@` (bad: '{s}')",
+                    .{arg.string},
+                );
             }
         }
-    }
+    };
+
+    var ctx: Ctx = .{ .tags = &tag_list };
+    const args = try parser.parseAllCtx(&ctx, .{ .unhandled_arg = Ctx.handleArg });
 
     if (tag_list.items.len == 0) {
-        return cli.throwError(
+        try cli.throwError(
             cli.CLIErrors.TooFewArguments,
             "Must specify at least one @tag to apply to the item.",
             .{},
         );
     }
 
-    const args = try parser.getParsed();
     const selection = try selections.fromArgs(
-        arguments.Parsed,
+        Arguments.Parsed,
         args.item,
         args,
     );

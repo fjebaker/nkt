@@ -21,7 +21,7 @@ pub const long_help =
     \\the topology file
 ;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "path",
         .help = "Path(s) to the files to import, seperated by spaces. Can optionally specify a new name for each note by appending `:name`, such as `recipe.cake.md:recipe.chocolate-cake`.",
@@ -70,7 +70,11 @@ fn splitPath(itt: *cli.ArgIterator, arg: []const u8) !struct { name: []const u8,
         const path = arg[0..i];
         const name = arg[i + 1 ..];
         if (name.len < 1) {
-            try itt.throwBadArgument("Note name too short");
+            try itt.throwError(
+                cli.CLIErrors.BadArgument,
+                "Note name too short: '{s}'",
+                .{name},
+            );
         }
         return .{ .name = name, .path = path };
     } else {
@@ -78,28 +82,36 @@ fn splitPath(itt: *cli.ArgIterator, arg: []const u8) !struct { name: []const u8,
     }
 }
 
-pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var parser = arguments.init(itt);
+const StringList = std.ArrayList([]const u8);
 
-    var names_list = std.ArrayList([]const u8).init(allocator);
+pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var parser = Arguments.init(itt, .{});
+
+    var names_list = StringList.init(allocator);
     defer names_list.deinit();
 
-    var paths_list = std.ArrayList([]const u8).init(allocator);
+    var paths_list = StringList.init(allocator);
     defer paths_list.deinit();
 
-    while (try itt.next()) |arg| {
-        if (!try parser.parseArg(arg)) {
-            if (arg.flag) {
-                try itt.throwUnknownFlag();
-            } else {
-                const x = try splitPath(itt, arg.string);
-                try names_list.append(x.name);
-                try paths_list.append(x.path);
-            }
-        }
-    }
+    const Ctx = struct {
+        names: *StringList,
+        paths: *StringList,
 
-    const parsed = try parser.getParsed();
+        fn handleArg(self: *@This(), p: *Arguments, arg: @import("clippy").Arg) anyerror!void {
+            if (arg.flag) try p.throwError(cli.CLIErrors.InvalidFlag, "{s}", .{arg.string});
+            const x = try splitPath(p.itt, arg.string);
+            try self.names.append(x.name);
+            try self.paths.append(x.path);
+        }
+    };
+
+    var ctx: Ctx = .{
+        .names = &names_list,
+        .paths = &paths_list,
+    };
+    const parsed = try parser.parseAllCtx(&ctx, .{
+        .unhandled_arg = Ctx.handleArg,
+    });
 
     const x = try splitPath(itt, parsed.path);
     try names_list.insert(0, x.name);

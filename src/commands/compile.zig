@@ -15,7 +15,7 @@ const Self = @This();
 pub const short_help = "Compile a note into various formats.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(selections.selectHelp(
+pub const Arguments = cli.Arguments(selections.selectHelp(
     "item",
     "The item to edit (see `help select`).",
     .{ .required = true },
@@ -41,10 +41,10 @@ strict: bool,
 compiler: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const selection = try selections.fromArgs(
-        arguments.Parsed,
+        Arguments.Parsed,
         args.item,
         args,
     );
@@ -126,11 +126,12 @@ fn compileNote(
     return compiler.compileNote(allocator, note, root, .{}) catch |err|
         switch (err) {
         error.FileNotFound => {
-            return cli.throwError(
+            try cli.throwError(
                 err,
                 "No such command: '{s}'",
                 .{compiler.command[0]},
             );
+            unreachable;
         },
         else => return err,
     };
@@ -144,17 +145,18 @@ fn getCompiler(
 ) !Root.TextCompiler {
     if (self.compiler) |name| {
         const compiler = root.getTextCompilerByName(name) orelse {
-            return cli.throwError(
+            try cli.throwError(
                 Root.Error.UnknownCompiler,
                 "No compiler known with name '{s}'",
                 .{name},
             );
+            unreachable;
         };
 
         if (compiler.supports(ext)) {
             return compiler;
         } else {
-            return cli.throwError(
+            try cli.throwError(
                 Root.Error.InvalidCompiler,
                 "Compiler '{s}' does not support extension '{s}'",
                 .{ name, ext },
@@ -166,7 +168,7 @@ fn getCompiler(
     defer allocator.free(compilers);
 
     if (compilers.len == 0) {
-        return cli.throwError(
+        try cli.throwError(
             Root.Error.UnknownExtension,
             "No text compiler for '{s}'",
             .{ext},
@@ -181,7 +183,7 @@ fn getCompiler(
             try list.writer().print("{s} ", .{cmp.name});
         }
 
-        return cli.throwError(
+        try cli.throwError(
             Root.Error.AmbigousCompiler,
             "Use the `--compiler name` flag to disambiguate.\nAvailable options:\n{s}",
             .{list.items},

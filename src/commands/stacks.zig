@@ -13,7 +13,7 @@ const commands = @import("../commands.zig");
 pub const Push = struct {
     pub const short_help = "Push onto a stack";
     pub const long_help = short_help;
-    pub const arguments = cli.Arguments(selections.selectHelp(
+    pub const Arguments = cli.Arguments(selections.selectHelp(
         "item",
         "The item to push to the stack (see `help select`)",
         .{ .required = true },
@@ -42,9 +42,9 @@ pub const Push = struct {
     message: ?[]const u8,
 
     pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Push {
-        const args = try arguments.parseAll(itt);
+        const args = try Arguments.initParseAll(itt, .{});
         const selection = try selections.fromArgs(
-            arguments.Parsed,
+            Arguments.Parsed,
             args.item,
             args,
         );
@@ -90,7 +90,7 @@ pub const Push = struct {
 pub const Pop = struct {
     pub const short_help = "Pop from a stack";
     pub const long_help = short_help;
-    pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
+    pub const Arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
         .{
             .arg = "stack",
             .help = "Name of the stack to pop from.",
@@ -104,10 +104,10 @@ pub const Pop = struct {
         },
     });
 
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
 
     pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Pop {
-        return .{ .args = try arguments.parseAll(itt) };
+        return .{ .args = try Arguments.initParseAll(itt, .{}) };
     }
 
     pub fn execute(
@@ -180,7 +180,7 @@ pub const Pop = struct {
 pub const Peek = struct {
     pub const short_help = "Peek at a stack";
     pub const long_help = short_help;
-    pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
+    pub const Arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
         .{
             .arg = "stack",
             .help = "Name of the stack peek at.",
@@ -189,10 +189,10 @@ pub const Peek = struct {
         },
     });
 
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
 
     pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Peek {
-        return .{ .args = try arguments.parseAll(itt) };
+        return .{ .args = try Arguments.initParseAll(itt, .{}) };
     }
 
     pub fn execute(

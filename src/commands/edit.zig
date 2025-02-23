@@ -42,7 +42,7 @@ pub const long_help =
     \\
 ;
 
-pub const arguments = cli.Arguments(selections.selectHelp(
+pub const Arguments = cli.Arguments(selections.selectHelp(
     "item",
     "The item to edit (see `help select`). If left blank will open an interactive search through the names of the notes.",
     .{ .required = false },
@@ -72,17 +72,17 @@ selection: selections.Selection,
 opts: EditOptions,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const selection =
         try selections.fromArgs(
-        arguments.Parsed,
+        Arguments.Parsed,
         args.item,
         args,
     );
 
     if (args.new == false and args.ext != null) {
-        return cli.throwError(
+        try cli.throwError(
             cli.CLIErrors.InvalidFlag,
             "Cannot provide `--ext` without `--new`",
             .{},
@@ -121,7 +121,12 @@ pub fn execute(
             if (ct == .CollectionDirectory) {
                 break :b self.selection.collection_name;
             }
-            return cli.throwError(cli.CLIErrors.IncompatibleTypes, "Currently can only select from directories interactively", .{});
+            try cli.throwError(
+                cli.CLIErrors.BadArgument,
+                "Currently can only select from directories interactively",
+                .{},
+            );
+            unreachable;
         } else null;
 
         const selected_directory = dir_name orelse root.info.default_directory;
@@ -586,7 +591,7 @@ fn createNew(
             selection.selector.? == .ByIndex and
             !selection.collection_provided);
         if (ctype != .CollectionDirectory and !is_index) {
-            return cli.throwError(
+            try cli.throwError(
                 Error.InvalidEdit,
                 "Can only create new items with `edit` in directories ('{s}' is invalid).",
                 .{@tagName(ctype)},
@@ -657,20 +662,22 @@ fn createNewNote(
     _: commands.Options,
 ) ![]const u8 {
     var dir = (try root.getDirectory(collection_name)) orelse {
-        return cli.throwError(
+        try cli.throwError(
             Root.Error.NoSuchCollection,
             "No directory by name '{s}' exists",
             .{collection_name},
         );
+        unreachable;
     };
 
     // assert the extension is a valid one
     if (!root.isKnownExtension(extension)) {
-        return cli.throwError(
+        try cli.throwError(
             Root.Error.UnknownExtension,
             "No text environment / compiler known for extension '{s}'. Consider adding one with `new`.",
             .{extension},
         );
+        unreachable;
     }
 
     const note = try dir.addNewNoteByName(

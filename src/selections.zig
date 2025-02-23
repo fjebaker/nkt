@@ -286,7 +286,7 @@ pub const Selection = struct {
                 // don't update the name
                 return;
             }
-            return cli.throwError(
+            try cli.throwError(
                 Error.AmbiguousSelection,
                 "Collection name is specified by both a flag and the inline syntax. Can only use one",
                 .{},
@@ -892,7 +892,7 @@ fn implArgsPrefixed(
         @field(args, prefix ++ "tasklist"),
     )) |info| {
         if (!forgiving) {
-            return cli.throwError(
+            try cli.throwError(
                 Error.IncompatibleSelection,
                 "Item selected '{s}' but flag is for '{s}'.",
                 .{ @tagName(info.has), @tagName(info.was_given) },
@@ -907,7 +907,7 @@ fn implArgsPrefixed(
             // assert we are selecting a journal or null
             if (selection.collection_type) |ct| {
                 if (ct != .CollectionJournal) {
-                    return cli.throwError(
+                    try cli.throwError(
                         Error.IncompatibleSelection,
                         "Cannot select a time for collection type '{s}'",
                         .{@tagName(ct)},
@@ -917,7 +917,7 @@ fn implArgsPrefixed(
 
             // assert the format of the time is okay
             if (!time.isTime(t)) {
-                return cli.throwError(
+                try cli.throwError(
                     cli.CLIErrors.BadArgument,
                     "Time is invalid format: '{s}' (needs to be 'HH:MM:SS')",
                     .{t},

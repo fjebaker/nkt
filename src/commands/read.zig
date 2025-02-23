@@ -23,14 +23,15 @@ pub const alias = [_][]const u8{ "r", "rp" };
 pub const short_help = "Read notes, task details, and journals.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(selections.selectHelp(
+pub const Arguments = cli.Arguments(selections.selectHelp(
     "item",
     "Selected item (see `help select` for the formatting). If not argument is provided, defaults to reading the last `--limit` entries of the default journal.",
     .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
     .{
-        .arg = "@tag1,@tag2,...",
+        .arg = "tags",
+        .display_name = "@tag1,@tag2,...",
         .help = "Show only entries or note sections that contain one of the following tags",
         .parse = false,
     },
@@ -59,7 +60,7 @@ pub const arguments = cli.Arguments(selections.selectHelp(
 });
 
 tags: []const []const u8,
-args: arguments.Parsed,
+args: Arguments.Parsed,
 selection: selections.Selection,
 include_tasks: ?[]const []const u8,
 
@@ -78,20 +79,25 @@ fn addTag(tag_list: *std.ArrayList([]const u8), arg: []const u8) !void {
     }
 }
 
-pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var parser = arguments.init(itt);
+const StringList = std.ArrayList([]const u8);
 
-    var tag_list = std.ArrayList([]const u8).init(allocator);
+pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
+    var parser = Arguments.init(itt, .{});
+
+    var tag_list = StringList.init(allocator);
     defer tag_list.deinit();
 
-    while (try itt.next()) |arg| {
-        if (!try parser.parseArg(arg)) {
-            if (arg.flag) try itt.throwUnknownFlag();
-            try addTag(&tag_list, arg.string);
+    const Ctx = struct {
+        tags: *StringList,
+        fn handleArg(self: *@This(), p: *const Arguments, arg: cli.Arg) anyerror!void {
+            if (arg.flag) try p.throwError(cli.CLIErrors.InvalidFlag, "{s}", .{arg.string});
+            try addTag(self.tags, arg.string);
         }
-    }
+    };
 
-    var args = try parser.getParsed();
+    var ctx: Ctx = .{ .tags = &tag_list };
+    var args = try parser.parseAllCtx(&ctx, .{ .unhandled_arg = Ctx.handleArg });
+
     if (args.item) |item| {
         if (item[0] == '@') {
             try addTag(&tag_list, item);
@@ -101,7 +107,7 @@ pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     }
 
     const selection = try selections.fromArgs(
-        arguments.Parsed,
+        Arguments.Parsed,
         args.item,
         args,
     );
@@ -268,19 +274,21 @@ fn getRelevantTasks(
             // validate the tasklist argument
             for (it) |name| {
                 if (std.mem.eql(u8, "all", name) or std.mem.eql(u8, "no", name)) {
-                    return cli.throwError(
+                    try cli.throwError(
                         cli.CLIErrors.BadArgument,
                         "Cannot specify 'all' or 'no' when also specifying tasklists",
                         .{},
                     );
                 }
 
-                const tl = (try root.getTasklist(name)) orelse
-                    return cli.throwError(
-                    Root.Error.NoSuchCollection,
-                    "Tasklist '{s}' does not exist",
-                    .{name},
-                );
+                const tl = (try root.getTasklist(name)) orelse {
+                    try cli.throwError(
+                        Root.Error.NoSuchCollection,
+                        "Tasklist '{s}' does not exist",
+                        .{name},
+                    );
+                    unreachable;
+                };
 
                 try task_list.appendSlice(tl.getInfo().tasks);
             }
@@ -295,7 +303,7 @@ fn getRelevantTasks(
     );
 }
 
-fn extractLineLimit(args: arguments.Parsed) !?usize {
+fn extractLineLimit(args: Arguments.Parsed) !?usize {
     if (args.all) return null;
     return args.limit;
 }

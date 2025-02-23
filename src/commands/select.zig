@@ -38,7 +38,7 @@ pub const long_help =
     \\    nkt select linux.bash
 ;
 
-pub const arguments = cli.Arguments(
+pub const Arguments = cli.Arguments(
     selections.selectHelp(
         "item",
         "The main selection query.",
@@ -49,10 +49,10 @@ pub const arguments = cli.Arguments(
 selection: selections.Selection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const selection = try selections.fromArgs(
-        arguments.Parsed,
+        Arguments.Parsed,
         args.item,
         args,
     );

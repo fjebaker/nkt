@@ -18,60 +18,53 @@ const SelectArgs = selections.selectHelp(
 );
 
 const SelectArguments = cli.Arguments(SelectArgs);
-
-pub const arguments = cli.Commands(
-    .{
-        .commands = &.{
-            .{
-                .name = "list",
-                .args = &.{
-                    .{
-                        .arg = "--collection type",
-                        .help = "List the names of all collection names of a given type.",
-                    },
-                    .{
-                        .arg = "--all-collections",
-                        .help = "List the names of all collection of all types.",
-                    },
-                    .{
-                        .arg = "--tags",
-                        .help = "List the names of all tags (with the `@` prefix).",
-                    },
-                },
-                .help = "List completion helper.",
-            },
-            .{
-                .name = "item",
-                .args = SelectArgs,
-                .help = "Selection completion helper.",
-            },
+const ListArguments = cli.Arguments(
+    &.{
+        .{
+            .arg = "--collection type",
+            .help = "List the names of all collection names of a given type.",
+        },
+        .{
+            .arg = "--all-collections",
+            .help = "List the names of all collection of all types.",
+        },
+        .{
+            .arg = "--tags",
+            .help = "List the names of all tags (with the `@` prefix).",
         },
     },
 );
 
+pub const Arguments = cli.Commands(union(enum) {
+    list: ListArguments,
+    item: SelectArguments,
+});
+
 pub const short_help = "Shell completion helper";
 pub const long_help = short_help;
 
-args: ?arguments.Parsed,
+args: ?Arguments.Parsed,
 unused: []const []const u8 = &.{},
+
+const StringList = std.ArrayList([]const u8);
 
 pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
     if (itt.argCount() > 2) {
-        var list = std.ArrayList([]const u8).init(alloc);
+        var list = StringList.init(alloc);
         defer list.deinit();
 
-        var args = arguments.init(itt);
-
-        const cmd = (try itt.next()).?;
-        _ = try args.parseArg(cmd);
-
-        while (try itt.next()) |arg| {
-            if (!args.parseArgForgiving(arg)) {
-                try list.append(arg.string);
+        const Ctx = struct {
+            l: *StringList,
+            fn handleArg(self: *@This(), _: *const Arguments, arg: cli.Arg) anyerror!void {
+                try self.l.append(arg.string);
             }
-        }
+        };
 
-        return .{ .args = try args.getParsed(), .unused = try list.toOwnedSlice() };
+        var ctx: Ctx = .{ .l = &list };
+        var parser = Arguments.init(itt, .{ .forgiving = true });
+        const parsed = try parser.parseAllCtx(&ctx, .{ .unhandled_arg = Ctx.handleArg });
+
+        return .{ .args = parsed, .unused = try list.toOwnedSlice() };
     } else {
         return .{ .args = null };
     }
@@ -109,7 +102,7 @@ fn executeInternal(
     defer arena.deinit();
     const alloc = arena.allocator();
 
-    switch (self.args.?.commands) {
+    switch (self.args.?) {
         .list => |args| {
             // use a hash map to avoid duplicate names
             var names = std.StringArrayHashMap(void).init(allocator);
@@ -305,15 +298,15 @@ pub fn writeTemplate(allocator: std.mem.Allocator, writer: anytype) !void {
     inline for (info.fields) |field| {
         const name = field.name;
         const descr = @field(field.type, "short_help");
-        const has_arguments = @hasDecl(field.type, "arguments");
+        const has_arguments = @hasDecl(field.type, "Arguments");
 
         const name_or_alias = try nameOrAlias(alloc, field, '|');
         defer alloc.free(name_or_alias);
 
         if (has_arguments) {
-            const args = @field(field.type, "arguments");
+            const args = @field(field.type, "Arguments");
 
-            const cmpl = try args.generateCompletion(alloc, .Zsh, name);
+            const cmpl = try args.generateCompletion(alloc, .{ .function_name = name });
             defer alloc.free(cmpl);
             try writer.writeAll(cmpl);
 

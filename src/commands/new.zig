@@ -21,7 +21,7 @@ pub const long_help =
     \\`task`.
 ;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "type",
         .help = "What sort of collection type to create. Can be 'journal', 'tasklist', 'directory', 'chain', 'stack' or 'tag'.",
@@ -48,14 +48,15 @@ ctype: NewType,
 name: []const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const ctype = std.meta.stringToEnum(NewType, args.type) orelse {
-        return cli.throwError(
+        try cli.throwError(
             cli.CLIErrors.BadArgument,
             "Not a known type: '{s}'",
             .{args.type},
         );
+        unreachable;
     };
 
     return .{ .ctype = ctype, .name = args.name };

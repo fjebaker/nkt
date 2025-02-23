@@ -383,7 +383,7 @@ pub fn parseAndAssertValidTags(
 
     var tl = try root.getTagDescriptorList();
     if (tl.findInvalidTags(parsed_tags)) |invalid_tag| {
-        return cli.throwError(
+        try cli.throwError(
             error.InvalidTag,
             "@{s} is not a known tag",
             .{invalid_tag.name},

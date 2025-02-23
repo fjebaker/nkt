@@ -14,7 +14,7 @@ const Self = @This();
 pub const short_help = "Modify attributes of entries, notes, chains, or tasks.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
+pub const Arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
     .arg = "what",
     .help = "May be one of 'done', 'archive', 'todo'",
     .required = true,
@@ -60,26 +60,27 @@ const SetSelection = union(enum) {
 selection: SetSelection,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     const what = std.meta.stringToEnum(SetVerbs, args.what) orelse {
-        return cli.throwError(
+        try cli.throwError(
             cli.CLIErrors.BadArgument,
             "Unrecognized verb '{s}'",
             .{args.what},
         );
+        unreachable;
     };
 
     if (args.item) |_| {
         if (args.chain != null) {
-            return cli.throwError(
+            try cli.throwError(
                 error.AmbiguousSelection,
                 "Cannot select both an item and a chain",
                 .{},
             );
         }
         const selection = try selections.fromArgs(
-            arguments.Parsed,
+            Arguments.Parsed,
             args.item,
             args,
         );
@@ -97,7 +98,7 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         } } };
     } else {
         if (args.chain == null) {
-            return cli.throwError(
+            try cli.throwError(
                 cli.CLIErrors.TooFewArguments,
                 "No item or chain selected.",
                 .{},

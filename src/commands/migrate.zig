@@ -9,10 +9,10 @@ const Self = @This();
 
 pub const short_help = "Migrate differing versions of nkt's topology";
 pub const long_help = short_help;
-pub const arguments = cli.Arguments(&.{});
+pub const Arguments = cli.Arguments(&.{});
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
     _ = args;
     return .{};
 }

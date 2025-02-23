@@ -26,7 +26,7 @@ pub const alias = [_][]const u8{"chain"};
 pub const short_help = "View and interact with habitual chains.";
 pub const long_help = short_help;
 
-pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
+pub const Arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
     .{
         .arg = "--days num",
         .help = "Number of days to display",
@@ -38,7 +38,7 @@ pub const arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{
 num_days: usize,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
     const num_days = args.days;
     return .{ .num_days = num_days };
 }

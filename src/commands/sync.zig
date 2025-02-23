@@ -10,10 +10,10 @@ const Self = @This();
 
 pub const short_help = "Sync root directory to remote git repository";
 pub const long_help = short_help;
-pub const arguments = cli.Arguments(&.{});
+pub const Arguments = cli.Arguments(&.{});
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    _ = try arguments.parseAll(itt);
+    _ = try Arguments.initParseAll(itt, .{});
     return .{};
 }
 

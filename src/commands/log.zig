@@ -23,7 +23,7 @@ pub const long_help =
     \\appended on the CLI.
 ;
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "text",
         .help = "The text to log for the entry. If blank will open editor for editing notes.",
@@ -33,38 +33,49 @@ pub const arguments = cli.Arguments(&.{
         .help = "The name of the journal to add the entry to (else uses default journal).",
     },
     .{
-        .arg = "@tag1 [@tag2 ...]",
+        .arg = "tags",
+        .display_name = "@tag1 [@tag2 ...]",
         .help = "Additional tags to add.",
         .parse = false,
     },
 });
 
 tags: []const []const u8,
-args: arguments.Parsed,
+args: Arguments.Parsed,
+
+const StringList = std.ArrayList([]const u8);
 
 pub fn fromArgs(allocator: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    var parser = arguments.init(itt);
+    var parser = Arguments.init(itt, .{});
 
-    var tag_list = std.ArrayList([]const u8).init(allocator);
+    var tag_list = StringList.init(allocator);
     defer tag_list.deinit();
 
-    while (try itt.next()) |arg| {
-        if (!try parser.parseArg(arg)) {
-            if (arg.flag) try itt.throwUnknownFlag();
+    const Ctx = struct {
+        tags: *StringList,
+
+        fn handleArg(self: *@This(), p: *const Arguments, arg: cli.Arg) anyerror!void {
+            if (arg.flag) try p.throwError(cli.CLIErrors.InvalidFlag, "{s}", .{arg.string});
             // tag parsing
             const tag_name = ttags.getTagString(arg.string) catch |err| {
-                return cli.throwError(err, "{s}", .{arg.string});
+                return p.throwError(err, "{s}", .{arg.string});
             };
 
             if (tag_name) |name| {
-                try tag_list.append(name);
+                try self.tags.append(name);
             } else {
-                try itt.throwBadArgument("tag format: tags must begin with `@`");
+                try p.throwError(
+                    cli.CLIErrors.BadArgument,
+                    "tag format: tags must begin with `@` (bad: '{s}')",
+                    .{arg.string},
+                );
             }
         }
-    }
+    };
 
-    const args = try parser.getParsed();
+    var ctx: Ctx = .{ .tags = &tag_list };
+    const args = try parser.parseAllCtx(&ctx, .{ .unhandled_arg = Ctx.handleArg });
+
     return .{
         .tags = try tag_list.toOwnedSlice(),
         .args = args,

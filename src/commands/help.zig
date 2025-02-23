@@ -12,7 +12,7 @@ pub const short_help = "Print this help message or help for other commands.";
 pub const long_help =
     \\Print help messages and additional information about subcommands.
 ;
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "command",
         .help = "Subcommand to print extended help for.",
@@ -22,15 +22,16 @@ pub const arguments = cli.Arguments(&.{
 command: ?[]const u8,
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args = try arguments.parseAll(itt);
+    const args = try Arguments.initParseAll(itt, .{});
 
     if (args.command) |cmd| {
         const command = toValidCommand(cmd) orelse {
-            return cli.throwError(
+            try cli.throwError(
                 cli.CLIErrors.BadArgument,
                 "help: no such command: '{s}'",
                 .{cmd},
             );
+            unreachable;
         };
         return .{ .command = command };
     }
@@ -75,7 +76,7 @@ fn printExtendedHelp(
             @compileError("Subcommand " ++ field.name ++ " needs to define `long_help`");
         }
 
-        const has_arguments = @hasDecl(field.type, "arguments");
+        const has_arguments = @hasDecl(field.type, "Arguments");
         const field_correct =
             std.mem.eql(u8, field.name, command) or utils.isAlias(field, command);
 
@@ -96,7 +97,7 @@ fn printExtendedHelp(
             }
 
             if (has_arguments) {
-                const args = @field(field.type, "arguments");
+                const args = @field(field.type, "Arguments");
                 try writer.writeAll("Arguments:\n\n");
                 try args.writeHelp(writer, .{});
             }

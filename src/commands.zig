@@ -118,11 +118,12 @@ pub const Commands = union(enum) {
 };
 
 fn throwUnknownCommand(name: []const u8) anyerror {
-    return cli.throwError(
+    cli.throwError(
         Error.UnknownCommand,
         "'{s}'\n(use 'help' for a list of commands)",
         .{name},
-    );
+    ) catch |err| return err;
+    unreachable;
 }
 
 /// Parse argument from the `cli.ArgIterator` and execute the command contained

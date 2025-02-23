@@ -12,7 +12,11 @@ pub const short_help = "View and modify the configuration of nkt";
 pub const long_help = short_help;
 
 pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    try itt.assertNoArguments();
+    if (try itt.next()) |_| try cli.throwError(
+        cli.CLIErrors.TooManyArguments,
+        "Expected no arguments",
+        .{},
+    );
     return .{};
 }
 

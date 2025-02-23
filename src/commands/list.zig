@@ -30,7 +30,7 @@ const MUTUAL_FIELDS: []const []const u8 = &.{
     "sort",
 };
 
-pub const arguments = cli.Arguments(&.{
+pub const Arguments = cli.Arguments(&.{
     .{
         .arg = "--sort how",
         .help = "How to sort the item lists. Possible values are 'alpha[betical]', 'modified', 'canonical' or 'created'. ",
@@ -119,23 +119,42 @@ const ListSelection = union(enum) {
     Compilers: void,
 };
 
-args: arguments.Parsed,
+args: Arguments.Parsed,
 selection: ListSelection,
 sort: Tasklist.SortingOptions,
 
+const ArgList = std.ArrayList(cli.Arg);
+
 pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
-    const args_with_positional = try arguments.parseAllKeepPositional(alloc, itt);
-    const args = args_with_positional.parsed;
+    const Ctx = struct {
+        positionals: ArgList,
+        fn handleArg(self: *@This(), p: *const Arguments, arg: cli.Arg) anyerror!void {
+            if (arg.flag) try p.throwError(
+                cli.CLIErrors.InvalidFlag,
+                "{s}",
+                .{arg.string},
+            );
+            try self.positionals.append(arg);
+        }
+    };
+
+    var ctx: Ctx = .{
+        .positionals = ArgList.init(alloc),
+    };
+
+    var parser = Arguments.init(itt, .{});
+    const args = try parser.parseAllCtx(&ctx, .{ .unhandled_arg = Ctx.handleArg });
 
     const sort_method = std.meta.stringToEnum(
         Tasklist.SortingOptions.Method,
         args.sort,
     ) orelse {
-        return cli.throwError(
+        try cli.throwError(
             error.UnknownSort,
             "Sorting method '{s}' is unknown",
             .{args.sort},
         );
+        unreachable;
     };
 
     return .{
@@ -143,7 +162,7 @@ pub fn fromArgs(alloc: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
         .selection = try processArguments(
             alloc,
             args,
-            args_with_positional.positional,
+            ctx.positionals.items,
         ),
         .sort = .{ .how = sort_method },
     };
@@ -240,12 +259,12 @@ fn listNamedSelection(
 
 fn processTasklistArgs(
     name: []const u8,
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
     comptime extra_fields: []const []const u8,
 ) !ListSelection {
     // make sure none of the incompatible fields are selected
     try utils.ensureOnly(
-        arguments.Parsed,
+        Arguments.Parsed,
         args,
         (MUTUAL_FIELDS ++ [_][]const u8{ "done", "archived", "long-hash", "hash", "date" } ++ extra_fields),
         "tasklist",
@@ -261,12 +280,12 @@ fn processTasklistArgs(
 }
 fn processDirectoryArgs(
     name: []const u8,
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
     comptime extra_fields: []const []const u8,
 ) !ListSelection {
     // make sure none of the incompatible fields are selected
     try utils.ensureOnly(
-        arguments.Parsed,
+        Arguments.Parsed,
         args,
         (MUTUAL_FIELDS ++ [_][]const u8{ "what", "date" } ++ extra_fields),
         "directory",
@@ -279,12 +298,12 @@ fn processDirectoryArgs(
 }
 fn processJournalArgs(
     name: []const u8,
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
     comptime extra_fields: []const []const u8,
 ) !ListSelection {
     // make sure none of the incompatible fields are selected
     try utils.ensureOnly(
-        arguments.Parsed,
+        Arguments.Parsed,
         args,
         MUTUAL_FIELDS ++ [_][]const u8{"date"} ++ extra_fields,
         "journal",
@@ -297,7 +316,7 @@ fn processJournalArgs(
 
 fn processArguments(
     allocator: std.mem.Allocator,
-    args: arguments.Parsed,
+    args: Arguments.Parsed,
     additional: []const cli.Arg,
 ) !ListSelection {
     var count: usize = 0;
@@ -305,7 +324,7 @@ fn processArguments(
     if (args.directory != null) count += 1;
     if (args.tasklist != null) count += 1;
     if (count > 1) {
-        return cli.throwError(
+        try cli.throwError(
             error.AmbiguousSelection,
             "Can only list a single collection.",
             .{},
@@ -325,7 +344,7 @@ fn processArguments(
     if (args.what) |what| {
         if (std.mem.eql(u8, what, "tags")) {
             try utils.ensureOnly(
-                arguments.Parsed,
+                Arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
                 what,
@@ -333,7 +352,7 @@ fn processArguments(
             return .{ .Tags = {} };
         } else if (std.mem.eql(u8, what, "stacks")) {
             try utils.ensureOnly(
-                arguments.Parsed,
+                Arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
                 what,
@@ -341,7 +360,7 @@ fn processArguments(
             return .{ .Stacks = {} };
         } else if (std.mem.eql(u8, what, "compilers")) {
             try utils.ensureOnly(
-                arguments.Parsed,
+                Arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{"what"}),
                 what,
@@ -349,7 +368,7 @@ fn processArguments(
             return .{ .Compilers = {} };
         } else if (what[0] == '@') {
             try utils.ensureOnly(
-                arguments.Parsed,
+                Arguments.Parsed,
                 args,
                 (MUTUAL_FIELDS ++ [_][]const u8{ "what", "type", "date" }),
                 what,
@@ -360,12 +379,12 @@ fn processArguments(
 
             tag_names[0] = what;
 
-            // ensure the additional arguments are what we would expect
+            // ensure the additional Arguments are what we would expect
             for (additional, 1..) |add, i| {
                 if (add.string[0] != '@') {
-                    return cli.throwError(
+                    try cli.throwError(
                         cli.CLIErrors.BadArgument,
-                        "'{s}' is invalid; when listing tags, all positional arguments must be tags.",
+                        "'{s}' is invalid; when listing tags, all positional Arguments must be tags.",
                         .{add.string},
                     );
                 } else {
@@ -388,7 +407,7 @@ fn processArguments(
     }
 
     try utils.ensureOnly(
-        arguments.Parsed,
+        Arguments.Parsed,
         args,
         MUTUAL_FIELDS,
         "collections",
@@ -409,11 +428,12 @@ fn toColType(string: ?[]const u8) !?Root.CollectionType {
     if (eq(u8, s, "t") or eq(u8, s, "tl") or eq(u8, s, "tasklist")) {
         return .CollectionTasklist;
     }
-    return cli.throwError(
+    try cli.throwError(
         error.NoSuchCollection,
         "Collectiont type '{s}' is not a valid type.",
         .{s},
     );
+    unreachable;
 }
 
 fn listCollections(

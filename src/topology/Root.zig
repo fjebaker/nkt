@@ -676,7 +676,7 @@ pub fn getTasklist(self: *Root, name: []const u8) !?Tasklist {
     return self.getCollection(name, .CollectionTasklist);
 }
 
-const select_args = @import("../commands/select.zig").arguments;
+const SelectArgs = @import("../commands/select.zig").Arguments;
 
 /// Attempt to select an item from a string, i.e. like using
 ///
@@ -688,11 +688,13 @@ pub fn selectFromString(self: *Root, selection: []const u8) !?Item {
     defer self.allocator.free(tokens);
 
     var itt = cli.ArgIterator.init(tokens);
-    const args = select_args.parseAllForgiving(&itt) orelse
+    const args = SelectArgs.initParseAll(&itt, .{ .forgiving = true }) catch |err| {
+        std.debug.print(">>> {any}\n", .{err});
         return null;
+    };
 
     const s = try selections.fromArgsForgiving(
-        select_args.Parsed,
+        SelectArgs.Parsed,
         args.item,
         args,
     );

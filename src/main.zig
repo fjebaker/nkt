@@ -15,6 +15,10 @@ const color = @import("colors.zig");
 
 const help = @import("commands/help.zig");
 
+pub const clippy_options: @import("clippy").Options = .{
+    .errorFn = cli.throwError,
+};
+
 test "main" {
     _ = Root;
     _ = cli;
