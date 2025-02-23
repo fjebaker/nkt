@@ -3,7 +3,7 @@ const std = @import("std");
 const VERSION: std.SemanticVersion = .{
     .major = 0,
     .minor = 2,
-    .patch = 11,
+    .patch = 12,
 };
 
 pub fn addTracy(b: *std.Build, step: *std.Build.Step.Compile) !void {
