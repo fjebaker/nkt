@@ -372,9 +372,8 @@ Grab one of the binaries from the [release]() for your architecture:
 
 ### From source <a id="toc-tag-mdtoc" name="from-source"></a>
 
-Clone this GitHub repository, and have [Zig]() installed. nkt tracks the master
-branch of zig so the latest release should work, but just the definitive
-version can be found in the `.zigversion` file in this repository.
+Clone this GitHub repository, and have [Zig](https://ziglang.org) installed.
+nkt is build using Zig version 0.14.0.
 
 ```bash
 git clone https://github.com/fjebaker/nkt \
