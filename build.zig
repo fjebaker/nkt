@@ -45,10 +45,10 @@ pub fn build(b: *std.Build) !void {
     defer if (hash) |h| b.allocator.free(h);
     opts.addOption(?[]const u8, "git_hash", hash);
 
-    const time = b.dependency("time", .{
+    const datetime = b.dependency("datetime", .{
         .target = target,
         .optimize = optimize,
-    }).module("zig-datetime");
+    }).module("datetime");
     const farbe = b.dependency("farbe", .{
         .target = target,
         .optimize = optimize,
@@ -77,7 +77,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    exe.root_module.addImport("time", time);
+    exe.root_module.addImport("datetime", datetime);
     exe.root_module.addImport("farbe", farbe);
     exe.root_module.addImport("chrono", chrono);
     exe.root_module.addImport("clippy", clippy);
@@ -109,7 +109,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    unit_tests.root_module.addImport("time", time);
+    unit_tests.root_module.addImport("datetime", datetime);
     unit_tests.root_module.addImport("farbe", farbe);
     unit_tests.root_module.addImport("chrono", chrono);
     unit_tests.root_module.addImport("clippy", clippy);

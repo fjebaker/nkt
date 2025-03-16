@@ -300,11 +300,11 @@ pub const SearchDisplay = struct {
             const inp = try self.display.ctrl.tui.nextInput();
             switch (inp) {
                 .char => |c| switch (c) {
-                    Key.CtrlC => return null,
-                    Key.CtrlD => return self.pageDown(),
-                    Key.CtrlU => return self.pageUp(),
-                    Key.CtrlJ => return self.selectDown(),
-                    Key.CtrlK => return self.selectUp(),
+                    Key.ctrl('c') => return null,
+                    Key.ctrl('d') => return self.pageDown(),
+                    Key.ctrl('u') => return self.pageUp(),
+                    Key.ctrl('j') => return self.selectDown(),
+                    Key.ctrl('k') => return self.selectUp(),
                     // CtrlW
                     23 => {
                         const index = std.mem.lastIndexOfScalar(

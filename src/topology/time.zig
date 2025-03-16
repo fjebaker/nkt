@@ -1,11 +1,11 @@
 const std = @import("std");
-const time = @import("time");
+const datetime = @import("datetime");
 const chrono = @import("chrono");
 const utils = @import("../utils.zig");
 
-pub const Timestamp = time.datetime.Time;
-pub const Date = time.datetime.Datetime;
-pub const Weekday = time.datetime.Weekday;
+pub const Timestamp = datetime.datetime.Time;
+pub const Date = datetime.datetime.Datetime;
+pub const Weekday = datetime.datetime.Weekday;
 
 pub const Error = error{DateTooShort};
 
@@ -43,7 +43,7 @@ pub fn deinitTimeZone() void {
 pub fn initTimeZoneUTC(allocator: std.mem.Allocator) !TimeZone {
     var mem = std.heap.ArenaAllocator.init(allocator);
     errdefer mem.deinit();
-    const tz = time.timezones.UTC;
+    const tz = datetime.timezones.UTC;
     global_time_zone = .{ .tz = .{ .tz = tz }, .mem = mem };
     return getLocalTimeZone();
 }
@@ -77,7 +77,7 @@ pub fn initTimeZone(allocator: std.mem.Allocator) !TimeZone {
     const local_offset = timezone.offsetAtTimestamp(timestamp_utc) orelse 0;
     const designation = timezone.designationAtTimestamp(timestamp_utc) orelse "NA";
 
-    const tz = time.datetime.Timezone.create(
+    const tz = datetime.datetime.Timezone.create(
         try mem.allocator().dupe(u8, designation),
         @intCast(@divFloor(local_offset, 60)), // convert to minutes
     );
@@ -110,7 +110,7 @@ pub const Time = struct {
 
     /// Get a `Time` from a `Date`
     pub fn fromDate(date: Date) Time {
-        const utc_date = date.shiftTimezone(&time.timezones.UTC);
+        const utc_date = date.shiftTimezone(&datetime.timezones.UTC);
         return .{
             .time = @intCast(utc_date.toTimestamp()),
             .timezone = TimeZone.fromDate(date),
@@ -241,7 +241,7 @@ pub const Time = struct {
 };
 
 pub const TimeZone = struct {
-    tz: time.datetime.Timezone,
+    tz: datetime.datetime.Timezone,
 
     pub fn fromDate(date: Date) TimeZone {
         return .{
@@ -280,14 +280,14 @@ pub const TimeZone = struct {
 
     /// Initialize a UTC timezone
     pub fn initUTC() !TimeZone {
-        return .{ .tz = time.timezones.UTC };
+        return .{ .tz = datetime.timezones.UTC };
     }
 
     /// Create a timezone with a designation and minute offset
     pub fn create(name: []const u8, offset_minutes: i16) TimeZone {
         const dupe_name = getTimeZoneAllocator().dupe(u8, name) catch
             @panic("Out of memory");
-        const tz = time.datetime.Timezone.create(
+        const tz = datetime.datetime.Timezone.create(
             dupe_name,
             offset_minutes,
         );

@@ -1,31 +1,32 @@
 .{
-    .name = "nkt",
+    .name = .nkt,
+    .fingerprint = 0x6c693871650a2d77,
     .paths = .{""},
     .version = "0.2.12",
     .dependencies = .{
-        .time = .{
+        .datetime = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
-            .hash = "122077215ce36e125a490e59ec1748ffd4f6ba00d4d14f7308978e5360711d72d77f",
+            .hash = "datetime-0.8.0-cJNXzNiMAQBz4RV6Gz7qUNeE-xLDNLs_jNU5_zIZ48as",
         },
         .chrono = .{
             .url = "https://github.com/fjebaker/chrono-zig/archive/master.tar.gz",
-            .hash = "1220f90f7c49a91669a6477e667d7f80f9d9f2b8955ccd25d2e89105ba39a3adafab",
+            .hash = "N-V-__8AAHXKAwD5D3xJqRZppkd-Zn1_gPnZ8riVXM0l0uiR",
         },
         .farbe = .{
             .url = "https://github.com/fjebaker/farbe/archive/main.tar.gz",
-            .hash = "1220afe0eee9d0382f7ff07905205e287a8714bb40fa2642f8b1103509ac3503d93d",
+            .hash = "farbe-0.3.0-AmrQL1FZAAARi236kSPLBkuSVmRrKhwsLX6CQn9ouyPr",
         },
         .clippy = .{
             .url = "https://github.com/fjebaker/clippy/archive/main.tar.gz",
-            .hash = "122020b99fee27e4b236366694def0f4320ed7ae501549c2f35ea74e50aa6947100a",
+            .hash = "clippy-0.3.0-BgbUoKFjAQD-LGbheipUh6q9bVGSj3_SrE1fdkC515nN",
         },
         .termui = .{
             .url = "https://github.com/fjebaker/termui/archive/main.tar.gz",
-            .hash = "1220b6f7c21af9998c2df5b3b0fa5e03f47ff28260d1eb656a3742d0ad82361c59db",
+            .hash = "termui-0.2.0-2zSn4eJgAACLxSPEqZLXKTXY2cVXBgoH5Jm0IN4YqrRN",
         },
         .fuzzig = .{
             .url = "https://github.com/fjebaker/fuzzig/archive/main.tar.gz",
-            .hash = "1220666c7afe30f6a51ae477f7755e9b6a5341723bfcb5de349817b5d0912b96f9ad",
+            .hash = "fuzzig-0.1.1-Ji0xitlIAQBNtK3ptAGmK5QMfog1dBL3Hqzrolq81l94",
         },
     },
 }

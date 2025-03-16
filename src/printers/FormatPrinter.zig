@@ -159,12 +159,8 @@ const Parser = struct {
         try p.stack.append(block);
     }
 
-    pub fn pop(p: *Parser) Block {
+    pub fn pop(p: *Parser) ?Block {
         return p.stack.pop();
-    }
-
-    pub fn popOrNull(p: *Parser) ?Block {
-        return p.stack.popOrNull();
     }
 
     pub fn next(p: *Parser) ?u8 {
@@ -216,7 +212,7 @@ fn addTextImpl(
                 .{ .text = text[current.start..current.end], .fmt = current.fmt },
             );
             // retrieve the previous block
-            current = parser.pop();
+            current = parser.pop().?;
             if (i >= text.len) break;
             continue;
         }
@@ -243,7 +239,7 @@ fn addTextImpl(
         .{ .text = text[current.start..current.end], .fmt = current.fmt },
     );
 
-    while (parser.popOrNull()) |b| {
+    while (parser.pop()) |b| {
         try fp.add(
             .{ .text = text[b.start..b.end], .fmt = b.fmt },
         );
