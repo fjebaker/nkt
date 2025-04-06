@@ -106,8 +106,12 @@ fn viewFile(allocator: std.mem.Allocator, root: *Root, outpath: []const u8) !voi
 
     std.log.default.debug("Viewing: '{s}'", .{list.items});
 
-    // TODO: maybe shell this instead of execve?
-    return std.process.execve(allocator, cmd, &env_map);
+    var child = std.process.Child.init(list.items, allocator);
+
+    child.stderr_behavior = std.process.Child.StdIo.Ignore;
+    child.stdin_behavior = std.process.Child.StdIo.Ignore;
+    child.stdout_behavior = std.process.Child.StdIo.Ignore;
+    try child.spawn();
 }
 
 fn compileNote(
