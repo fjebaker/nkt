@@ -338,9 +338,7 @@ fn runCommand(
     proc.stdout_behavior = std.process.Child.StdIo.Inherit;
     proc.stderr_behavior = std.process.Child.StdIo.Inherit;
 
-    try proc.spawn();
-
-    const term = try proc.wait();
+    const term = try proc.spawnAndWait();
     switch (term) {
         .Exited => |code| {
             if (code != 0) return Error.CompileError;
