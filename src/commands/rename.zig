@@ -21,10 +21,10 @@ pub const Arguments = cli.Arguments(selections.selectHelp(
     .{ .required = true, .flag_prefix = "from-" },
 ) ++
     selections.selectHelp(
-    "to",
-    "The item to move to (see `help select`).",
-    .{ .required = true, .flag_prefix = "to-" },
-));
+        "to",
+        "The item to move to (see `help select`).",
+        .{ .required = true, .flag_prefix = "to-" },
+    ));
 
 from: selections.Selection,
 to: selections.Selection,

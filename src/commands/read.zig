@@ -29,35 +29,35 @@ pub const Arguments = cli.Arguments(selections.selectHelp(
     .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
-    .{
-        .arg = "tags",
-        .display_name = "@tag1,@tag2,...",
-        .help = "Show only entries or note sections that contain one of the following tags",
-        .parse = false,
-    },
-    .{
-        .arg = "-n/--limit limit",
-        .help = "The maximum number of entries to display of a journal",
-        .default = "25",
-        .argtype = usize,
-    },
-    .{
-        .arg = "-d/--date",
-        .help = "Display the full date format (`YYYY-MM-DD HH:MM:SS`)",
-    },
-    .{
-        .arg = "-a/--all",
-        .help = "Display all items (overwrites `--limit`)",
-    },
-    .{
-        .arg = "-t/--tasks name",
-        .help = "Interweave changes to the (default tasklist) tasks in the printout of a journal. This argument can be `none` / `off` to disable intereacing, `all` to show all tasklists, or a comma seperated list of tasklists to include. Default is to show for `all` except those ignored in the configuration file.",
-    },
-    .{
-        .arg = "-p/--page",
-        .help = "Read the item through the configured pager",
-    },
-});
+        .{
+            .arg = "tags",
+            .display_name = "@tag1,@tag2,...",
+            .help = "Show only entries or note sections that contain one of the following tags",
+            .parse = false,
+        },
+        .{
+            .arg = "-n/--limit limit",
+            .help = "The maximum number of entries to display of a journal",
+            .default = "25",
+            .argtype = usize,
+        },
+        .{
+            .arg = "-d/--date",
+            .help = "Display the full date format (`YYYY-MM-DD HH:MM:SS`)",
+        },
+        .{
+            .arg = "-a/--all",
+            .help = "Display all items (overwrites `--limit`)",
+        },
+        .{
+            .arg = "-t/--tasks name",
+            .help = "Interweave changes to the (default tasklist) tasks in the printout of a journal. This argument can be `none` / `off` to disable intereacing, `all` to show all tasklists, or a comma seperated list of tasklists to include. Default is to show for `all` except those ignored in the configuration file.",
+        },
+        .{
+            .arg = "-p/--page",
+            .help = "Read the item through the configured pager",
+        },
+    });
 
 tags: []const []const u8,
 args: Arguments.Parsed,

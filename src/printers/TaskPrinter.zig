@@ -94,11 +94,11 @@ pub fn add(self: *Self, task: Task, index: ?usize) !void {
     // make date pretty
     const pretty_date: ?[]const u8 =
         if (task.done) |cmpl|
-        try cmpl.formatDate(alloc)
-    else if (task.archived) |arch|
-        try arch.formatDate(alloc)
-    else
-        null;
+            try cmpl.formatDate(alloc)
+        else if (task.archived) |arch|
+            try arch.formatDate(alloc)
+        else
+            null;
 
     try self.entries.append(
         .{

@@ -48,19 +48,19 @@ pub const Arguments = cli.Arguments(selections.selectHelp(
     .{ .required = false },
 ) ++
     &[_]cli.ArgumentDescriptor{
-    .{
-        .arg = "-n/--new",
-        .help = "Allow new notes to be created.",
-    },
-    .{
-        .arg = "--ext extension",
-        .help = "The file extension for the new note (default: 'md')",
-    },
-    .{
-        .arg = "--path-only",
-        .help = "Do not open the file in the editor, but print the path to stdout. Used for editor integration.",
-    },
-});
+        .{
+            .arg = "-n/--new",
+            .help = "Allow new notes to be created.",
+        },
+        .{
+            .arg = "--ext extension",
+            .help = "The file extension for the new note (default: 'md')",
+        },
+        .{
+            .arg = "--path-only",
+            .help = "Do not open the file in the editor, but print the path to stdout. Used for editor integration.",
+        },
+    });
 
 const EditOptions = struct {
     allow_new: bool = false,
@@ -76,10 +76,10 @@ pub fn fromArgs(_: std.mem.Allocator, itt: *cli.ArgIterator) !Self {
 
     const selection =
         try selections.fromArgs(
-        Arguments.Parsed,
-        args.item,
-        args,
-    );
+            Arguments.Parsed,
+            args.item,
+            args,
+        );
 
     if (args.new == false and args.ext != null) {
         try cli.throwError(

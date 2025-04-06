@@ -21,19 +21,19 @@ pub const Arguments = cli.Arguments(selections.selectHelp(
     .{ .required = true },
 ) ++
     &[_]cli.ArgumentDescriptor{
-    .{
-        .arg = "--open",
-        .help = "Open the file after compilation in the configured viewer.",
-    },
-    .{
-        .arg = "--strict",
-        .help = "If multiple compilers are available, fail with error.",
-    },
-    .{
-        .arg = "--compiler name",
-        .help = "Specify a specific compiler to use.",
-    },
-});
+        .{
+            .arg = "--open",
+            .help = "Open the file after compilation in the configured viewer.",
+        },
+        .{
+            .arg = "--strict",
+            .help = "If multiple compilers are available, fail with error.",
+        },
+        .{
+            .arg = "--compiler name",
+            .help = "Specify a specific compiler to use.",
+        },
+    });
 
 selection: selections.Selection,
 open: bool,
@@ -125,16 +125,16 @@ fn compileNote(
     const compiler = try self.getCompiler(allocator, root, ext);
     return compiler.compileNote(allocator, note, root, .{}) catch |err|
         switch (err) {
-        error.FileNotFound => {
-            try cli.throwError(
-                err,
-                "No such command: '{s}'",
-                .{compiler.command[0]},
-            );
-            unreachable;
-        },
-        else => return err,
-    };
+            error.FileNotFound => {
+                try cli.throwError(
+                    err,
+                    "No such command: '{s}'",
+                    .{compiler.command[0]},
+                );
+                unreachable;
+            },
+            else => return err,
+        };
 }
 
 fn getCompiler(

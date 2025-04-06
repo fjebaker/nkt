@@ -20,27 +20,27 @@ pub const Arguments = cli.Arguments(&[_]cli.ArgumentDescriptor{.{
     .required = true,
 }} ++
     selections.selectHelp(
-    "item",
-    "The item to edit (see `help select`).",
-    .{ .required = false },
-) ++
+        "item",
+        "The item to edit (see `help select`).",
+        .{ .required = false },
+    ) ++
     &[_]cli.ArgumentDescriptor{
-    .{
-        .arg = "-c/--chain chain",
-        .help = "The chain to apply to",
-        .completion = "{compadd $(nkt completion list --collection chains)}",
-    },
-    .{
-        .arg = "--due datelike",
-        .help = "Date by which this task must be completed. See `help dates` for format description (default: no due date).",
-    },
-    .{
-        .arg = "-i/--importance imp",
-        .help = "Choice of `low`, `medium`, and `high`",
-        .default = "low",
-        .completion = "(low medium high)",
-    },
-});
+        .{
+            .arg = "-c/--chain chain",
+            .help = "The chain to apply to",
+            .completion = "{compadd $(nkt completion list --collection chains)}",
+        },
+        .{
+            .arg = "--due datelike",
+            .help = "Date by which this task must be completed. See `help dates` for format description (default: no due date).",
+        },
+        .{
+            .arg = "-i/--importance imp",
+            .help = "Choice of `low`, `medium`, and `high`",
+            .default = "low",
+            .completion = "(low medium high)",
+        },
+    });
 
 const SetVerbs = enum { todo, archive, done, alias };
 

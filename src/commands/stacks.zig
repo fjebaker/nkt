@@ -19,22 +19,22 @@ pub const Push = struct {
         .{ .required = true },
     ) ++
         &[_]cli.ArgumentDescriptor{
-        .{
-            .arg = "stack",
-            .help = "Name of the stack to push to.",
-            .required = true,
-            .completion = "{compadd $(nkt completion list --collection stacks)}",
-        },
-        .{
-            .arg = "index",
-            .help = "The index position to insert into the stack. Index 0 is the default, and inserts the item at the top of the stack as the latest item.",
-            .argtype = usize,
-        },
-        .{
-            .arg = "-m/--message text",
-            .help = "An additional message to attach to the item when pushed.",
-        },
-    });
+            .{
+                .arg = "stack",
+                .help = "Name of the stack to push to.",
+                .required = true,
+                .completion = "{compadd $(nkt completion list --collection stacks)}",
+            },
+            .{
+                .arg = "index",
+                .help = "The index position to insert into the stack. Index 0 is the default, and inserts the item at the top of the stack as the latest item.",
+                .argtype = usize,
+            },
+            .{
+                .arg = "-m/--message text",
+                .help = "An additional message to attach to the item when pushed.",
+            },
+        });
 
     selection: selections.Selection,
     stack: []const u8,

@@ -19,17 +19,17 @@ pub const Arguments = cli.Arguments(selections.selectHelp(
     .{ .required = true },
 ) ++
     &[_]cli.ArgumentDescriptor{
-    .{
-        .arg = "tags",
-        .display_name = "@tag1 [@tag2 ...]",
-        .help = "The tag (or tags) to assign to the item",
-        .parse = false,
-    },
-    .{
-        .arg = "-d/--delete",
-        .help = "Delete the tags instead of assigning them. Does not validate that the item has those tags",
-    },
-});
+        .{
+            .arg = "tags",
+            .display_name = "@tag1 [@tag2 ...]",
+            .help = "The tag (or tags) to assign to the item",
+            .parse = false,
+        },
+        .{
+            .arg = "-d/--delete",
+            .help = "Delete the tags instead of assigning them. Does not validate that the item has those tags",
+        },
+    });
 
 selection: selections.Selection,
 tags: []const []const u8,

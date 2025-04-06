@@ -71,28 +71,28 @@ pub const Item = union(enum) {
                 const jd = j.Day;
                 return std.mem.eql(u8, jd.day.name, id.day.name) and
                     std.mem.eql(
-                    u8,
-                    id.journal.descriptor.name,
-                    id.journal.descriptor.name,
-                );
+                        u8,
+                        id.journal.descriptor.name,
+                        id.journal.descriptor.name,
+                    );
             },
             .Note => |in| {
                 const jn = j.Note;
                 return std.mem.eql(u8, in.note.name, jn.note.name) and
                     std.mem.eql(
-                    u8,
-                    in.directory.descriptor.name,
-                    jn.directory.descriptor.name,
-                );
+                        u8,
+                        in.directory.descriptor.name,
+                        jn.directory.descriptor.name,
+                    );
             },
             .Task => |it| {
                 const jt = j.Task;
                 return std.mem.eql(u8, it.task.outcome, jt.task.outcome) and
                     std.mem.eql(
-                    u8,
-                    it.tasklist.descriptor.name,
-                    jt.tasklist.descriptor.name,
-                );
+                        u8,
+                        it.tasklist.descriptor.name,
+                        jt.tasklist.descriptor.name,
+                    );
             },
             .Collection => |ic| {
                 const jc = j.Collection;

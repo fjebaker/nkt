@@ -242,8 +242,8 @@ pub fn doSearchLoop(
 
             const best_match =
                 chunk_machine.getValueFromChunk(
-                selected_item,
-            );
+                    selected_item,
+                );
 
             var preview = searching.previewDisplay(
                 best_match,
