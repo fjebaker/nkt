@@ -2,7 +2,7 @@
     .name = .nkt,
     .fingerprint = 0x6c693871650a2d77,
     .paths = .{""},
-    .version = "0.2.12",
+    .version = "0.2.13",
     .dependencies = .{
         .datetime = .{
             .url = "https://github.com/frmdstryr/zig-datetime/archive/master.tar.gz",
