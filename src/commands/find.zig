@@ -186,7 +186,7 @@ pub fn doSearchLoop(
 
         const term_size = try display.display.ctrl.tui.getSize();
         const preview_columns = @divFloor(
-            (term_size.col * self.preview_size),
+            ((term_size.col - PREVIEW_SIZE_PADDING) * self.preview_size),
             100,
         );
 

@@ -1,5 +1,8 @@
 # nkt
 
+> [!IMPORTANT]
+> The `nkt` source has moved to [sr.ht](https://sr.ht/~fjebaker/nkt/)
+
 <p align="center">
   <img width="80%" alt="Example screenshot of nkt in the terminal." src="assets/example.jpg">
 </p>
